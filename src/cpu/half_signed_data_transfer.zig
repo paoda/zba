@@ -27,9 +27,9 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
             var address = if (P) modified_base else base;
 
             if (L) {
-                switch(@truncate(u2, opcode >> 5)) {
+                switch (@truncate(u2, opcode >> 5)) {
                     0b00 => {
-                        // SWP 
+                        // SWP
                         std.debug.panic("TODO: Implement SWP", .{});
                     },
                     0b01 => {
@@ -46,7 +46,7 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                         // LDRSH
                         const halfword = bus.readHalfWord(address);
                         cpu.r[rd] = util.u32_sign_extend(@as(u32, halfword), 16);
-                    }
+                    },
                 }
             } else {
                 if (opcode >> 5 & 0x01 == 0x01) {

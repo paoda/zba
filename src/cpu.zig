@@ -28,7 +28,7 @@ pub const ARM7TDMI = struct {
     pub inline fn step(self: *@This()) u64 {
         const opcode = self.fetch();
         // Debug
-        std.debug.print("R15: 0x{X:}\n", .{ opcode });
+        std.debug.print("R15: 0x{X:}\n", .{opcode});
 
         ARM_LUT[armIdx(opcode)](self, self.bus, opcode);
 
@@ -63,8 +63,8 @@ fn populate() [0x1000]InstrFn {
                 const instrKind = i >> 5 & 0x0F;
 
                 lut[i] = comptimeDataProcessing(I, S, instrKind);
-            } 
-            
+            }
+
             if (i >> 9 & 0x7 == 0b000 and i >> 6 & 0x01 == 0x00 and i & 0xF == 0x0) {
                 // Halfword and Signed Data Transfer with register offset
                 const P = i >> 8 & 0x01 == 0x01;
@@ -86,7 +86,7 @@ fn populate() [0x1000]InstrFn {
 
                 lut[i] = comptimeHalfSignedDataTransfer(P, U, I, W, L);
             }
-            
+
             if (i >> 10 & 0x3 == 0b01 and i & 0x01 == 0x00) {
                 const I = i >> 9 & 0x01 == 0x01;
                 const P = i >> 8 & 0x01 == 0x01;
@@ -97,11 +97,11 @@ fn populate() [0x1000]InstrFn {
 
                 lut[i] = comptimeSingleDataTransfer(I, P, U, B, W, L);
             }
-            
+
             if (i >> 9 & 0x7 == 0b101) {
                 const L = i >> 8 & 0x01 == 0x01;
                 lut[i] = comptimeBranch(L);
-            } 
+            }
         }
 
         return lut;
@@ -116,8 +116,8 @@ const CPSR = packed struct {
     _: u20,
     i: bool, // IRQ Disable
     f: bool, // FIQ Diable
-    t: bool, // State 
-    m: Mode, // Mode 
+    t: bool, // State
+    m: Mode, // Mode
 };
 
 const Mode = enum(u5) {
@@ -129,9 +129,6 @@ const Mode = enum(u5) {
     Undefined = 0b11011,
     System = 0b11111,
 };
-
-
-
 
 fn undefined_instr(_: *ARM7TDMI, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);

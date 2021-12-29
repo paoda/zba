@@ -32,7 +32,7 @@ pub const Bus = struct {
         }
 
         self.pak.writeHalfWord(addr, halfword);
-    } 
+    }
 
     pub fn readByte(self: *const @This(), addr: u32) u8 {
         return self.pak.readByte(addr);
