@@ -24,7 +24,9 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
                     cpu.r[rd] = bus.readByte(address);
                 } else {
                     // LDR
-                    std.debug.panic("Implement LDR", .{});
+
+                    // FIXME: Unsure about how I calculate the boundary offset
+                    cpu.r[rd] = std.math.rotl(u32, bus.readWord(address), address % 4);
                 }
             } else {
                 if (B) {
@@ -37,7 +39,11 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
                     bus.writeByte(address, src);
                 } else {
                     // STR
-                    std.debug.panic("Implement STR", .{});
+
+                    // FIXME: Is this right?
+                    const src = cpu.r[rd];
+                    const aligned_addr = address - (address % 4);
+                    bus.writeWord(aligned_addr, src);
                 }
             }
 

@@ -27,8 +27,8 @@ pub const ARM7TDMI = struct {
 
     pub inline fn step(self: *@This()) u64 {
         const opcode = self.fetch();
-        // Debug
-        std.debug.print("R15: 0x{X:}\n", .{opcode});
+
+        std.debug.print("R15: 0x{X:}\n", .{opcode}); // Debug
 
         ARM_LUT[armIdx(opcode)](self, self.bus, opcode);
 

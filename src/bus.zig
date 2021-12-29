@@ -16,8 +16,13 @@ pub const Bus = struct {
         return self.pak.readWord(addr);
     }
 
-    pub fn writeWord(_: *@This(), _: u32, _: u32) void {
-        std.debug.panic("TODO: Implement Bus#writeWord", .{});
+    pub fn writeWord(self: *@This(), addr: u32, word: u32) void {
+        // TODO: Actually implement the memory mmap
+        if (addr >= self.pak.buf.len) {
+            return;
+        }
+
+        self.pak.writeWord(addr, word);
     }
 
     pub fn readHalfWord(self: *const @This(), addr: u32) u16 {
