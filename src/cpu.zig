@@ -131,7 +131,7 @@ const CPSR = struct {
     pub fn set_v(self: *@This(), set: bool) void {
         self.set_bit(28, set);
     }
-    
+
     pub fn i(self: *const @This()) bool {
         return self.inner >> 7 & 0x01 == 0x01;
     }
@@ -159,15 +159,15 @@ const CPSR = struct {
     pub fn mode(self: *const @This()) Mode {
         return self.inner & 0x1F;
     }
-    
+
     pub fn set_mode(_: *@This(), _: Mode) void {
         std.debug.panic("TODO: Implement set_mode for CPSR", .{});
     }
-    
+
     fn set_bit(self: *@This(), comptime bit: usize, set: bool) void {
         const set_val = @as(u32, @boolToInt(set)) << bit;
         const mask = ~(@as(u32, 1) << bit);
-        
+
         self.inner = (self.inner & mask) | set_val;
     }
 };
