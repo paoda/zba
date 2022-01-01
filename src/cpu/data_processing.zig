@@ -20,14 +20,31 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
 
             switch (instrKind) {
                 0x4 => {
+                    // ADD
                     cpu.r[rd] = cpu.r[op1] + op2;
 
                     if (S) std.debug.panic("TODO: implement ADD condition codes", .{});
                 },
                 0xD => {
+                    // MOV
                     cpu.r[rd] = op2;
 
                     if (S) std.debug.panic("TODO: implement MOV condition codes", .{});
+                },
+                0xA => {
+                    // CMP
+                    var result: u32 = undefined;
+                
+                    const op1_val = cpu.r[op1];    
+                    const v_ctx = (op1_val >> 31 == 0x01) or (op2 >> 31 == 0x01);
+                
+                    const didOverflow = @subWithOverflow(u32, op1_val, op2, &result);
+                
+                    cpu.cpsr.set_v(v_ctx and (result >> 31 & 0x01 == 0x01));    
+                    cpu.cpsr.set_c(didOverflow);
+                    cpu.cpsr.set_z(result == 0x00);
+                    cpu.cpsr.set_n(result >> 31 & 0x01 == 0x01);
+                        
                 },
                 else => std.debug.panic("TODO: implement data processing type {}", .{instrKind}),
             }

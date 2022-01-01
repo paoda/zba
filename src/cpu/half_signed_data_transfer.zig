@@ -40,12 +40,12 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                     0b10 => {
                         // LDRSB
                         const byte = bus.readByte(address);
-                        cpu.r[rd] = util.u32_sign_extend(@as(u32, byte), 8);
+                        cpu.r[rd] = util.u32SignExtend(8, @as(u32, byte));
                     },
                     0b11 => {
                         // LDRSH
                         const halfword = bus.readHalfWord(address);
-                        cpu.r[rd] = util.u32_sign_extend(@as(u32, halfword), 16);
+                        cpu.r[rd] = util.u32SignExtend(16, @as(u32, halfword));
                     },
                 }
             } else {
