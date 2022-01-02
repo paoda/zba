@@ -27,6 +27,8 @@ pub fn main() anyerror!void {
     var scheduler = Scheduler.init(alloc);
     var cpu = Arm7tdmi.init(&scheduler, &bus);
 
+    cpu.skipBios();
+
     while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);
     }

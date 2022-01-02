@@ -29,6 +29,19 @@ pub const Arm7tdmi = struct {
         };
     }
 
+    pub fn skipBios(self: *@This()) void {
+        self.r[0] = 0x08000000;
+        self.r[1] = 0x000000EA;
+        // GPRs 2 -> 12 *should* already be 0 initialized
+        self.r[13] = 0x0300_7F00;
+        self.r[14] = 0x0000_0000;
+        self.r[15] = 0x0800_0000;
+
+        // TODO: Set sp_irq = 0x0300_7FA0, sp_svc = 0x0300_7FE0
+
+        self.cpsr.val = 0x6000001F;
+    }
+
     pub inline fn step(self: *@This()) u64 {
         std.debug.print("PC: 0x{X:} ", .{self.r[15]});
         const opcode = self.fetch();
