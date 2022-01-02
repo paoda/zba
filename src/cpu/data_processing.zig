@@ -40,10 +40,10 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
 
                     const didOverflow = @subWithOverflow(u32, op1_val, op2, &result);
 
-                    cpu.cpsr.setV(v_ctx and (result >> 31 & 0x01 == 0x01));
-                    cpu.cpsr.setC(didOverflow);
-                    cpu.cpsr.setZ(result == 0x00);
-                    cpu.cpsr.setN(result >> 31 & 0x01 == 0x01);
+                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 0x01 == 0x01));
+                    cpu.cpsr.c.write(didOverflow);
+                    cpu.cpsr.z.write(result == 0x00);
+                    cpu.cpsr.n.write(result >> 31 & 0x01 == 0x01);
                 },
                 else => std.debug.panic("TODO: implement data processing type {}", .{instrKind}),
             }
