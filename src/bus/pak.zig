@@ -5,7 +5,7 @@ const Allocator = std.mem.Allocator;
 pub const GamePak = struct {
     buf: []u8,
 
-    pub fn fromPath(alloc: Allocator, path: []const u8) !@This() {
+    pub fn init(alloc: Allocator, path: []const u8) !@This() {
         const file = try std.fs.cwd().openFile(path, .{ .read = true });
         defer file.close();
 

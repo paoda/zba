@@ -20,7 +20,7 @@ pub const Arm7tdmi = struct {
     bus: *Bus,
     cpsr: CPSR,
 
-    pub fn new(scheduler: *Scheduler, bus: *Bus) @This() {
+    pub fn init(scheduler: *Scheduler, bus: *Bus) @This() {
         return .{
             .r = [_]u32{0x00} ** 16,
             .sch = scheduler,

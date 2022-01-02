@@ -10,7 +10,7 @@ pub const Scheduler = struct {
     tick: u64,
     queue: PriorityQueue(Event, void, lessThan),
 
-    pub fn new(alloc: Allocator) @This() {
+    pub fn init(alloc: Allocator) @This() {
         var scheduler = Scheduler{ .tick = 0, .queue = PriorityQueue(Event, void, lessThan).init(alloc, {}) };
 
         scheduler.queue.add(.{

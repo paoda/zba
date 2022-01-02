@@ -23,9 +23,9 @@ pub fn main() anyerror!void {
         return;
     }
 
-    var bus = try Bus.withPak(alloc, zba_args[0]);
-    var scheduler = Scheduler.new(alloc);
-    var cpu = Arm7tdmi.new(&scheduler, &bus);
+    var bus = try Bus.init(alloc, zba_args[0]);
+    var scheduler = Scheduler.init(alloc);
+    var cpu = Arm7tdmi.init(&scheduler, &bus);
 
     while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);

@@ -8,11 +8,11 @@ pub const Bus = struct {
     pak: GamePak,
     bios: Bios,
 
-    pub fn withPak(alloc: Allocator, path: []const u8) !@This() {
+    pub fn init(alloc: Allocator, path: []const u8) !@This() {
         return @This(){
-            .pak = try GamePak.fromPath(alloc, path),
+            .pak = try GamePak.init(alloc, path),
             // TODO: don't hardcode this + bundle open-sorce Boot ROM
-            .bios = try Bios.fromPath(alloc, "./bin/gba_bios.bin"),
+            .bios = try Bios.init(alloc, "./bin/gba_bios.bin"),
         };
     }
 
