@@ -30,7 +30,7 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                 switch (@truncate(u2, opcode >> 5)) {
                     0b00 => {
                         // SWP
-                        std.debug.panic("TODO: Implement SWP", .{});
+                        std.debug.panic("[CPU] TODO: Implement SWP", .{});
                     },
                     0b01 => {
                         // LDRH
@@ -56,7 +56,7 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                     bus.write16(address + 2, src);
                     bus.write16(address, src);
                 } else {
-                    std.debug.panic("TODO Figure out if this is also SWP", .{});
+                    std.debug.panic("[CPU] TODO: Figure out if this is also SWP", .{});
                 }
             }
 

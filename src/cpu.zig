@@ -71,7 +71,7 @@ fn checkCond(cpsr: *const CPSR, opcode: u32) bool {
         0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.z.read()), // GT - Greater than
         0xD => cpsr.z.read() or (cpsr.n.read() != cpsr.v.read()), // LE - Less than or equal
         0xE => true, // AL - Always
-        0xF => std.debug.panic("0xF is a reserved condition field", .{}),
+        0xF => std.debug.panic("[CPU] 0xF is a reserved condition field", .{}),
     };
 }
 
@@ -145,7 +145,7 @@ const Mode = enum(u5) {
 
 fn undefinedInstruction(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
-    std.debug.panic("[0x{X:}] 0x{X:} is an illegal opcode", .{ id, opcode });
+    std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
 }
 
 fn comptimeBranch(comptime L: bool) InstrFn {

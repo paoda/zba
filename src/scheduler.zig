@@ -29,7 +29,7 @@ pub const Scheduler = struct {
 
             switch (event.kind) {
                 .HeatDeath => {
-                    std.debug.panic("Somehow, a u64 overflowed", .{});
+                    std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
                 },
             }
         }

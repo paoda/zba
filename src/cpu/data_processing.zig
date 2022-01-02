@@ -23,13 +23,13 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                     // ADD
                     cpu.r[rd] = cpu.r[op1] + op2;
 
-                    if (S) std.debug.panic("TODO: implement ADD condition codes", .{});
+                    if (S) std.debug.panic("[CPU] TODO: implement ADD condition codes", .{});
                 },
                 0xD => {
                     // MOV
                     cpu.r[rd] = op2;
 
-                    if (S) std.debug.panic("TODO: implement MOV condition codes", .{});
+                    if (S) std.debug.panic("[CPU] implement MOV condition codes", .{});
                 },
                 0xA => {
                     // CMP
@@ -45,7 +45,7 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                     cpu.cpsr.z.write(result == 0x00);
                     cpu.cpsr.n.write(result >> 31 & 0x01 == 0x01);
                 },
-                else => std.debug.panic("TODO: implement data processing type {}", .{instrKind}),
+                else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
         }
     }.dataProcessing;
