@@ -26,6 +26,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub inline fn step(self: *@This()) u64 {
+        std.debug.print("PC: 0x{X:} ", .{self.r[15]});
         const opcode = self.fetch();
         std.debug.print("opcode: 0x{X:}\n", .{opcode}); // Debug
 

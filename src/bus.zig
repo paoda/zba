@@ -1,21 +1,25 @@
 const std = @import("std");
 
-const GamePak = @import("pak.zig").GamePak;
+const Bios = @import("bus/bios.zig").Bios;
+const GamePak = @import("bus/pak.zig").GamePak;
 const Allocator = std.mem.Allocator;
 
 pub const Bus = struct {
     pak: GamePak,
+    bios: Bios,
 
     pub fn withPak(alloc: Allocator, path: []const u8) !@This() {
         return @This(){
             .pak = try GamePak.fromPath(alloc, path),
+            // TODO: don't hardcode this + bundle open-sorce Boot ROM
+            .bios = try Bios.fromPath(alloc, "./bin/gba_bios.bin"),
         };
     }
 
     pub fn read32(self: *const @This(), addr: u32) u32 {
         return switch (addr) {
             // General Internal Memory
-            0x0000_0000...0x0000_3FFF => std.debug.panic("read32 from 0x{X:} in BIOS", .{addr}),
+            0x0000_0000...0x0000_3FFF => self.bios.get32(@as(usize, addr)),
             0x0200_0000...0x0203FFFF => std.debug.panic("read32 from 0x{X:} in IWRAM", .{addr}),
             0x0300_0000...0x0300_7FFF => std.debug.panic("read32 from 0x{X:} in EWRAM", .{addr}),
             0x0400_0000...0x0400_03FE => std.debug.panic("read32 from 0x{X:} in I/O", .{addr}),
@@ -58,7 +62,7 @@ pub const Bus = struct {
     pub fn read16(self: *const @This(), addr: u32) u16 {
         return switch (addr) {
             // General Internal Memory
-            0x0000_0000...0x0000_3FFF => std.debug.panic("read16 from 0x{X:} in BIOS", .{addr}),
+            0x0000_0000...0x0000_3FFF => self.bios.get16(@as(usize, addr)),
             0x0200_0000...0x0203FFFF => std.debug.panic("read16 from 0x{X:} in IWRAM", .{addr}),
             0x0300_0000...0x0300_7FFF => std.debug.panic("read16 from 0x{X:} in EWRAM", .{addr}),
             0x0400_0000...0x0400_03FE => std.debug.panic("read16 from 0x{X:} in I/O", .{addr}),
@@ -101,7 +105,7 @@ pub const Bus = struct {
     pub fn read8(self: *const @This(), addr: u32) u8 {
         return switch (addr) {
             // General Internal Memory
-            0x0000_0000...0x0000_3FFF => std.debug.panic("read8 from 0x{X:} in BIOS", .{addr}),
+            0x0000_0000...0x0000_3FFF => self.bios.get8(@as(usize, addr)),
             0x0200_0000...0x0203FFFF => std.debug.panic("read8 from 0x{X:} in IWRAM", .{addr}),
             0x0300_0000...0x0300_7FFF => std.debug.panic("read8 from 0x{X:} in EWRAM", .{addr}),
             0x0400_0000...0x0400_03FE => std.debug.panic("read8 from 0x{X:} in I/O", .{addr}),
