@@ -213,7 +213,7 @@ fn comptimeBranch(comptime L: bool) InstrFn {
                 cpu.r[14] = cpu.r[15] - 4;
             }
 
-            cpu.r[15] = cpu.fakePC() + util.u32SignExtend(24, opcode << 2);
+            cpu.r[15] = cpu.fakePC() +% util.u32SignExtend(24, opcode << 2);
         }
     }.branch;
 }
