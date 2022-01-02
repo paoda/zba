@@ -21,29 +21,29 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
             if (L) {
                 if (B) {
                     // LDRB
-                    cpu.r[rd] = bus.readByte(address);
+                    cpu.r[rd] = bus.read8(address);
                 } else {
                     // LDR
 
                     // FIXME: Unsure about how I calculate the boundary offset
-                    cpu.r[rd] = std.math.rotl(u32, bus.readWord(address), address % 4);
+                    cpu.r[rd] = std.math.rotl(u32, bus.read32(address), address % 4);
                 }
             } else {
                 if (B) {
                     // STRB
                     const src = @truncate(u8, cpu.r[rd]);
 
-                    bus.writeByte(address + 3, src);
-                    bus.writeByte(address + 2, src);
-                    bus.writeByte(address + 1, src);
-                    bus.writeByte(address, src);
+                    bus.write8(address + 3, src);
+                    bus.write8(address + 2, src);
+                    bus.write8(address + 1, src);
+                    bus.write8(address, src);
                 } else {
                     // STR
 
                     // FIXME: Is this right?
                     const src = cpu.r[rd];
                     const aligned_addr = address - (address % 4);
-                    bus.writeWord(aligned_addr, src);
+                    bus.write32(aligned_addr, src);
                 }
             }
 

@@ -34,7 +34,7 @@ pub const Arm7tdmi = struct {
     }
 
     fn fetch(self: *@This()) u32 {
-        const word = self.bus.readWord(self.r[15]);
+        const word = self.bus.read32(self.r[15]);
         self.r[15] += 4;
         return word;
     }

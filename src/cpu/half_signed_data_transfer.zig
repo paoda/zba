@@ -34,17 +34,17 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                     },
                     0b01 => {
                         // LDRH
-                        const halfword = bus.readHalfWord(address);
+                        const halfword = bus.read16(address);
                         cpu.r[rd] = @as(u32, halfword);
                     },
                     0b10 => {
                         // LDRSB
-                        const byte = bus.readByte(address);
+                        const byte = bus.read8(address);
                         cpu.r[rd] = util.u32SignExtend(8, @as(u32, byte));
                     },
                     0b11 => {
                         // LDRSH
-                        const halfword = bus.readHalfWord(address);
+                        const halfword = bus.read16(address);
                         cpu.r[rd] = util.u32SignExtend(16, @as(u32, halfword));
                     },
                 }
@@ -53,8 +53,8 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                     // STRH
                     const src = @truncate(u16, cpu.r[rd]);
 
-                    bus.writeHalfWord(address + 2, src);
-                    bus.writeHalfWord(address, src);
+                    bus.write16(address + 2, src);
+                    bus.write16(address, src);
                 } else {
                     std.debug.panic("TODO Figure out if this is also SWP", .{});
                 }
