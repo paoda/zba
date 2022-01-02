@@ -1,5 +1,3 @@
-// source + credit: https://github.com/FlorenceOS/Florence/blob/master/lib/util/bitfields.zig --
-
 const std = @import("std");
 
 fn PtrCastPreserveCV(comptime T: type, comptime PtrToT: type, comptime NewT: type) type {

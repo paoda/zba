@@ -1,6 +1,6 @@
 const std = @import("std");
 const util = @import("util.zig");
-const bitfield = @import("util/bitfield.zig");
+const bitfield = @import("bitfield");
 
 const Bus = @import("bus.zig").Bus;
 const Scheduler = @import("scheduler.zig").Scheduler;
