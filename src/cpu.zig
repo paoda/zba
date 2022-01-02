@@ -29,7 +29,7 @@ pub const Arm7tdmi = struct {
         const opcode = self.fetch();
         std.debug.print("opcode: 0x{X:}\n", .{opcode}); // Debug
 
-        arm_lut[armIdx(opcode)](self, self.bus, opcode);
+        if (checkCond(&self.cpsr, opcode)) arm_lut[armIdx(opcode)](self, self.bus, opcode);
         return 1;
     }
 
@@ -46,6 +46,28 @@ pub const Arm7tdmi = struct {
 
 fn armIdx(opcode: u32) u12 {
     return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
+}
+
+fn checkCond(cpsr: *const CPSR, opcode: u32) bool {
+    // TODO: Should I implement an enum?
+    return switch (@truncate(u4, opcode >> 28)) {
+        0x0 => cpsr.z(), // EQ - Equal
+        0x1 => !cpsr.z(), // NEQ - Not equal
+        0x2 => cpsr.c(), // CS - Unsigned higher or same
+        0x3 => !cpsr.c(), // CC - Unsigned lower
+        0x4 => cpsr.n(), // MI - Negative
+        0x5 => !cpsr.n(), // PL - Positive or zero
+        0x6 => cpsr.v(), // VS - Overflow
+        0x7 => !cpsr.v(), // VC - No overflow
+        0x8 => cpsr.c() and !cpsr.z(), // HI - unsigned higher
+        0x9 => !cpsr.c() and cpsr.z(), // LS - unsigned lower or same
+        0xA => cpsr.n() == cpsr.v(), // GE - Greater or equal
+        0xB => cpsr.n() != cpsr.v(), // LT - Less than
+        0xC => !cpsr.z() and (cpsr.n() == cpsr.z()), // GT - Greater than
+        0xD => cpsr.z() or (cpsr.n() != cpsr.v()), // LE - Less than or equal
+        0xE => true, // AL - Always
+        0xF => std.debug.panic("0xF is a reserved condition field", .{}),
+    };
 }
 
 fn populate() [0x1000]InstrFn {
