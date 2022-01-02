@@ -8,9 +8,22 @@ const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
-    // defer gpa.deinit();
+    defer _ = gpa.deinit();
 
-    var bus = try Bus.withPak(alloc, "./bin/demo/beeg/beeg.gba");
+    const args = try std.process.argsAlloc(alloc);
+    defer std.process.argsFree(alloc, args);
+
+    const zba_args: []const []const u8 = args[1..];
+
+    if (zba_args.len == 0) {
+        std.log.err("Expected PATH to Gameboy Advance ROM as a CLI argument", .{});
+        return;
+    } else if (zba_args.len > 1) {
+        std.log.err("Too many CLI arguments were provided", .{});
+        return;
+    }
+
+    var bus = try Bus.withPak(alloc, zba_args[0]);
     var scheduler = Scheduler.new(alloc);
     var cpu = Arm7tdmi.new(&scheduler, &bus);
 
