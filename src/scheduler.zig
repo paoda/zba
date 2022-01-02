@@ -1,7 +1,7 @@
 const std = @import("std");
-const ARM7TDMI = @import("cpu.zig").ARM7TDMI;
-const Bus = @import("bus.zig").Bus;
 
+const Bus = @import("bus.zig").Bus;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
@@ -21,7 +21,7 @@ pub const Scheduler = struct {
         return scheduler;
     }
 
-    pub fn handleEvent(self: *@This(), _: *ARM7TDMI, _: *Bus) void {
+    pub fn handleEvent(self: *@This(), _: *Arm7tdmi, _: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
 
         if (should_handle) {
@@ -47,8 +47,7 @@ pub const Event = struct {
     tick: u64,
 };
 
-fn lessThan(context: void, a: Event, b: Event) Order {
-    _ = context;
+fn lessThan(_: void, a: Event, b: Event) Order {
     return std.math.order(a.tick, b.tick);
 }
 

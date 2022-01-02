@@ -1,6 +1,6 @@
 const std = @import("std");
-const GamePak = @import("pak.zig").GamePak;
 
+const GamePak = @import("pak.zig").GamePak;
 const Allocator = std.mem.Allocator;
 
 pub const Bus = struct {
@@ -17,11 +17,8 @@ pub const Bus = struct {
     }
 
     pub fn writeWord(self: *@This(), addr: u32, word: u32) void {
-        // TODO: Actually implement the memory mmap
-        if (addr >= self.pak.buf.len) {
-            return;
-        }
-
+        // TODO: Actually implement the memory map
+        if (addr > self.pak.buf.len) return;
         self.pak.writeWord(addr, word);
     }
 
@@ -30,12 +27,8 @@ pub const Bus = struct {
     }
 
     pub fn writeHalfWord(self: *@This(), addr: u32, halfword: u16) void {
-
-        // TODO: Actually implement the memory mmap
-        if (addr >= self.pak.buf.len) {
-            return;
-        }
-
+        // TODO: Actually implement the memory map
+        if (addr > self.pak.buf.len) return;
         self.pak.writeHalfWord(addr, halfword);
     }
 
@@ -43,7 +36,9 @@ pub const Bus = struct {
         return self.pak.readByte(addr);
     }
 
-    pub fn writeByte(_: *@This(), _: u32, _: u8) void {
-        std.debug.panic("TODO: Implement Bus#writeByte", .{});
+    pub fn writeByte(self: *@This(), addr: u32, byte: u8) void {
+        // TODO: Actually implement the memory map
+        if (addr > self.pak.buf.len) return;
+        self.pak.writeByte(addr, byte);
     }
 };

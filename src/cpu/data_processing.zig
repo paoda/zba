@@ -1,13 +1,13 @@
 const std = @import("std");
-const cpu_mod = @import("../cpu.zig");
+const processor = @import("../cpu.zig");
 
 const Bus = @import("../bus.zig").Bus;
-const ARM7TDMI = cpu_mod.ARM7TDMI;
-const InstrFn = cpu_mod.InstrFn;
+const Arm7tdmi = processor.Arm7tdmi;
+const InstrFn = processor.InstrFn;
 
 pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4) InstrFn {
     return struct {
-        fn dataProcessing(cpu: *ARM7TDMI, _: *Bus, opcode: u32) void {
+        fn dataProcessing(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
             const rd = opcode >> 12 & 0xF;
             const op1 = opcode >> 16 & 0xF;
 
@@ -15,7 +15,7 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
             if (I) {
                 op2 = std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1);
             } else {
-                op2 = reg_op2(cpu, opcode);
+                op2 = registerOp2(cpu, opcode);
             }
 
             switch (instrKind) {
@@ -34,17 +34,16 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                 0xA => {
                     // CMP
                     var result: u32 = undefined;
-                
-                    const op1_val = cpu.r[op1];    
+
+                    const op1_val = cpu.r[op1];
                     const v_ctx = (op1_val >> 31 == 0x01) or (op2 >> 31 == 0x01);
-                
+
                     const didOverflow = @subWithOverflow(u32, op1_val, op2, &result);
-                
-                    cpu.cpsr.set_v(v_ctx and (result >> 31 & 0x01 == 0x01));    
-                    cpu.cpsr.set_c(didOverflow);
-                    cpu.cpsr.set_z(result == 0x00);
-                    cpu.cpsr.set_n(result >> 31 & 0x01 == 0x01);
-                        
+
+                    cpu.cpsr.setV(v_ctx and (result >> 31 & 0x01 == 0x01));
+                    cpu.cpsr.setC(didOverflow);
+                    cpu.cpsr.setZ(result == 0x00);
+                    cpu.cpsr.setN(result >> 31 & 0x01 == 0x01);
                 },
                 else => std.debug.panic("TODO: implement data processing type {}", .{instrKind}),
             }
@@ -52,7 +51,7 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
     }.dataProcessing;
 }
 
-fn reg_op2(cpu: *const ARM7TDMI, opcode: u32) u32 {
+fn registerOp2(cpu: *const Arm7tdmi, opcode: u32) u32 {
     var amount: u32 = undefined;
     if (opcode >> 4 & 0x01 == 0x01) {
         amount = cpu.r[opcode >> 8 & 0xF] & 0xFF;

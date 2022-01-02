@@ -1,14 +1,14 @@
 const std = @import("std");
 const util = @import("../util.zig");
-const mod_cpu = @import("../cpu.zig");
+const processor = @import("../cpu.zig");
 
-const ARM7TDMI = mod_cpu.ARM7TDMI;
-const InstrFn = mod_cpu.InstrFn;
 const Bus = @import("../bus.zig").Bus;
+const Arm7tdmi = processor.Arm7tdmi;
+const InstrFn = processor.InstrFn;
 
 pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
-        fn singleDataTransfer(cpu: *ARM7TDMI, bus: *Bus, opcode: u32) void {
+        fn singleDataTransfer(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
             const rn = opcode >> 16 & 0xF;
             const rd = opcode >> 12 & 0xF;
 
@@ -55,7 +55,7 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
     }.singleDataTransfer;
 }
 
-fn registerOffset(cpu: *ARM7TDMI, opcode: u32) u32 {
+fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
     const amount = opcode >> 7 & 0x1F;
     const rm = opcode & 0xF;
     const r_val = cpu.r[rm];

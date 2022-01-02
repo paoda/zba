@@ -39,4 +39,8 @@ pub const GamePak = struct {
     pub fn readByte(self: *const @This(), addr: u32) u8 {
         return self.buf[addr];
     }
+
+    pub fn writeByte(self: *@This(), addr: u32, byte: u8) void {
+        self.buf[addr] = byte;
+    }
 };

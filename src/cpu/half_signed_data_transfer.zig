@@ -1,14 +1,14 @@
 const std = @import("std");
-const cpu_mod = @import("../cpu.zig");
+const processor = @import("../cpu.zig");
 const util = @import("../util.zig");
 
 const Bus = @import("../bus.zig").Bus;
-const ARM7TDMI = cpu_mod.ARM7TDMI;
-const InstrFn = cpu_mod.InstrFn;
+const Arm7tdmi = processor.Arm7tdmi;
+const InstrFn = processor.InstrFn;
 
 pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
-        fn halfSignedDataTransfer(cpu: *ARM7TDMI, bus: *Bus, opcode: u32) void {
+        fn halfSignedDataTransfer(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
             const rn = opcode >> 16 & 0xF;
             const rd = opcode >> 12 & 0xF;
             const rm = opcode & 0xF;

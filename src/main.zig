@@ -1,10 +1,9 @@
 const std = @import("std");
+const emu = @import("emu.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Bus = @import("bus.zig").Bus;
-const ARM7TDMI = @import("cpu.zig").ARM7TDMI;
-
-const emu = @import("emu.zig");
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -13,7 +12,7 @@ pub fn main() anyerror!void {
 
     var bus = try Bus.withPak(alloc, "./bin/demo/beeg/beeg.gba");
     var scheduler = Scheduler.new(alloc);
-    var cpu = ARM7TDMI.new(&scheduler, &bus);
+    var cpu = Arm7tdmi.new(&scheduler, &bus);
 
     while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);

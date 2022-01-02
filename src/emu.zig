@@ -1,13 +1,13 @@
 const _ = @import("std");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
-const ARM7TDMI = @import("cpu.zig").ARM7TDMI;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Bus = @import("bus.zig").Bus;
 
-const CYCLES_PER_FRAME: u64 = 10_000; // TODO: What is this?
+const cycles_per_frame: u64 = 10_000; // TODO: How many cycles actually?
 
-pub fn runFrame(sch: *Scheduler, cpu: *ARM7TDMI, bus: *Bus) void {
-    const frame_end = sch.tick + CYCLES_PER_FRAME;
+pub fn runFrame(sch: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+    const frame_end = sch.tick + cycles_per_frame;
 
     while (sch.tick < frame_end) {
         while (sch.tick < sch.nextTimestamp()) {
