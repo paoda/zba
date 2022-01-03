@@ -31,19 +31,11 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
             } else {
                 if (B) {
                     // STRB
-                    const src = @truncate(u8, cpu.r[rd]);
-
-                    bus.write8(address + 3, src);
-                    bus.write8(address + 2, src);
-                    bus.write8(address + 1, src);
-                    bus.write8(address, src);
+                    bus.write8(address, @truncate(u8, cpu.r[rd]));
                 } else {
                     // STR
-
-                    // FIXME: Is this right?
-                    const src = cpu.r[rd];
-                    const aligned_addr = address - (address % 4);
-                    bus.write32(aligned_addr, src);
+                    const force_aligned = address & 0xFFFF_FFFC;
+                    bus.write32(force_aligned, cpu.r[rd]);
                 }
             }
 

@@ -51,10 +51,7 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
             } else {
                 if (opcode >> 5 & 0x01 == 0x01) {
                     // STRH
-                    const src = @truncate(u16, cpu.r[rd]);
-
-                    bus.write16(address + 2, src);
-                    bus.write16(address, src);
+                    bus.write16(address, @truncate(u16, cpu.r[rd]));
                 } else {
                     std.debug.panic("[CPU] TODO: Figure out if this is also SWP", .{});
                 }
