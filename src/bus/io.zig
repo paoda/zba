@@ -29,7 +29,7 @@ pub const Io = struct {
 
     pub fn write16(self: *@This(), addr: u32, halfword: u16) void {
         switch (addr) {
-            0x0400_000 => self.dispcnt.val = halfword,
+            0x0400_0000 => self.dispcnt.val = halfword,
             else => std.debug.panic("[I/O:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
         }
     }
