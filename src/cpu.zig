@@ -25,7 +25,7 @@ pub const Arm7tdmi = struct {
             .r = [_]u32{0x00} ** 16,
             .sch = scheduler,
             .bus = bus,
-            .cpsr = .{ .val = 0x0000_00DF },
+            .cpsr = .{ .raw = 0x0000_00DF },
         };
     }
 
@@ -39,12 +39,11 @@ pub const Arm7tdmi = struct {
 
         // TODO: Set sp_irq = 0x0300_7FA0, sp_svc = 0x0300_7FE0
 
-        self.cpsr.val = 0x6000001F;
+        self.cpsr.raw = 0x6000001F;
     }
 
     pub inline fn step(self: *@This()) u64 {
         const opcode = self.fetch();
-
         if (checkCond(&self.cpsr, opcode)) arm_lut[armIdx(opcode)](self, self.bus, opcode);
         return 1;
     }
@@ -141,7 +140,7 @@ const CPSR = extern union {
     c: Bit(u32, 29),
     z: Bit(u32, 30),
     n: Bit(u32, 31),
-    val: u32,
+    raw: u32,
 };
 
 const Mode = enum(u5) {
