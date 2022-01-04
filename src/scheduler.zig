@@ -21,6 +21,10 @@ pub const Scheduler = struct {
         return scheduler;
     }
 
+    pub fn deinit(self: *@This()) void {
+        self.queue.deinit();
+    }
+
     pub fn handleEvent(self: *@This(), _: *Arm7tdmi, _: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
 

@@ -8,7 +8,7 @@ const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
-    defer _ = gpa.deinit();
+    defer std.debug.assert(!gpa.deinit());
 
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
@@ -24,7 +24,11 @@ pub fn main() anyerror!void {
     }
 
     var bus = try Bus.init(alloc, zba_args[0]);
+    defer bus.deinit();
+
     var scheduler = Scheduler.init(alloc);
+    defer scheduler.deinit();
+
     var cpu = Arm7tdmi.init(&scheduler, &bus);
 
     cpu.skipBios();

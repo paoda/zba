@@ -10,15 +10,25 @@ pub const Ppu = struct {
             .vram = try Vram.init(alloc),
         };
     }
+
+    pub fn deinit(self: *@This()) void {
+        self.vram.deinit();
+    }
 };
 
 const Vram = struct {
     buf: []u8,
+    alloc: Allocator,
 
     fn init(alloc: Allocator) !@This() {
         return @This(){
             .buf = try alloc.alloc(u8, 0x18000),
+            .alloc = alloc,
         };
+    }
+
+    fn deinit(self: *@This()) void {
+        self.alloc.free(self.buf);
     }
 
     pub inline fn get32(self: *const @This(), idx: usize) u32 {

@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 pub const Bios = struct {
     buf: []u8,
+    alloc: Allocator,
 
     pub fn init(alloc: Allocator, path: []const u8) !@This() {
         const file = try std.fs.cwd().openFile(path, .{ .read = true });
@@ -13,7 +14,12 @@ pub const Bios = struct {
 
         return @This(){
             .buf = try file.readToEndAlloc(alloc, len),
+            .alloc = alloc,
         };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.alloc.free(self.buf);
     }
 
     pub inline fn get32(self: *const @This(), idx: usize) u32 {
