@@ -37,7 +37,7 @@ pub const Bus = struct {
             0x0400_0000...0x0400_03FE => self.read32(addr),
 
             // Internal Display Memory
-            0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:32] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
+            0x0500_0000...0x0500_03FF => self.ppu.palette.get32(@as(usize, addr - 0x0500_0000)),
             0x0600_0000...0x0601_7FFF => self.ppu.vram.get32(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] read from 0x{X:} in OAM", .{addr}),
 
@@ -63,7 +63,7 @@ pub const Bus = struct {
             0x0400_0000...0x0400_03FE => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in I/O", .{ word, addr }),
 
             // Internal Display Memory
-            0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in BG/OBJ Palette RAM", .{ word, addr }),
+            0x0500_0000...0x0500_03FF => self.ppu.palette.set32(@as(usize, addr - 0x0500_0000), word),
             0x0600_0000...0x0601_7FFF => self.ppu.vram.set32(@as(usize, addr - 0x0600_0000), word),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in OAM", .{ word, addr }),
 
@@ -80,7 +80,7 @@ pub const Bus = struct {
             0x0400_0000...0x0400_03FE => self.io.read16(addr),
 
             // Internal Display Memory
-            0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:16] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
+            0x0500_0000...0x0500_03FF => self.ppu.palette.get16(@as(usize, addr - 0x0500_0000)),
             0x0600_0000...0x0601_7FFF => self.ppu.vram.get16(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] read from 0x{X:} in OAM", .{addr}),
 
@@ -105,7 +105,7 @@ pub const Bus = struct {
             0x0400_0000...0x0400_03FE => self.io.write16(addr, halfword),
 
             // Internal Display Memory
-            0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in BG/OBJ Palette RAM", .{ halfword, addr }),
+            0x0500_0000...0x0500_03FF => self.ppu.palette.set16(@as(usize, addr - 0x0500_0000), halfword),
             0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(@as(usize, addr - 0x0600_0000), halfword),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in OAM", .{ halfword, addr }),
 
@@ -122,7 +122,7 @@ pub const Bus = struct {
             0x0400_0000...0x0400_03FE => self.io.read8(addr),
 
             // Internal Display Memory
-            0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:8] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
+            0x0500_0000...0x0500_03FF => self.ppu.palette.get8(@as(usize, addr - 0x0500_0000)),
             0x0600_0000...0x0601_7FFF => self.ppu.vram.get8(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:8] read from 0x{X:} in OAM", .{addr}),
 
