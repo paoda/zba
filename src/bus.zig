@@ -98,7 +98,6 @@ pub const Bus = struct {
 
     pub fn write16(self: *@This(), addr: u32, halfword: u16) void {
         // TODO: write16 can write to GamePak Flash
-
         switch (addr) {
             // General Internal Memory
             0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in IWRAM", .{ halfword, addr }),

@@ -32,14 +32,12 @@ const Vram = struct {
     }
 
     pub inline fn get32(self: *const @This(), idx: usize) u32 {
-        return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
+        return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
     }
 
     pub inline fn set32(self: *@This(), idx: usize, word: u32) void {
-        self.buf[idx + 3] = @truncate(u8, word >> 24);
-        self.buf[idx + 2] = @truncate(u8, word >> 16);
-        self.buf[idx + 1] = @truncate(u8, word >> 8);
-        self.buf[idx] = @truncate(u8, word);
+        self.set16(idx + 2, @truncate(u16, word >> 16));
+        self.set16(idx, @truncate(u16, word));
     }
 
     pub inline fn get16(self: *const @This(), idx: usize) u16 {

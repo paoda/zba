@@ -23,7 +23,7 @@ pub const GamePak = struct {
     }
 
     pub inline fn get32(self: *const @This(), idx: usize) u32 {
-        return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
+        return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
     }
 
     pub inline fn get16(self: *const @This(), idx: usize) u16 {
