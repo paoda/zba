@@ -44,7 +44,7 @@ pub const Arm7tdmi = struct {
 
     pub inline fn step(self: *@This()) u64 {
         const opcode = self.fetch();
-        self.mgbaLog(opcode);
+        // self.mgbaLog(opcode);
 
         if (checkCond(&self.cpsr, opcode)) arm_lut[armIdx(opcode)](self, self.bus, opcode);
         return 1;
