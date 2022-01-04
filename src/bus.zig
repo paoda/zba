@@ -3,18 +3,21 @@ const std = @import("std");
 const Io = @import("bus/io.zig").Io;
 const Bios = @import("bus/bios.zig").Bios;
 const GamePak = @import("bus/pak.zig").GamePak;
+const Ppu = @import("ppu.zig").Ppu;
+
 const Allocator = std.mem.Allocator;
 
 pub const Bus = struct {
     pak: GamePak,
     bios: Bios,
+    ppu: Ppu,
     io: Io,
 
     pub fn init(alloc: Allocator, path: []const u8) !@This() {
         return @This(){
             .pak = try GamePak.init(alloc, path),
-            // TODO: don't hardcode this + bundle open-sorce Boot ROM
-            .bios = try Bios.init(alloc, "./bin/gba_bios.bin"),
+            .bios = try Bios.init(alloc, "./bin/gba_bios.bin"), // TODO: don't hardcode this + bundle open-sorce Boot ROM
+            .ppu = try Ppu.init(alloc),
             .io = Io.init(),
         };
     }
@@ -29,7 +32,7 @@ pub const Bus = struct {
 
             // Internal Display Memory
             0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:32] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
-            0x0600_0000...0x0601_7FFF => std.debug.panic("[Bus:32] read from 0x{X:} in VRAM", .{addr}),
+            0x0600_0000...0x0601_7FFF => self.ppu.vram.get32(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] read from 0x{X:} in OAM", .{addr}),
 
             // External Memory (Game Pak)
@@ -44,7 +47,7 @@ pub const Bus = struct {
         };
     }
 
-    pub fn write32(_: *@This(), addr: u32, word: u32) void {
+    pub fn write32(self: *@This(), addr: u32, word: u32) void {
         // TODO: write32 can write to GamePak Flash
 
         switch (addr) {
@@ -55,7 +58,7 @@ pub const Bus = struct {
 
             // Internal Display Memory
             0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in BG/OBJ Palette RAM", .{ word, addr }),
-            0x0600_0000...0x0601_7FFF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in VRAM", .{ word, addr }),
+            0x0600_0000...0x0601_7FFF => self.ppu.vram.set32(@as(usize, addr - 0x0600_0000), word),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in OAM", .{ word, addr }),
 
             else => std.log.warn("[Bus:32] ZBA tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
@@ -72,7 +75,7 @@ pub const Bus = struct {
 
             // Internal Display Memory
             0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:16] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
-            0x0600_0000...0x0601_7FFF => std.debug.panic("[Bus:16] read from 0x{X:} in VRAM", .{addr}),
+            0x0600_0000...0x0601_7FFF => self.ppu.vram.get16(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] read from 0x{X:} in OAM", .{addr}),
 
             // External Memory (Game Pak)
@@ -98,7 +101,7 @@ pub const Bus = struct {
 
             // Internal Display Memory
             0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in BG/OBJ Palette RAM", .{ halfword, addr }),
-            0x0600_0000...0x0601_7FFF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in VRAM", .{ halfword, addr }),
+            0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(@as(usize, addr - 0x0600_0000), halfword),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in OAM", .{ halfword, addr }),
 
             else => std.log.warn("[Bus:16] ZBA tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
@@ -115,7 +118,7 @@ pub const Bus = struct {
 
             // Internal Display Memory
             0x0500_0000...0x0500_03FF => std.debug.panic("[Bus:8] read from 0x{X:} in BG/OBJ Palette RAM", .{addr}),
-            0x0600_0000...0x0601_7FFF => std.debug.panic("[Bus:8] read from 0x{X:} in VRAM", .{addr}),
+            0x0600_0000...0x0601_7FFF => self.ppu.vram.get8(@as(usize, addr - 0x0600_0000)),
             0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:8] read from 0x{X:} in OAM", .{addr}),
 
             // External Memory (Game Pak)
