@@ -44,6 +44,8 @@ pub const Arm7tdmi = struct {
 
     pub inline fn step(self: *@This()) u64 {
         const opcode = self.fetch();
+        self.mgbaLog(opcode);
+
         if (checkCond(&self.cpsr, opcode)) arm_lut[armIdx(opcode)](self, self.bus, opcode);
         return 1;
     }
@@ -56,6 +58,33 @@ pub const Arm7tdmi = struct {
 
     fn fakePC(self: *const @This()) u32 {
         return self.r[15] + 4;
+    }
+
+    fn mgbaLog(self: *const @This(), opcode: u32) void {
+        const stderr = std.io.getStdErr().writer();
+        std.debug.getStderrMutex().lock();
+        defer std.debug.getStderrMutex().unlock();
+
+        const r0 = self.r[0];
+        const r1 = self.r[1];
+        const r2 = self.r[2];
+        const r3 = self.r[3];
+        const r4 = self.r[4];
+        const r5 = self.r[5];
+        const r6 = self.r[6];
+        const r7 = self.r[7];
+        const r8 = self.r[8];
+        const r9 = self.r[9];
+        const r10 = self.r[10];
+        const r11 = self.r[11];
+        const r12 = self.r[12];
+        const r13 = self.r[13];
+        const r14 = self.r[14];
+        const r15 = self.r[15];
+
+        const cpsr = self.cpsr.raw;
+
+        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>8}:\n", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, cpsr, opcode }) catch return;
     }
 };
 
