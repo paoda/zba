@@ -34,18 +34,17 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
                     },
                     0b01 => {
                         // LDRH
-                        const halfword = bus.read16(address);
-                        cpu.r[rd] = @as(u32, halfword);
+                        cpu.r[rd] = bus.read16(address);
                     },
                     0b10 => {
                         // LDRSB
-                        const byte = bus.read8(address);
-                        cpu.r[rd] = util.u32SignExtend(8, @as(u32, byte));
+                        cpu.r[rd] = util.u32SignExtend(8, @as(u32, bus.read8(address)));
+                        std.debug.panic("TODO: Affect the CPSR", .{});
                     },
                     0b11 => {
                         // LDRSH
-                        const halfword = bus.read16(address);
-                        cpu.r[rd] = util.u32SignExtend(16, @as(u32, halfword));
+                        cpu.r[rd] = util.u32SignExtend(16, @as(u32, bus.read16(address)));
+                        std.debug.panic("TODO: Affect the CPSR", .{});
                     },
                 }
             } else {
@@ -58,7 +57,7 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
             }
 
             address = modified_base;
-            if (W and P) cpu.r[rn] = address;
+            if (W and P or !P) cpu.r[rn] = address;
         }
     }.halfSignedDataTransfer;
 }

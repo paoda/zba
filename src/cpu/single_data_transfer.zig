@@ -40,7 +40,7 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
             }
 
             address = modified_base;
-            if (W and P or !W) cpu.r[rn] = address;
+            if (W and P or !P) cpu.r[rn] = address;
 
             // TODO: W-bit forces non-privledged mode for the transfer
         }
