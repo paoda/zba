@@ -33,17 +33,15 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                 },
                 0xA => {
                     // CMP
-                    var result: u32 = undefined;
-
                     const op1_val = cpu.r[op1];
                     const v_ctx = (op1_val >> 31 == 0x01) or (op2 >> 31 == 0x01);
 
-                    const didOverflow = @subWithOverflow(u32, op1_val, op2, &result);
+                    const result = op1_val -% op2;
 
-                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 0x01 == 0x01));
-                    cpu.cpsr.c.write(didOverflow);
-                    cpu.cpsr.z.write(result == 0x00);
                     cpu.cpsr.n.write(result >> 31 & 0x01 == 0x01);
+                    cpu.cpsr.z.write(result == 0x00);
+                    cpu.cpsr.c.write(op2 <= op1_val);
+                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 0x01 == 0x01));
                 },
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
