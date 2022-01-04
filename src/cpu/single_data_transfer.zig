@@ -13,7 +13,7 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
             const rd = opcode >> 12 & 0xF;
 
             const base = cpu.r[rn];
-            const offset = if (I) opcode & 0xFFF else registerOffset(cpu, opcode);
+            const offset = if (I) registerOffset(cpu, opcode) else opcode & 0xFFF;
 
             const modified_base = if (U) base + offset else base - offset;
             var address = if (P) modified_base else base;
@@ -40,7 +40,7 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
             }
 
             address = modified_base;
-            if (W and P) cpu.r[rn] = address;
+            if (W and P or !W) cpu.r[rn] = address;
 
             // TODO: W-bit forces non-privledged mode for the transfer
         }
