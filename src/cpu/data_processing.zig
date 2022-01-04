@@ -25,6 +25,10 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
 
                     if (S) std.debug.panic("[CPU] TODO: implement ADD condition codes", .{});
                 },
+                0x8 => {
+                    // TST
+                    std.debug.panic("[CPU] TODO: implement TST, also figure out barrel shifter flags\n", .{});
+                },
                 0xD => {
                     // MOV
                     cpu.r[rd] = op2;
@@ -34,14 +38,14 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                 0xA => {
                     // CMP
                     const op1_val = cpu.r[op1];
-                    const v_ctx = (op1_val >> 31 == 0x01) or (op2 >> 31 == 0x01);
+                    const v_ctx = (op1_val >> 31 == 1) or (op2 >> 31 == 1);
 
                     const result = op1_val -% op2;
 
-                    cpu.cpsr.n.write(result >> 31 & 0x01 == 0x01);
-                    cpu.cpsr.z.write(result == 0x00);
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
                     cpu.cpsr.c.write(op2 <= op1_val);
-                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 0x01 == 0x01));
+                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 1== 1));
                 },
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
