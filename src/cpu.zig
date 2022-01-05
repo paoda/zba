@@ -2,8 +2,10 @@ const std = @import("std");
 const util = @import("util.zig");
 const bitfield = @import("bitfield");
 
+const BarrelShifter = @import("cpu/barrel_shifter.zig");
 const Bus = @import("bus.zig").Bus;
 const Scheduler = @import("scheduler.zig").Scheduler;
+
 const Bitfield = bitfield.Bitfield;
 const Bit = bitfield.Bit;
 
@@ -160,7 +162,7 @@ fn populate() [0x1000]InstrFn {
     };
 }
 
-const CPSR = extern union {
+pub const CPSR = extern union {
     mode: Bitfield(u32, 0, 5),
     t: Bit(u32, 5),
     f: Bit(u32, 6),

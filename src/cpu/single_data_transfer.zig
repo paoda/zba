@@ -1,10 +1,11 @@
 const std = @import("std");
 const util = @import("../util.zig");
-const processor = @import("../cpu.zig");
+const arm = @import("../cpu.zig");
 
+const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../bus.zig").Bus;
-const Arm7tdmi = processor.Arm7tdmi;
-const InstrFn = processor.InstrFn;
+const Arm7tdmi = arm.Arm7tdmi;
+const InstrFn = arm.InstrFn;
 
 pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
@@ -48,15 +49,14 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
 }
 
 fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
-    const amount = opcode >> 7 & 0x1F;
-    const rm = opcode & 0xF;
-    const r_val = cpu.r[rm];
+    const shift_byte = @truncate(u8, opcode >> 7 & 0x1F);
 
-    return switch (opcode >> 5 & 0x03) {
-        0b00 => r_val << @truncate(u5, amount),
-        0b01 => r_val >> @truncate(u5, amount),
-        0b10 => @bitCast(u32, @bitCast(i32, r_val) >> @truncate(u5, amount)),
-        0b11 => std.math.rotr(u32, r_val, amount),
-        else => unreachable,
+    const rm = cpu.r[opcode & 0xF];
+
+    return switch (@truncate(u2, opcode >> 5)) {
+        0b00 => BarrelShifter.logical_left(&cpu.cpsr, rm, shift_byte),
+        0b01 => BarrelShifter.logical_right(&cpu.cpsr, rm, shift_byte),
+        0b10 => BarrelShifter.arithmetic_right(&cpu.cpsr, rm, shift_byte),
+        0b11 => BarrelShifter.rotate_right(&cpu.cpsr, rm, shift_byte),
     };
 }

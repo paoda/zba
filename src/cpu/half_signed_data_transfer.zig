@@ -1,10 +1,10 @@
 const std = @import("std");
-const processor = @import("../cpu.zig");
+const arm = @import("../cpu.zig");
 const util = @import("../util.zig");
 
 const Bus = @import("../bus.zig").Bus;
-const Arm7tdmi = processor.Arm7tdmi;
-const InstrFn = processor.InstrFn;
+const Arm7tdmi = arm.Arm7tdmi;
+const InstrFn = arm.InstrFn;
 
 pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
