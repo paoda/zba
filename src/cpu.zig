@@ -18,14 +18,14 @@ const arm_lut: [0x1000]InstrFn = populate();
 
 pub const Arm7tdmi = struct {
     r: [16]u32,
-    sch: *Scheduler,
+    sched: *Scheduler,
     bus: *Bus,
     cpsr: CPSR,
 
-    pub fn init(scheduler: *Scheduler, bus: *Bus) @This() {
+    pub fn init(sched: *Scheduler, bus: *Bus) @This() {
         return .{
             .r = [_]u32{0x00} ** 16,
-            .sch = scheduler,
+            .sched = sched,
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_00DF },
         };

@@ -35,6 +35,12 @@ pub const Scheduler = struct {
                 .HeatDeath => {
                     std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
                 },
+                .HBlank => {
+                    std.debug.panic("[Scheduler] tick {}: Hblank", .{self.tick});
+                },
+                .VBlank => {
+                    std.debug.panic("[Scheduler] tick {}: VBlank", .{self.tick});
+                },
             }
         }
     }
@@ -57,4 +63,6 @@ fn lessThan(_: void, a: Event, b: Event) Order {
 
 pub const EventKind = enum {
     HeatDeath,
+    HBlank,
+    VBlank,
 };

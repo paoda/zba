@@ -1,15 +1,18 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const Scheduler = @import("scheduler.zig").Scheduler;
 
 pub const Ppu = struct {
     vram: Vram,
     palette: Palette,
+    sched: *Scheduler,
 
-    pub fn init(alloc: Allocator) !@This() {
+    pub fn init(alloc: Allocator, sched: *Scheduler) !@This() {
         return @This(){
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
+            .sched = sched,
         };
     }
 

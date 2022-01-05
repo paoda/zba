@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const Scheduler = @import("scheduler.zig").Scheduler;
 const Io = @import("bus/io.zig").Io;
 const Bios = @import("bus/bios.zig").Bios;
 const GamePak = @import("bus/pak.zig").GamePak;
@@ -13,11 +14,11 @@ pub const Bus = struct {
     ppu: Ppu,
     io: Io,
 
-    pub fn init(alloc: Allocator, path: []const u8) !@This() {
+    pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !@This() {
         return @This(){
             .pak = try GamePak.init(alloc, path),
             .bios = try Bios.init(alloc, "./bin/gba_bios.bin"), // TODO: don't hardcode this + bundle open-sorce Boot ROM
-            .ppu = try Ppu.init(alloc),
+            .ppu = try Ppu.init(alloc, sched),
             .io = Io.init(),
         };
     }

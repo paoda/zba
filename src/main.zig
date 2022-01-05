@@ -23,11 +23,11 @@ pub fn main() anyerror!void {
         return;
     }
 
-    var bus = try Bus.init(alloc, zba_args[0]);
-    defer bus.deinit();
-
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
+
+    var bus = try Bus.init(alloc, &scheduler, zba_args[0]);
+    defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
 
