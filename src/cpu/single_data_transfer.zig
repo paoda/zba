@@ -6,6 +6,7 @@ const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../bus.zig").Bus;
 const Arm7tdmi = arm.Arm7tdmi;
 const InstrFn = arm.InstrFn;
+const CPSR = arm.CPSR;
 
 pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
@@ -53,10 +54,12 @@ fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
 
     const rm = cpu.r[opcode & 0xF];
 
+    var dummy = CPSR{ .raw = 0x0000_0000 };
+
     return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => BarrelShifter.logical_left(&cpu.cpsr, rm, shift_byte),
-        0b01 => BarrelShifter.logical_right(&cpu.cpsr, rm, shift_byte),
-        0b10 => BarrelShifter.arithmetic_right(&cpu.cpsr, rm, shift_byte),
-        0b11 => BarrelShifter.rotate_right(&cpu.cpsr, rm, shift_byte),
+        0b00 => BarrelShifter.logical_left(&dummy, rm, shift_byte),
+        0b01 => BarrelShifter.logical_right(&dummy, rm, shift_byte),
+        0b10 => BarrelShifter.arithmetic_right(&dummy, rm, shift_byte),
+        0b11 => BarrelShifter.rotate_right(&dummy, rm, shift_byte),
     };
 }

@@ -4,7 +4,7 @@ const arm = @import("../cpu.zig");
 const Arm7tdmi = arm.Arm7tdmi;
 const CPSR = arm.CPSR;
 
-pub inline fn exec(cpu: *Arm7tdmi, opcode: u32) u32 {
+pub inline fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var shift_amt: u8 = undefined;
     if (opcode >> 4 & 1 == 1) {
         shift_amt = @truncate(u8, cpu.r[opcode >> 8 & 0xF]);
@@ -14,12 +14,22 @@ pub inline fn exec(cpu: *Arm7tdmi, opcode: u32) u32 {
 
     const rm = cpu.r[opcode & 0xF];
 
-    return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => logical_left(&cpu.cpsr, rm, shift_amt),
-        0b01 => logical_right(&cpu.cpsr, rm, shift_amt),
-        0b10 => arithmetic_right(&cpu.cpsr, rm, shift_amt),
-        0b11 => rotate_right(&cpu.cpsr, rm, shift_amt),
-    };
+    if (S) {
+        return switch (@truncate(u2, opcode >> 5)) {
+            0b00 => logical_left(&cpu.cpsr, rm, shift_amt),
+            0b01 => logical_right(&cpu.cpsr, rm, shift_amt),
+            0b10 => arithmetic_right(&cpu.cpsr, rm, shift_amt),
+            0b11 => rotate_right(&cpu.cpsr, rm, shift_amt),
+        };
+    } else {
+        var dummy = CPSR{ .raw = 0x0000_0000 };
+        return switch (@truncate(u2, opcode >> 5)) {
+            0b00 => logical_left(&dummy, rm, shift_amt),
+            0b01 => logical_right(&dummy, rm, shift_amt),
+            0b10 => arithmetic_right(&dummy, rm, shift_amt),
+            0b11 => rotate_right(&dummy, rm, shift_amt),
+        };
+    }
 }
 
 pub inline fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {

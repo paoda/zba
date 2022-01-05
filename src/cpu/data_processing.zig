@@ -16,60 +16,57 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
             if (I) {
                 op2 = std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1);
             } else {
-                op2 = BarrelShifter.exec(cpu, opcode);
+                if (S and rd == 0xF) {
+                    std.debug.panic("[CPU] Data Processing Instruction w/ S set and Rd == 15", .{});
+                } else {
+                    op2 = BarrelShifter.exec(S, cpu, opcode);
+                }
             }
 
             switch (instrKind) {
                 0x4 => {
                     // ADD
-                    cpu.r[rd] = cpu.r[op1] + op2;
+                    var result: u32 = undefined;
+                    const didOverflow = @addWithOverflow(u32, cpu.r[op1], op2, &result);
+                    cpu.r[rd] = result;
 
-                    if (S) std.debug.panic("[CPU] TODO: implement ADD condition codes", .{});
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        cpu.cpsr.c.write(didOverflow);
+                        cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                    }
                 },
                 0x8 => {
                     // TST
-                    std.debug.panic("[CPU] TODO: implement TST, also figure out barrel shifter flags\n", .{});
+                    const result = cpu.r[op1] & op2;
+
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    // Barrel Shifter should always calc CPSR C in TST
+                    if (!S) _ = BarrelShifter.exec(true, cpu, opcode);
                 },
                 0xD => {
                     // MOV
                     cpu.r[rd] = op2;
 
-                    if (S) std.debug.panic("[CPU] implement MOV condition codes", .{});
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(op2 >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(op2 == 0);
+                        // C set by Barr0x15el Shifter, V is unnafected
+                    }
                 },
                 0xA => {
                     // CMP
-                    const op1_val = cpu.r[op1];
-                    const v_ctx = (op1_val >> 31 == 1) or (op2 >> 31 == 1);
-
-                    const result = op1_val -% op2;
+                    const result = cpu.r[op1] -% op2;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(op2 <= op1_val);
-                    cpu.cpsr.v.write(v_ctx and (result >> 31 & 1 == 1));
+                    cpu.cpsr.c.write(op2 <= cpu.r[op1]);
+                    cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                 },
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
         }
     }.dataProcessing;
 }
-
-// fn registerOp2(cpu: *const Arm7tdmi, opcode: u32) u32 {
-//     var amount: u32 = undefined;
-//     if (opcode >> 4 & 0x01 == 0x01) {
-//         amount = cpu.r[opcode >> 8 & 0xF] & 0xFF;
-//     } else {
-//         amount = opcode >> 7 & 0x1F;
-//     }
-
-//     const rm = opcode & 0xF;
-//     const r_val = cpu.r[rm];
-
-//     return switch (opcode >> 5 & 0x03) {
-//         0b00 => r_val << @truncate(u5, amount),
-//         0b01 => r_val >> @truncate(u5, amount),
-//         0b10 => @bitCast(u32, @bitCast(i32, r_val) >> @truncate(u5, amount)),
-//         0b11 => std.math.rotr(u32, r_val, amount),
-//         else => unreachable,
-//     };
-// }
