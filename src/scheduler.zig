@@ -25,7 +25,7 @@ pub const Scheduler = struct {
         self.queue.deinit();
     }
 
-    pub fn handleEvent(self: *@This(), _: *Arm7tdmi, _: *Bus) void {
+    pub fn handleEvent(self: *@This(), _: *Arm7tdmi, bus: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
 
         if (should_handle) {
@@ -36,13 +36,53 @@ pub const Scheduler = struct {
                     std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
                 },
                 .HBlank => {
-                    std.debug.panic("[Scheduler] tick {}: Hblank", .{self.tick});
+                    std.log.debug("[Scheduler] tick {}: Hblank", .{self.tick});
+
+                    // We've reached the end of a scanline
+                    const scanline = bus.io.vcount.scanline.read();
+                    bus.io.vcount.scanline.write(scanline + 1);
+
+                    bus.io.dispstat.hblank.set();
+
+                    if (scanline < 160) {
+                        self.push(.{ .kind = .Visible, .tick = self.tick + (68 * 4) });
+                    } else {
+                        self.push(.{ .kind = .VBlank, .tick = self.tick + (68 * 4) });
+                    }
+                },
+                .Visible => {
+                    std.log.debug("[Scheduler] tick {}: Visible", .{self.tick});
+
+                    // Beginning of a Scanline
+                    bus.io.dispstat.hblank.unset();
+                    bus.io.dispstat.vblank.unset();
+
+                    self.push(.{ .kind = .HBlank, .tick = self.tick + (240 * 4) });
                 },
                 .VBlank => {
-                    std.debug.panic("[Scheduler] tick {}: VBlank", .{self.tick});
+                    std.log.debug("[Scheduler] tick {}: VBlank", .{self.tick});
+
+                    // Beginning of a Scanline, not visible though
+                    bus.io.dispstat.hblank.unset();
+                    bus.io.dispstat.vblank.set();
+
+                    const scanline = bus.io.vcount.scanline.read();
+                    bus.io.vcount.scanline.write(scanline + 1);
+
+                    if (scanline < 227) {
+                        // Another Vblank Scanline
+                        self.push(.{ .kind = .VBlank, .tick = self.tick + 68 * (308 * 4) });
+                    } else {
+                        bus.io.vcount.scanline.write(0); // Reset Scanline
+                        self.push(.{ .kind = .Visible, .tick = self.tick + 68 * (308 * 4) });
+                    }
                 },
             }
         }
+    }
+
+    pub inline fn push(self: *@This(), event: Event) void {
+        self.queue.add(event) catch unreachable;
     }
 
     pub inline fn nextTimestamp(self: *@This()) u64 {
@@ -65,4 +105,5 @@ pub const EventKind = enum {
     HeatDeath,
     HBlank,
     VBlank,
+    Visible,
 };

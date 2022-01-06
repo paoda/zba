@@ -5,13 +5,15 @@ const Bitfield = bitfield.Bitfield;
 const Bit = bitfield.Bit;
 
 pub const Io = struct {
-    dispcnt: Dispcnt,
-    dispstat: Dispstat,
+    dispcnt: DispCnt,
+    dispstat: DispStat,
+    vcount: VCount,
 
     pub fn init() @This() {
         return .{
             .dispcnt = .{ .raw = 0x0000_0000 },
             .dispstat = .{ .raw = 0x0000_0000 },
+            .vcount = .{ .raw = 0x0000_0000 },
         };
     }
 
@@ -48,7 +50,7 @@ pub const Io = struct {
     }
 };
 
-const Dispcnt = extern union {
+const DispCnt = extern union {
     bg_mode: Bitfield(u16, 0, 3),
     frame_select: Bit(u16, 4),
     hblank_interraw_free: Bit(u16, 5),
@@ -61,7 +63,7 @@ const Dispcnt = extern union {
     raw: u16,
 };
 
-const Dispstat = extern union {
+const DispStat = extern union {
     vblank: Bit(u16, 0),
     hblank: Bit(u16, 1),
     vcount: Bit(u16, 2),
@@ -69,5 +71,10 @@ const Dispstat = extern union {
     hblank_irq: Bit(u16, 4),
     vcount_irq: Bit(u16, 5),
     vcount_setting: Bitfield(u16, 8, 7),
+    raw: u16,
+};
+
+const VCount = extern union {
+    scanline: Bitfield(u16, 0, 8),
     raw: u16,
 };

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 const Scheduler = @import("scheduler.zig").Scheduler;
+const EventKind = @import("scheduler.zig").EventKind;
 
 pub const Ppu = struct {
     vram: Vram,
@@ -9,6 +10,9 @@ pub const Ppu = struct {
     sched: *Scheduler,
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !@This() {
+        // Queue first Hblank
+        sched.push(.{ .kind = .HBlank, .tick = sched.tick + 240 * 4 });
+
         return @This(){
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
