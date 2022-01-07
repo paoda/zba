@@ -2,8 +2,8 @@ const std = @import("std");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Io = @import("bus/io.zig").Io;
-const Bios = @import("bus/bios.zig").Bios;
-const GamePak = @import("bus/pak.zig").GamePak;
+const Bios = @import("bus/Bios.zig");
+const GamePak = @import("bus/GamePak.zig");
 const Ppu = @import("ppu.zig").Ppu;
 
 const Allocator = std.mem.Allocator;
