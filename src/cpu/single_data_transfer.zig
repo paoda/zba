@@ -8,9 +8,9 @@ const Arm7tdmi = arm.Arm7tdmi;
 const InstrFn = arm.InstrFn;
 const CPSR = arm.CPSR;
 
-pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
+pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
-        fn singleDataTransfer(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
+        fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
             const rn = opcode >> 16 & 0xF;
             const rd = opcode >> 12 & 0xF;
 
@@ -46,7 +46,7 @@ pub fn comptimeSingleDataTransfer(comptime I: bool, comptime P: bool, comptime U
 
             // TODO: W-bit forces non-privledged mode for the transfer
         }
-    }.singleDataTransfer;
+    }.inner;
 }
 
 fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {

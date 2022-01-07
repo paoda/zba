@@ -6,9 +6,9 @@ const Bus = @import("../bus.zig").Bus;
 const Arm7tdmi = arm.Arm7tdmi;
 const InstrFn = arm.InstrFn;
 
-pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
+pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
-        fn halfSignedDataTransfer(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
+        fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
             const rn = opcode >> 16 & 0xF;
             const rd = opcode >> 12 & 0xF;
             const rm = opcode & 0xF;
@@ -59,5 +59,5 @@ pub fn comptimeHalfSignedDataTransfer(comptime P: bool, comptime U: bool, compti
             address = modified_base;
             if (W and P or !P) cpu.r[rn] = address;
         }
-    }.halfSignedDataTransfer;
+    }.inner;
 }

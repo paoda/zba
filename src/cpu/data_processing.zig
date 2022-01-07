@@ -6,9 +6,9 @@ const Bus = @import("../bus.zig").Bus;
 const Arm7tdmi = arm.Arm7tdmi;
 const InstrFn = arm.InstrFn;
 
-pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4) InstrFn {
+pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4) InstrFn {
     return struct {
-        fn dataProcessing(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
+        fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
             const rd = opcode >> 12 & 0xF;
             const op1 = opcode >> 16 & 0xF;
 
@@ -68,5 +68,5 @@ pub fn comptimeDataProcessing(comptime I: bool, comptime S: bool, comptime instr
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
         }
-    }.dataProcessing;
+    }.inner;
 }

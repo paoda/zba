@@ -9,9 +9,10 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Bitfield = bitfield.Bitfield;
 const Bit = bitfield.Bit;
 
-const comptimeDataProcessing = @import("cpu/data_processing.zig").comptimeDataProcessing;
-const comptimeSingleDataTransfer = @import("cpu/single_data_transfer.zig").comptimeSingleDataTransfer;
-const comptimeHalfSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").comptimeHalfSignedDataTransfer;
+const dataProcessing = @import("cpu/data_processing.zig").dataProcessing;
+const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTransfer;
+const halfAndSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
+const branch = @import("cpu/branch.zig").branch;
 
 pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 const arm_lut: [0x1000]InstrFn = populate();
@@ -58,7 +59,7 @@ pub const Arm7tdmi = struct {
         return word;
     }
 
-    fn fakePC(self: *const @This()) u32 {
+    pub fn fakePC(self: *const @This()) u32 {
         return self.r[15] + 4;
     }
 
@@ -128,7 +129,7 @@ fn populate() [0x1000]InstrFn {
                 const S = i >> 4 & 1 == 1;
                 const instrKind = i >> 5 & 0xF;
 
-                lut[i] = comptimeDataProcessing(I, S, instrKind);
+                lut[i] = dataProcessing(I, S, instrKind);
             }
 
             if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
@@ -138,7 +139,7 @@ fn populate() [0x1000]InstrFn {
                 const W = i >> 5 & 1 == 1;
                 const L = i >> 4 & 1 == 1;
 
-                lut[i] = comptimeHalfSignedDataTransfer(P, U, I, W, L);
+                lut[i] = halfAndSignedDataTransfer(P, U, I, W, L);
             }
 
             if (i >> 10 & 0x3 == 0b01) {
@@ -149,12 +150,12 @@ fn populate() [0x1000]InstrFn {
                 const W = i >> 5 & 1 == 1;
                 const L = i >> 4 & 1 == 1;
 
-                lut[i] = comptimeSingleDataTransfer(I, P, U, B, W, L);
+                lut[i] = singleDataTransfer(I, P, U, B, W, L);
             }
 
             if (i >> 9 & 0x7 == 0b101) {
                 const L = i >> 8 & 1 == 1;
-                lut[i] = comptimeBranch(L);
+                lut[i] = branch(L);
             }
         }
 
@@ -187,16 +188,4 @@ const Mode = enum(u5) {
 fn undefinedInstruction(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
     std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
-}
-
-fn comptimeBranch(comptime L: bool) InstrFn {
-    return struct {
-        fn branch(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
-            if (L) {
-                cpu.r[14] = cpu.r[15] - 4;
-            }
-
-            cpu.r[15] = cpu.fakePC() +% util.u32SignExtend(24, opcode << 2);
-        }
-    }.branch;
 }
