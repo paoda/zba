@@ -5,11 +5,13 @@ const Bitfield = bitfield.Bitfield;
 const Bit = bitfield.Bit;
 
 pub const Io = struct {
+    const Self = @This();
+
     dispcnt: DispCnt,
     dispstat: DispStat,
     vcount: VCount,
 
-    pub fn init() @This() {
+    pub fn init() Self {
         return .{
             .dispcnt = .{ .raw = 0x0000_0000 },
             .dispstat = .{ .raw = 0x0000_0000 },
@@ -17,7 +19,7 @@ pub const Io = struct {
         };
     }
 
-    pub fn read32(self: *const @This(), addr: u32) u32 {
+    pub fn read32(self: *const Self, addr: u32) u32 {
         return switch (addr) {
             0x0400_0000 => @as(u32, self.dispcnt.raw),
             0x0400_0004 => @as(u32, self.dispstat.raw),
@@ -25,7 +27,7 @@ pub const Io = struct {
         };
     }
 
-    pub fn read16(self: *const @This(), addr: u32) u16 {
+    pub fn read16(self: *const Self, addr: u32) u16 {
         return switch (addr) {
             0x0400_0000 => self.dispcnt.raw,
             0x0400_0004 => self.dispstat.raw,
@@ -33,7 +35,7 @@ pub const Io = struct {
         };
     }
 
-    pub fn write16(self: *@This(), addr: u32, halfword: u16) void {
+    pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         switch (addr) {
             0x0400_0000 => self.dispcnt.raw = halfword,
             0x0400_0004 => self.dispstat.raw = halfword,
@@ -41,7 +43,7 @@ pub const Io = struct {
         }
     }
 
-    pub fn read8(self: *const @This(), addr: u32) u8 {
+    pub fn read8(self: *const Self, addr: u32) u8 {
         return switch (addr) {
             0x0400_0000 => @truncate(u8, self.dispcnt.raw),
             0x0400_0004 => @truncate(u8, self.dispstat.raw),
