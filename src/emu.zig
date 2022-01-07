@@ -1,6 +1,6 @@
+const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const Bus = @import("bus.zig").Bus;
 
 const cycles_per_frame: u64 = 100; // TODO: How many cycles actually?
 

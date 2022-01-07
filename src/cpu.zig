@@ -3,7 +3,7 @@ const util = @import("util.zig");
 const bitfield = @import("bitfield");
 
 const BarrelShifter = @import("cpu/barrel_shifter.zig");
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Bitfield = bitfield.Bitfield;

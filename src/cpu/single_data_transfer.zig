@@ -3,7 +3,7 @@ const util = @import("../util.zig");
 const arm = @import("../cpu.zig");
 
 const BarrelShifter = @import("barrel_shifter.zig");
-const Bus = @import("../bus.zig").Bus;
+const Bus = @import("../Bus.zig");
 const Arm7tdmi = arm.Arm7tdmi;
 const InstrFn = arm.InstrFn;
 const CPSR = arm.CPSR;

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;

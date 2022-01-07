@@ -2,7 +2,7 @@ const std = @import("std");
 const emu = @import("emu.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 pub fn main() anyerror!void {
