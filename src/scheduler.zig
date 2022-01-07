@@ -21,7 +21,7 @@ pub const Scheduler = struct {
         return scheduler;
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: @This()) void {
         self.queue.deinit();
     }
 

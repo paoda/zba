@@ -23,7 +23,7 @@ pub const Bus = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: @This()) void {
         self.pak.deinit();
         self.bios.deinit();
         self.ppu.deinit();

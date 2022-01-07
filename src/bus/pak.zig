@@ -18,7 +18,7 @@ pub const GamePak = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: @This()) void {
         self.alloc.free(self.buf);
     }
 

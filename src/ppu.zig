@@ -20,7 +20,7 @@ pub const Ppu = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: @This()) void {
         self.vram.deinit();
     }
 };
@@ -36,7 +36,7 @@ const Palette = struct {
         };
     }
 
-    fn deinit(self: *@This()) void {
+    fn deinit(self: @This()) void {
         self.alloc.free(self.buf);
     }
 
@@ -74,7 +74,7 @@ const Vram = struct {
         };
     }
 
-    fn deinit(self: *@This()) void {
+    fn deinit(self: @This()) void {
         self.alloc.free(self.buf);
     }
 
