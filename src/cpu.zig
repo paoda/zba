@@ -1,13 +1,11 @@
 const std = @import("std");
 const util = @import("util.zig");
-const bitfield = @import("bitfield");
 
 const BarrelShifter = @import("cpu/barrel_shifter.zig");
 const Bus = @import("Bus.zig");
+const Bit = @import("bitfield").Bit;
+const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
-
-const Bitfield = bitfield.Bitfield;
-const Bit = bitfield.Bit;
 
 const dataProcessing = @import("cpu/data_processing.zig").dataProcessing;
 const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTransfer;

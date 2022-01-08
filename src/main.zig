@@ -1,9 +1,9 @@
 const std = @import("std");
 const emu = @import("emu.zig");
 
-const Scheduler = @import("scheduler.zig").Scheduler;
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Scheduler = @import("scheduler.zig").Scheduler;
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

@@ -1,10 +1,8 @@
-const arm = @import("../cpu.zig");
 const util = @import("../util.zig");
 
 const Bus = @import("../Bus.zig");
-
-const Arm7tdmi = arm.Arm7tdmi;
-const InstrFn = arm.InstrFn;
+const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const InstrFn = @import("../cpu.zig").InstrFn;
 
 pub fn branch(comptime L: bool) InstrFn {
     return struct {

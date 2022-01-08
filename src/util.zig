@@ -1,13 +1,12 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 pub fn signExtend(comptime T: type, comptime bits: usize, value: anytype) T {
     const ValT = comptime @TypeOf(value);
-    comptime assert(isInteger(ValT));
-    comptime assert(isSigned(ValT));
+    comptime std.debug.assert(isInteger(ValT));
+    comptime std.debug.assert(isSigned(ValT));
 
     const value_bits = @typeInfo(ValT).Int.bits;
-    comptime assert(value_bits >= bits);
+    comptime std.debug.assert(value_bits >= bits);
 
     const bit_diff = value_bits - bits;
 

@@ -1,12 +1,11 @@
 const std = @import("std");
 const util = @import("../util.zig");
-const arm = @import("../cpu.zig");
 
 const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../Bus.zig");
-const Arm7tdmi = arm.Arm7tdmi;
-const InstrFn = arm.InstrFn;
-const CPSR = arm.CPSR;
+const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const CPSR = @import("../cpu.zig").CPSR;
+const InstrFn = @import("../cpu.zig").InstrFn;
 
 pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {

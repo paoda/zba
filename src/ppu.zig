@@ -1,8 +1,9 @@
 const std = @import("std");
 
-const Allocator = std.mem.Allocator;
-const Scheduler = @import("scheduler.zig").Scheduler;
 const EventKind = @import("scheduler.zig").EventKind;
+const Scheduler = @import("scheduler.zig").Scheduler;
+
+const Allocator = std.mem.Allocator;
 
 pub const Ppu = struct {
     vram: Vram,

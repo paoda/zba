@@ -1,8 +1,7 @@
 const std = @import("std");
-const bitfield = @import("bitfield");
 
-const Bitfield = bitfield.Bitfield;
-const Bit = bitfield.Bit;
+const Bit = @import("bitfield").Bit;
+const Bitfield = @import("bitfield").Bitfield;
 
 pub const Io = struct {
     const Self = @This();

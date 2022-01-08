@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
