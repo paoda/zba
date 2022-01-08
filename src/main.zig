@@ -61,6 +61,10 @@ pub fn main() anyerror!void {
     const buf_len = buf_pitch * 160;
     var white: [buf_len]u8 = [_]u8{ 0xFF, 0x7F } ** (buf_len / 2);
 
+    var white_heap = try alloc.alloc(u8, buf_len);
+    for (white) |b, i| white_heap[i] = b;
+    defer alloc.free(white_heap);
+
     emu_loop: while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);
 
@@ -72,7 +76,7 @@ pub fn main() anyerror!void {
             else => {},
         }
 
-        _ = SDL.SDL_UpdateTexture(texture, null, &white, buf_pitch);
+        _ = SDL.SDL_UpdateTexture(texture, null, &white_heap, buf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
     }
