@@ -1,15 +1,18 @@
 const std = @import("std");
-const emu = @import("emu.zig");
+const SDL = @import("sdl2");
 
+const emu = @import("emu.zig");
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 pub fn main() anyerror!void {
+    // Allocator for Emulator + CLI Aruments
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
     defer std.debug.assert(!gpa.deinit());
 
+    // Handle CLI Arguments
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
 
@@ -23,6 +26,7 @@ pub fn main() anyerror!void {
         return;
     }
 
+    // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
@@ -30,14 +34,50 @@ pub fn main() anyerror!void {
     defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
-
     cpu.skipBios();
 
-    while (true) {
+    // Initialize SDL
+    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO);
+    if (status < 0) sdlPanic();
+    defer SDL.SDL_Quit();
+
+    var window = SDL.SDL_CreateWindow(
+        "Gameboy Advance Emulator",
+        SDL.SDL_WINDOWPOS_CENTERED,
+        SDL.SDL_WINDOWPOS_CENTERED,
+        240 * 3,
+        160 * 3,
+        SDL.SDL_WINDOW_SHOWN,
+    ) orelse sdlPanic();
+    defer _ = SDL.SDL_DestroyWindow(window);
+
+    var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED) orelse sdlPanic();
+    defer _ = SDL.SDL_DestroyRenderer(renderer);
+
+    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_RGBA8888, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160);
+    defer SDL.SDL_DestroyTexture(texture);
+
+    const buf_len = (240 * 4) * 160;
+    var white: [buf_len]u8 = [_]u8{0xFF} ** buf_len;
+
+    emu_loop: while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);
+
+        var event: SDL.SDL_Event = undefined;
+        _ = SDL.SDL_PollEvent(&event);
+
+        switch (event.type) {
+            SDL.SDL_QUIT => break :emu_loop,
+            else => {},
+        }
+
+        _ = SDL.SDL_UpdateTexture(texture, null, &white, 240 * 4);
+        _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
+        SDL.SDL_RenderPresent(renderer);
     }
 }
 
-test "basic test" {
-    try std.testing.expectEqual(10, 3 + 7);
+fn sdlPanic() noreturn {
+    const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
+    @panic(std.mem.sliceTo(str, 0));
 }
