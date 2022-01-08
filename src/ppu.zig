@@ -23,6 +23,7 @@ pub const Ppu = struct {
 
     pub fn deinit(self: @This()) void {
         self.vram.deinit();
+        self.palette.deinit();
     }
 };
 
