@@ -49,16 +49,17 @@ pub fn main() anyerror!void {
         160 * 3,
         SDL.SDL_WINDOW_SHOWN,
     ) orelse sdlPanic();
-    defer _ = SDL.SDL_DestroyWindow(window);
+    defer SDL.SDL_DestroyWindow(window);
 
     var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED) orelse sdlPanic();
-    defer _ = SDL.SDL_DestroyRenderer(renderer);
+    defer SDL.SDL_DestroyRenderer(renderer);
 
-    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_RGBA8888, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160);
+    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_BGR555, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
     defer SDL.SDL_DestroyTexture(texture);
 
-    const buf_len = (240 * 4) * 160;
-    var white: [buf_len]u8 = [_]u8{0xFF} ** buf_len;
+    const buf_pitch = 240 * @sizeOf(u16);
+    const buf_len = buf_pitch * 160;
+    var white: [buf_len]u8 = [_]u8{ 0xFF, 0x7F } ** (buf_len / 2);
 
     emu_loop: while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);
@@ -71,7 +72,7 @@ pub fn main() anyerror!void {
             else => {},
         }
 
-        _ = SDL.SDL_UpdateTexture(texture, null, &white, 240 * 4);
+        _ = SDL.SDL_UpdateTexture(texture, null, &white, buf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
     }
