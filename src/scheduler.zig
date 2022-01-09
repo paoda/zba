@@ -37,45 +37,48 @@ pub const Scheduler = struct {
                     std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
                 },
                 .HBlank => {
-                    std.log.debug("[Scheduler] tick {}: Hblank", .{self.tick});
-
-                    // We've reached the end of a scanline
+                    // The End of a Hblank
                     const scanline = bus.io.vcount.scanline.read();
-                    bus.io.vcount.scanline.write(scanline + 1);
+                    const new_scanline = scanline + 1;
 
-                    bus.io.dispstat.hblank.set();
+                    // TODO: Should this be done @ end of Draw instead of end of Hblank?
+                    bus.ppu.drawScanline(&bus.io);
 
-                    if (scanline < 160) {
-                        self.push(.{ .kind = .Visible, .tick = self.tick + (68 * 4) });
+                    bus.io.vcount.scanline.write(new_scanline);
+                    bus.io.dispstat.hblank.unset();
+
+                    if (new_scanline < 160) {
+                        // Transitioning to another Draw
+                        self.push(.{ .kind = .Draw, .tick = self.tick + (240 * 4) });
                     } else {
-                        self.push(.{ .kind = .VBlank, .tick = self.tick + (68 * 4) });
+                        // Transitioning to a Vblank
+                        bus.io.dispstat.vblank.set();
+                        self.push(.{ .kind = .VBlank, .tick = self.tick + (308 * 4) });
                     }
                 },
-                .Visible => {
-                    std.log.debug("[Scheduler] tick {}: Visible", .{self.tick});
+                .Draw => {
+                    // The end of a Draw
 
-                    // Beginning of a Scanline
-                    bus.io.dispstat.hblank.unset();
-                    bus.io.dispstat.vblank.unset();
-
-                    self.push(.{ .kind = .HBlank, .tick = self.tick + (240 * 4) });
+                    // Transitioning to a Hblank
+                    bus.io.dispstat.hblank.set();
+                    self.push(.{ .kind = .HBlank, .tick = self.tick + (68 * 4) });
                 },
                 .VBlank => {
-                    std.log.debug("[Scheduler] tick {}: VBlank", .{self.tick});
-
-                    // Beginning of a Scanline, not visible though
-                    bus.io.dispstat.hblank.unset();
-                    bus.io.dispstat.vblank.set();
+                    // The end of a Vblank
 
                     const scanline = bus.io.vcount.scanline.read();
-                    bus.io.vcount.scanline.write(scanline + 1);
+                    const new_scanline = scanline + 1;
+                    bus.io.vcount.scanline.write(new_scanline);
 
-                    if (scanline < 227) {
-                        // Another Vblank Scanline
-                        self.push(.{ .kind = .VBlank, .tick = self.tick + 68 * (308 * 4) });
+                    if (new_scanline < 228) {
+                        // Transition to another Vblank
+                        self.push(.{ .kind = .VBlank, .tick = self.tick + (308 * 4) });
                     } else {
+                        // Transition to another Draw
                         bus.io.vcount.scanline.write(0); // Reset Scanline
-                        self.push(.{ .kind = .Visible, .tick = self.tick + 68 * (308 * 4) });
+
+                        bus.io.dispstat.vblank.unset();
+                        self.push(.{ .kind = .Draw, .tick = self.tick + (240 * 4) });
                     }
                 },
             }
@@ -106,5 +109,5 @@ pub const EventKind = enum {
     HeatDeath,
     HBlank,
     VBlank,
-    Visible,
+    Draw,
 };

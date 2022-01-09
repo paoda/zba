@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const EventKind = @import("scheduler.zig").EventKind;
+const Io = @import("bus/io.zig").Io;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Allocator = std.mem.Allocator;
@@ -18,18 +19,13 @@ pub const Ppu = struct {
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !@This() {
         // Queue first Hblank
-        sched.push(.{ .kind = .HBlank, .tick = sched.tick + 240 * 4 });
-
-        // Initialize the Frame Buffer to white
-        const white_buf: [buf_len]u8 = [_]u8{ 0xFF, 0x7F } ** (buf_len / 2);
-        const frame_buf = try alloc.alloc(u8, buf_len);
-        std.mem.copy(u8, frame_buf, &white_buf);
+        sched.push(.{ .kind = .Draw, .tick = sched.tick + 240 * 4 });
 
         return @This(){
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
             .sched = sched,
-            .frame_buf = frame_buf,
+            .frame_buf = try alloc.alloc(u8, buf_len),
             .alloc = alloc,
         };
     }
@@ -38,6 +34,22 @@ pub const Ppu = struct {
         self.alloc.free(self.frame_buf);
         self.vram.deinit();
         self.palette.deinit();
+    }
+
+    pub fn drawScanline(self: *@This(), io: *const Io) void {
+        const bg_mode = io.dispcnt.bg_mode.read();
+        const scanline = io.vcount.scanline.read();
+
+        switch (bg_mode) {
+            0x3 => {
+                // Mode 3
+                const start = buf_pitch * @as(usize, scanline);
+                const end = start + buf_pitch;
+
+                std.mem.copy(u8, self.frame_buf[start..end], self.vram.buf[start..end]);
+            },
+            else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
+        }
     }
 };
 
