@@ -4,24 +4,38 @@ const EventKind = @import("scheduler.zig").EventKind;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Allocator = std.mem.Allocator;
+const width = 240;
+const height = 160;
+pub const buf_pitch = width * @sizeOf(u16);
+const buf_len = buf_pitch * height;
 
 pub const Ppu = struct {
     vram: Vram,
     palette: Palette,
     sched: *Scheduler,
+    frame_buf: []u8,
+    alloc: Allocator,
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !@This() {
         // Queue first Hblank
         sched.push(.{ .kind = .HBlank, .tick = sched.tick + 240 * 4 });
 
+        // Initialize the Frame Buffer to white
+        const white_buf: [buf_len]u8 = [_]u8{ 0xFF, 0x7F } ** (buf_len / 2);
+        const frame_buf = try alloc.alloc(u8, buf_len);
+        std.mem.copy(u8, frame_buf, &white_buf);
+
         return @This(){
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
             .sched = sched,
+            .frame_buf = frame_buf,
+            .alloc = alloc,
         };
     }
 
     pub fn deinit(self: @This()) void {
+        self.alloc.free(self.frame_buf);
         self.vram.deinit();
         self.palette.deinit();
     }
