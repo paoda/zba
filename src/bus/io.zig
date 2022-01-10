@@ -22,6 +22,7 @@ pub const Io = struct {
         return switch (addr) {
             0x0400_0000 => @as(u32, self.dispcnt.raw),
             0x0400_0004 => @as(u32, self.dispstat.raw),
+            0x0400_0006 => @as(u32, self.vcount.raw),
             else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
         };
     }
@@ -30,6 +31,7 @@ pub const Io = struct {
         return switch (addr) {
             0x0400_0000 => self.dispcnt.raw,
             0x0400_0004 => self.dispstat.raw,
+            0x0400_0006 => self.vcount.raw,
             else => std.debug.panic("[I/O:16] tried to read from {X:}", .{addr}),
         };
     }
@@ -46,6 +48,7 @@ pub const Io = struct {
         return switch (addr) {
             0x0400_0000 => @truncate(u8, self.dispcnt.raw),
             0x0400_0004 => @truncate(u8, self.dispstat.raw),
+            0x0400_0006 => @truncate(u8, self.vcount.raw),
             else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
         };
     }
