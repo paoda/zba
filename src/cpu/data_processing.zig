@@ -45,6 +45,15 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // Barrel Shifter should always calc CPSR C in TST
                     if (!S) _ = BarrelShifter.exec(true, cpu, opcode);
                 },
+                0x9 => {
+                    // TEQ
+                    const result = cpu.r[op1] ^ op2;
+
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    // Barrel Shifter should always calc CPSR C in TEQ
+                    if (!S) _ = BarrelShifter.exec(true, cpu, opcode);
+                },
                 0xD => {
                     // MOV
                     cpu.r[rd] = op2;
