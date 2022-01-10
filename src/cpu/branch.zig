@@ -8,7 +8,8 @@ pub fn branch(comptime L: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
             if (L) {
-                cpu.r[14] = cpu.r[15] - 4;
+                // TODO: Debugging beeg.gba w/ MGBA seems to suggest that I don't do anything here
+                cpu.r[14] = cpu.r[15];
             }
 
             cpu.r[15] = cpu.fakePC() +% util.u32SignExtend(24, opcode << 2);
