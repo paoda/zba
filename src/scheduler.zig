@@ -44,7 +44,6 @@ pub const Scheduler = struct {
                     bus.ppu.drawScanline(&bus.io);
 
                     bus.io.vcount.scanline.write(new_scanline);
-                    bus.io.dispstat.hblank.unset();
 
                     if (new_scanline < 160) {
                         // Transitioning to another Draw
@@ -69,6 +68,8 @@ pub const Scheduler = struct {
                     const new_scanline = scanline + 1;
                     bus.io.vcount.scanline.write(new_scanline);
 
+                    if (new_scanline == 227) bus.io.dispstat.vblank.unset();
+
                     if (new_scanline < 228) {
                         // Transition to another Vblank
                         self.push(.VBlank, self.tick + (308 * 4));
@@ -76,7 +77,7 @@ pub const Scheduler = struct {
                         // Transition to another Draw
                         bus.io.vcount.scanline.write(0); // Reset Scanline
 
-                        bus.io.dispstat.vblank.unset();
+                        // DISPSTAT was disabled on scanline 227
                         self.push(.Draw, self.tick + (240 * 4));
                     }
                 },
