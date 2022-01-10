@@ -10,6 +10,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const dataProcessing = @import("cpu/data_processing.zig").dataProcessing;
 const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTransfer;
 const halfAndSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
+const blockDataTransfer = @import("cpu/block_data_transfer.zig").blockDataTransfer;
 const branch = @import("cpu/branch.zig").branch;
 
 pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
@@ -151,6 +152,16 @@ fn populate() [0x1000]InstrFn {
                 const L = i >> 4 & 1 == 1;
 
                 lut[i] = singleDataTransfer(I, P, U, B, W, L);
+            }
+
+            if (i >> 9 & 0x7 == 0b100) {
+                const P = i >> 8 & 1 == 1;
+                const U = i >> 7 & 1 == 1;
+                const S = i >> 6 & 1 == 1;
+                const W = i >> 5 & 1 == 1;
+                const L = i >> 4 & 1 == 1;
+
+                lut[i] = blockDataTransfer(P, U, S, W, L);
             }
 
             if (i >> 9 & 0x7 == 0b101) {
