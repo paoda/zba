@@ -53,18 +53,16 @@ pub const Ppu = struct {
                 const frame_select = io.dispcnt.frame_select.read();
 
                 const fb_start = buf_pitch * @as(usize, scanline);
-                const vram_start = width * @as(usize, scanline);
+                const vram_start = fb_start >> 1;
 
                 const start = if (frame_select) 0xA000 + vram_start else vram_start;
                 const end = start + width;
 
                 for (self.vram.buf[start..end]) |byte, i| {
                     const fb_i = i * @sizeOf(u16);
-                    const colour = self.palette.buf[byte];
-                    var bgr555: u16 = colour & 0x3 | (colour & 0x1C >> 2) << 5 | @as(u16, colour >> 5) << 10;
 
-                    self.frame_buf[fb_start + fb_i + 1] = @truncate(u8, bgr555 >> 8);
-                    self.frame_buf[fb_start + fb_i] = @truncate(u8, bgr555);
+                    self.frame_buf[fb_start + fb_i + 1] = self.palette.buf[byte + 1];
+                    self.frame_buf[fb_start + fb_i] = self.palette.buf[byte];
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
