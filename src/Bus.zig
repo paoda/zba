@@ -1,8 +1,10 @@
 const std = @import("std");
 
 const Bios = @import("bus/Bios.zig");
+const Ewram = @import("bus/Ewram.zig");
 const GamePak = @import("bus/GamePak.zig");
 const Io = @import("bus/io.zig").Io;
+const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
@@ -12,6 +14,8 @@ const Self = @This();
 pak: GamePak,
 bios: Bios,
 ppu: Ppu,
+iwram: Iwram,
+ewram: Ewram,
 io: Io,
 
 pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !Self {
@@ -19,11 +23,15 @@ pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !Self {
         .pak = try GamePak.init(alloc, path),
         .bios = try Bios.init(alloc, "./bin/gba_bios.bin"), // TODO: don't hardcode this + bundle open-sorce Boot ROM
         .ppu = try Ppu.init(alloc, sched),
+        .iwram = try Iwram.init(alloc),
+        .ewram = try Ewram.init(alloc),
         .io = Io.init(),
     };
 }
 
 pub fn deinit(self: Self) void {
+    self.iwram.deinit();
+    self.ewram.deinit();
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
@@ -33,8 +41,8 @@ pub fn read32(self: *const Self, addr: u32) u32 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get32(@as(usize, addr)),
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:32] read from 0x{X:} in IWRAM", .{addr}),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:32] read from 0x{X:} in EWRAM", .{addr}),
+        0x0200_0000...0x0203_FFFF => self.iwram.get32(addr - 0x0200_0000),
+        0x0300_0000...0x0300_7FFF => self.ewram.get32(addr - 0x0300_0000),
         0x0400_0000...0x0400_03FE => self.read32(addr),
 
         // Internal Display Memory
@@ -59,8 +67,8 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
 
     switch (addr) {
         // General Internal Memory
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in IWRAM", .{ word, addr }),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in EWRAM", .{ word, addr }),
+        0x0200_0000...0x0203_FFFF => self.iwram.set32(addr - 0x0200_0000, word),
+        0x0300_0000...0x0300_7FFF => self.ewram.set32(addr - 0x0300_0000, word),
         0x0400_0000...0x0400_03FE => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in I/O", .{ word, addr }),
 
         // Internal Display Memory
@@ -76,8 +84,8 @@ pub fn read16(self: *const Self, addr: u32) u16 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get16(@as(usize, addr)),
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:16] read from 0x{X:} in IWRAM", .{addr}),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:16] read from 0x{X:} in EWRAM", .{addr}),
+        0x0200_0000...0x0203_FFFF => self.iwram.get16(addr - 0x0200_0000),
+        0x0300_0000...0x0300_7FFF => self.ewram.get16(addr - 0x0300_0000),
         0x0400_0000...0x0400_03FE => self.io.read16(addr),
 
         // Internal Display Memory
@@ -101,8 +109,8 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
     // TODO: write16 can write to GamePak Flash
     switch (addr) {
         // General Internal Memory
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in IWRAM", .{ halfword, addr }),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in EWRAM", .{ halfword, addr }),
+        0x0200_0000...0x0203_FFFF => self.iwram.set16(addr - 0x0200_0000, halfword),
+        0x0300_0000...0x0300_7FFF => self.ewram.set16(addr - 0x0300_0000, halfword),
         0x0400_0000...0x0400_03FE => self.io.write16(addr, halfword),
 
         // Internal Display Memory
@@ -118,8 +126,8 @@ pub fn read8(self: *const Self, addr: u32) u8 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get8(@as(usize, addr)),
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:8] read from 0x{X:} in IWRAM", .{addr}),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:8] read from 0x{X:} in EWRAM", .{addr}),
+        0x0200_0000...0x0203_FFFF => self.iwram.get8(addr - 0x0200_0000),
+        0x0300_0000...0x0300_7FFF => self.ewram.get8(addr - 0x0300_0000),
         0x0400_0000...0x0400_03FE => self.io.read8(addr),
 
         // Internal Display Memory
@@ -140,12 +148,12 @@ pub fn read8(self: *const Self, addr: u32) u8 {
     };
 }
 
-pub fn write8(_: *Self, addr: u32, byte: u8) void {
+pub fn write8(self: *Self, addr: u32, byte: u8) void {
     switch (addr) {
         // General Internal Memory
-        0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in IWRAM", .{ byte, addr }),
-        0x0300_0000...0x0300_7FFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in EWRAM", .{ byte, addr }),
-        0x0400_0000...0x0400_03FE => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in I/O", .{ byte, addr }),
+        0x0200_0000...0x0203_FFFF => self.iwram.set8(addr - 0x0200_0000, byte),
+        0x0300_0000...0x0300_7FFF => self.ewram.set8(addr - 0x0300_0000, byte),
+        0x0400_0000...0x0400_03FE => self.io.set8(addr - 0x0400_0000, byte),
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in Game Pak SRAM", .{ byte, addr }),

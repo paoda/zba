@@ -52,6 +52,10 @@ pub const Io = struct {
             else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
         };
     }
+
+    pub fn set8(_: *Self, addr: u32, byte: u8) void {
+        std.debug.panic("[I/0:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr });
+    }
 };
 
 const DispCnt = extern union {
