@@ -6,6 +6,8 @@ const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
+const Timer = std.time.Timer;
+
 const buf_pitch = @import("ppu.zig").buf_pitch;
 
 pub fn main() anyerror!void {
@@ -59,6 +61,10 @@ pub fn main() anyerror!void {
     const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_BGR555, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
     defer SDL.SDL_DestroyTexture(texture);
 
+    // Init FPS Timer
+    var timer = Timer.start() catch unreachable;
+    var title_buf: [0x30]u8 = [_]u8{0x00} ** 0x30;
+
     emu_loop: while (true) {
         emu.runFrame(&scheduler, &cpu, &bus);
 
@@ -74,6 +80,10 @@ pub fn main() anyerror!void {
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, buf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
+
+        const fps = std.time.ns_per_s / timer.lap();
+        const title = std.fmt.bufPrint(&title_buf, "Gameboy Advance Emulator FPS: {d}", .{fps}) catch unreachable;
+        SDL.SDL_SetWindowTitle(window, title.ptr);
     }
 }
 

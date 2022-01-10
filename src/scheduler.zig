@@ -29,7 +29,7 @@ pub const Scheduler = struct {
 
         if (should_handle) {
             const event = self.queue.remove();
-            std.log.info("[Scheduler] Handle {} at {} ticks", .{ event.kind, self.tick });
+            // std.log.info("[Scheduler] Handle {} at {} ticks", .{ event.kind, self.tick });
 
             switch (event.kind) {
                 .HeatDeath => {
