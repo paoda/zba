@@ -76,6 +76,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 0xC => {
                     // ORR
                     const result = cpu.r[op1] | op2;
+                    cpu.r[rd] = result;
 
                     if (S and rd != 0xF) {
                         cpu.cpsr.n.write(result >> 31 & 1 == 1);
