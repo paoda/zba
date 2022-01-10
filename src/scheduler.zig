@@ -8,29 +8,28 @@ const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
 
 pub const Scheduler = struct {
+    const Self = @This();
+
     tick: u64,
     queue: PriorityQueue(Event, void, lessThan),
 
-    pub fn init(alloc: Allocator) @This() {
-        var scheduler = Scheduler{ .tick = 0, .queue = PriorityQueue(Event, void, lessThan).init(alloc, {}) };
+    pub fn init(alloc: Allocator) Self {
+        var sched = Self{ .tick = 0, .queue = PriorityQueue(Event, void, lessThan).init(alloc, {}) };
+        sched.push(.HeatDeath, std.math.maxInt(u64));
 
-        scheduler.queue.add(.{
-            .kind = EventKind.HeatDeath,
-            .tick = std.math.maxInt(u64),
-        }) catch unreachable;
-
-        return scheduler;
+        return sched;
     }
 
-    pub fn deinit(self: @This()) void {
+    pub fn deinit(self: Self) void {
         self.queue.deinit();
     }
 
-    pub fn handleEvent(self: *@This(), _: *Arm7tdmi, bus: *Bus) void {
+    pub fn handleEvent(self: *Self, _: *Arm7tdmi, bus: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
 
         if (should_handle) {
             const event = self.queue.remove();
+            std.log.info("[Scheduler] Handle {} at {} ticks", .{ event.kind, self.tick });
 
             switch (event.kind) {
                 .HeatDeath => {
@@ -49,11 +48,11 @@ pub const Scheduler = struct {
 
                     if (new_scanline < 160) {
                         // Transitioning to another Draw
-                        self.push(.{ .kind = .Draw, .tick = self.tick + (240 * 4) });
+                        self.push(.Draw, self.tick + (240 * 4));
                     } else {
                         // Transitioning to a Vblank
                         bus.io.dispstat.vblank.set();
-                        self.push(.{ .kind = .VBlank, .tick = self.tick + (308 * 4) });
+                        self.push(.VBlank, self.tick + (308 * 4));
                     }
                 },
                 .Draw => {
@@ -61,7 +60,7 @@ pub const Scheduler = struct {
 
                     // Transitioning to a Hblank
                     bus.io.dispstat.hblank.set();
-                    self.push(.{ .kind = .HBlank, .tick = self.tick + (68 * 4) });
+                    self.push(.HBlank, self.tick + (68 * 4));
                 },
                 .VBlank => {
                     // The end of a Vblank
@@ -72,24 +71,24 @@ pub const Scheduler = struct {
 
                     if (new_scanline < 228) {
                         // Transition to another Vblank
-                        self.push(.{ .kind = .VBlank, .tick = self.tick + (308 * 4) });
+                        self.push(.VBlank, self.tick + (308 * 4));
                     } else {
                         // Transition to another Draw
                         bus.io.vcount.scanline.write(0); // Reset Scanline
 
                         bus.io.dispstat.vblank.unset();
-                        self.push(.{ .kind = .Draw, .tick = self.tick + (240 * 4) });
+                        self.push(.Draw, self.tick + (240 * 4));
                     }
                 },
             }
         }
     }
 
-    pub inline fn push(self: *@This(), event: Event) void {
-        self.queue.add(event) catch unreachable;
+    pub inline fn push(self: *Self, kind: EventKind, end: u64) void {
+        self.queue.add(.{ .kind = kind, .tick = end }) catch unreachable;
     }
 
-    pub inline fn nextTimestamp(self: *@This()) u64 {
+    pub inline fn nextTimestamp(self: *Self) u64 {
         if (self.queue.peek()) |e| {
             return e.tick;
         } else unreachable;

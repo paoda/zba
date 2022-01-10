@@ -7,14 +7,15 @@ const Ppu = @import("ppu.zig").Ppu;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Allocator = std.mem.Allocator;
+const Self = @This();
 
 pak: GamePak,
 bios: Bios,
 ppu: Ppu,
 io: Io,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !@This() {
-    return @This(){
+pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !Self {
+    return Self{
         .pak = try GamePak.init(alloc, path),
         .bios = try Bios.init(alloc, "./bin/gba_bios.bin"), // TODO: don't hardcode this + bundle open-sorce Boot ROM
         .ppu = try Ppu.init(alloc, sched),
@@ -22,13 +23,13 @@ pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !@This() {
     };
 }
 
-pub fn deinit(self: @This()) void {
+pub fn deinit(self: Self) void {
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
 }
 
-pub fn read32(self: *const @This(), addr: u32) u32 {
+pub fn read32(self: *const Self, addr: u32) u32 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get32(@as(usize, addr)),
@@ -53,7 +54,7 @@ pub fn read32(self: *const @This(), addr: u32) u32 {
     };
 }
 
-pub fn write32(self: *@This(), addr: u32, word: u32) void {
+pub fn write32(self: *Self, addr: u32, word: u32) void {
     // TODO: write32 can write to GamePak Flash
 
     switch (addr) {
@@ -71,7 +72,7 @@ pub fn write32(self: *@This(), addr: u32, word: u32) void {
     }
 }
 
-pub fn read16(self: *const @This(), addr: u32) u16 {
+pub fn read16(self: *const Self, addr: u32) u16 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get16(@as(usize, addr)),
@@ -96,7 +97,7 @@ pub fn read16(self: *const @This(), addr: u32) u16 {
     };
 }
 
-pub fn write16(self: *@This(), addr: u32, halfword: u16) void {
+pub fn write16(self: *Self, addr: u32, halfword: u16) void {
     // TODO: write16 can write to GamePak Flash
     switch (addr) {
         // General Internal Memory
@@ -113,7 +114,7 @@ pub fn write16(self: *@This(), addr: u32, halfword: u16) void {
     }
 }
 
-pub fn read8(self: *const @This(), addr: u32) u8 {
+pub fn read8(self: *const Self, addr: u32) u8 {
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get8(@as(usize, addr)),
@@ -139,7 +140,7 @@ pub fn read8(self: *const @This(), addr: u32) u8 {
     };
 }
 
-pub fn write8(_: *@This(), addr: u32, byte: u8) void {
+pub fn write8(_: *Self, addr: u32, byte: u8) void {
     switch (addr) {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in IWRAM", .{ byte, addr }),

@@ -16,12 +16,14 @@ pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 const arm_lut: [0x1000]InstrFn = populate();
 
 pub const Arm7tdmi = struct {
+    const Self = @This();
+
     r: [16]u32,
     sched: *Scheduler,
     bus: *Bus,
     cpsr: CPSR,
 
-    pub fn init(sched: *Scheduler, bus: *Bus) @This() {
+    pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return .{
             .r = [_]u32{0x00} ** 16,
             .sched = sched,
@@ -30,7 +32,7 @@ pub const Arm7tdmi = struct {
         };
     }
 
-    pub fn skipBios(self: *@This()) void {
+    pub fn skipBios(self: *Self) void {
         self.r[0] = 0x08000000;
         self.r[1] = 0x000000EA;
         // GPRs 2 -> 12 *should* already be 0 initialized
@@ -43,7 +45,7 @@ pub const Arm7tdmi = struct {
         self.cpsr.raw = 0x6000001F;
     }
 
-    pub inline fn step(self: *@This()) u64 {
+    pub inline fn step(self: *Self) u64 {
         const opcode = self.fetch();
         // self.mgbaLog(opcode);
 
@@ -51,17 +53,17 @@ pub const Arm7tdmi = struct {
         return 1;
     }
 
-    fn fetch(self: *@This()) u32 {
+    fn fetch(self: *Self) u32 {
         const word = self.bus.read32(self.r[15]);
         self.r[15] += 4;
         return word;
     }
 
-    pub fn fakePC(self: *const @This()) u32 {
+    pub fn fakePC(self: *const Self) u32 {
         return self.r[15] + 4;
     }
 
-    fn mgbaLog(self: *const @This(), opcode: u32) void {
+    fn mgbaLog(self: *const Self, opcode: u32) void {
         const stderr = std.io.getStdErr().writer();
         std.debug.getStderrMutex().lock();
         defer std.debug.getStderrMutex().unlock();
