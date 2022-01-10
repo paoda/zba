@@ -84,11 +84,11 @@ pub const Scheduler = struct {
         }
     }
 
-    pub inline fn push(self: *Self, kind: EventKind, end: u64) void {
+    pub fn push(self: *Self, kind: EventKind, end: u64) void {
         self.queue.add(.{ .kind = kind, .tick = end }) catch unreachable;
     }
 
-    pub inline fn nextTimestamp(self: *Self) u64 {
+    pub fn nextTimestamp(self: *Self) u64 {
         if (self.queue.peek()) |e| {
             return e.tick;
         } else unreachable;

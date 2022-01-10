@@ -3,7 +3,7 @@ const std = @import("std");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const CPSR = @import("../cpu.zig").CPSR;
 
-pub inline fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
+pub fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var shift_amt: u8 = undefined;
     if (opcode >> 4 & 1 == 1) {
         shift_amt = @truncate(u8, cpu.r[opcode >> 8 & 0xF]);
@@ -31,7 +31,7 @@ pub inline fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     }
 }
 
-pub inline fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
+pub fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     const shift_amt = @truncate(u5, shift_byte);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -58,7 +58,7 @@ pub inline fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     return result;
 }
 
-pub inline fn logical_right(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
+pub fn logical_right(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     const shift_amt = @truncate(u5, shift_byte);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 

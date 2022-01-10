@@ -72,25 +72,25 @@ const Palette = struct {
         self.alloc.free(self.buf);
     }
 
-    pub inline fn get32(self: *const Self, idx: usize) u32 {
+    pub fn get32(self: *const Self, idx: usize) u32 {
         return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
     }
 
-    pub inline fn set32(self: *Self, idx: usize, word: u32) void {
+    pub fn set32(self: *Self, idx: usize, word: u32) void {
         self.set16(idx + 2, @truncate(u16, word >> 16));
         self.set16(idx, @truncate(u16, word));
     }
 
-    pub inline fn get16(self: *const Self, idx: usize) u16 {
+    pub fn get16(self: *const Self, idx: usize) u16 {
         return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
     }
 
-    pub inline fn set16(self: *Self, idx: usize, halfword: u16) void {
+    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
         self.buf[idx + 1] = @truncate(u8, halfword >> 8);
         self.buf[idx] = @truncate(u8, halfword);
     }
 
-    pub inline fn get8(self: *const Self, idx: usize) u8 {
+    pub fn get8(self: *const Self, idx: usize) u8 {
         return self.buf[idx];
     }
 };
@@ -112,25 +112,25 @@ const Vram = struct {
         self.alloc.free(self.buf);
     }
 
-    pub inline fn get32(self: *const Self, idx: usize) u32 {
+    pub fn get32(self: *const Self, idx: usize) u32 {
         return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
     }
 
-    pub inline fn set32(self: *Self, idx: usize, word: u32) void {
+    pub fn set32(self: *Self, idx: usize, word: u32) void {
         self.set16(idx + 2, @truncate(u16, word >> 16));
         self.set16(idx, @truncate(u16, word));
     }
 
-    pub inline fn get16(self: *const Self, idx: usize) u16 {
+    pub fn get16(self: *const Self, idx: usize) u16 {
         return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
     }
 
-    pub inline fn set16(self: *Self, idx: usize, halfword: u16) void {
+    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
         self.buf[idx + 1] = @truncate(u8, halfword >> 8);
         self.buf[idx] = @truncate(u8, halfword);
     }
 
-    pub inline fn get8(self: *const Self, idx: usize) u8 {
+    pub fn get8(self: *const Self, idx: usize) u8 {
         return self.buf[idx];
     }
 };

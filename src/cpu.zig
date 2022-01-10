@@ -45,7 +45,7 @@ pub const Arm7tdmi = struct {
         self.cpsr.raw = 0x6000001F;
     }
 
-    pub inline fn step(self: *Self) u64 {
+    pub fn step(self: *Self) u64 {
         const opcode = self.fetch();
         // self.mgbaLog(opcode);
 

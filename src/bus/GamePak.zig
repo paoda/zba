@@ -22,14 +22,14 @@ pub fn deinit(self: Self) void {
     self.alloc.free(self.buf);
 }
 
-pub inline fn get32(self: *const Self, idx: usize) u32 {
+pub fn get32(self: *const Self, idx: usize) u32 {
     return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
 }
 
-pub inline fn get16(self: *const Self, idx: usize) u16 {
+pub fn get16(self: *const Self, idx: usize) u16 {
     return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
 }
 
-pub inline fn get8(self: *const Self, idx: usize) u8 {
+pub fn get8(self: *const Self, idx: usize) u8 {
     return self.buf[idx];
 }
