@@ -54,7 +54,7 @@ pub const Io = struct {
 const DispCnt = extern union {
     bg_mode: Bitfield(u16, 0, 3),
     frame_select: Bit(u16, 4),
-    hblank_interraw_free: Bit(u16, 5),
+    hblank_interval_free: Bit(u16, 5),
     obj_mapping: Bit(u16, 6),
     forced_blank: Bit(u16, 7),
     bg_enable: Bitfield(u16, 8, 4),
@@ -67,11 +67,11 @@ const DispCnt = extern union {
 const DispStat = extern union {
     vblank: Bit(u16, 0),
     hblank: Bit(u16, 1),
-    vcount: Bit(u16, 2),
+    coincidence: Bit(u16, 2),
     vblank_irq: Bit(u16, 3),
     hblank_irq: Bit(u16, 4),
     vcount_irq: Bit(u16, 5),
-    vcount_setting: Bitfield(u16, 8, 7),
+    vcount_trigger: Bitfield(u16, 8, 8),
     raw: u16,
 };
 
