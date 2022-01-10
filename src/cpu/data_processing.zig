@@ -64,6 +64,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     cpu.cpsr.c.write(op2 <= cpu.r[op1]);
                     cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                 },
+                0xC => {
+                    // ORR
+                    const result = cpu.r[op1] | op2;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        // C set by Barr0x15el Shifter, V is unnafected
+                    }
+                },
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
         }
