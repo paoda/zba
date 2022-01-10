@@ -44,11 +44,28 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x3 => {
-                // Mode 3
                 const start = buf_pitch * @as(usize, scanline);
                 const end = start + buf_pitch;
 
                 std.mem.copy(u8, self.frame_buf[start..end], self.vram.buf[start..end]);
+            },
+            0x4 => {
+                const frame_select = io.dispcnt.frame_select.read();
+
+                const fb_start = buf_pitch * @as(usize, scanline);
+                const vram_start = width * @as(usize, scanline);
+
+                const start = if (frame_select) 0xA000 + vram_start else vram_start;
+                const end = start + width;
+
+                for (self.vram.buf[start..end]) |byte, i| {
+                    const fb_i = i * @sizeOf(u16);
+                    const colour = self.palette.buf[byte];
+                    var bgr555: u16 = colour & 0x3 | (colour & 0x1C >> 2) << 5 | @as(u16, colour >> 5) << 10;
+
+                    self.frame_buf[fb_start + fb_i + 1] = @truncate(u8, bgr555 >> 8);
+                    self.frame_buf[fb_start + fb_i] = @truncate(u8, bgr555);
+                }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
         }
