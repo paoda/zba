@@ -4,3 +4,7 @@
 /zig-out
 /docs
 **/*.log
+
+# Build on WIndows
+/.build_config
+/lib/SDL2
