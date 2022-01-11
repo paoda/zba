@@ -43,7 +43,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0000_0000...0x0000_3FFF => self.bios.get32(@as(usize, addr)),
         0x0200_0000...0x0203_FFFF => self.iwram.get32(addr - 0x0200_0000),
         0x0300_0000...0x0300_7FFF => self.ewram.get32(addr - 0x0300_0000),
-        0x0400_0000...0x0400_03FE => self.read32(addr),
+        0x0400_0000...0x0400_03FE => self.io.read32(addr),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get32(@as(usize, addr - 0x0500_0000)),
