@@ -8,6 +8,7 @@ const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const dataProcessing = @import("cpu/data_processing.zig").dataProcessing;
+const psrTransfer = @import("cpu/psr_transfer.zig").psrTransfer;
 const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTransfer;
 const halfAndSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
 const blockDataTransfer = @import("cpu/block_data_transfer.zig").blockDataTransfer;
@@ -131,6 +132,14 @@ fn populate() [0x1000]InstrFn {
                 const instrKind = i >> 5 & 0xF;
 
                 lut[i] = dataProcessing(I, S, instrKind);
+            }
+
+            if (i >> 10 & 0x3 == 0b00 and i >> 7 & 0x3 == 0b10 and i >> 4 & 1 == 0) {
+                // PSR Transfer
+                const I = i >> 9 & 1 == 1;
+                const isSpsr = i >> 6 & 1 == 1;
+
+                lut[i] = psrTransfer(I, isSpsr);
             }
 
             if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
