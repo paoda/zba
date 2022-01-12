@@ -12,21 +12,27 @@ pub fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     }
 
     const rm = cpu.r[opcode & 0xF];
+    var value: u32 = undefined;
+    if (rm == 0xF) {
+        value = cpu.fakePC() + 4; // 12 ahead
+    } else {
+        value = cpu.r[opcode & 0xF];
+    }
 
     if (S) {
         return switch (@truncate(u2, opcode >> 5)) {
-            0b00 => logical_left(&cpu.cpsr, rm, shift_amt),
-            0b01 => logical_right(&cpu.cpsr, rm, shift_amt),
-            0b10 => arithmetic_right(&cpu.cpsr, rm, shift_amt),
-            0b11 => rotate_right(&cpu.cpsr, rm, shift_amt),
+            0b00 => logical_left(&cpu.cpsr, value, shift_amt),
+            0b01 => logical_right(&cpu.cpsr, value, shift_amt),
+            0b10 => arithmetic_right(&cpu.cpsr, value, shift_amt),
+            0b11 => rotate_right(&cpu.cpsr, value, shift_amt),
         };
     } else {
         var dummy = CPSR{ .raw = 0x0000_0000 };
         return switch (@truncate(u2, opcode >> 5)) {
-            0b00 => logical_left(&dummy, rm, shift_amt),
-            0b01 => logical_right(&dummy, rm, shift_amt),
-            0b10 => arithmetic_right(&dummy, rm, shift_amt),
-            0b11 => rotate_right(&dummy, rm, shift_amt),
+            0b00 => logical_left(&dummy, value, shift_amt),
+            0b01 => logical_right(&dummy, value, shift_amt),
+            0b10 => arithmetic_right(&dummy, value, shift_amt),
+            0b11 => rotate_right(&dummy, value, shift_amt),
         };
     }
 }

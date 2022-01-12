@@ -9,24 +9,29 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
             const rd = opcode >> 12 & 0xF;
-            const op1 = opcode >> 16 & 0xF;
+            const rn = opcode >> 16 & 0xF;
+
+            if (S and rd == 0xF) std.debug.panic("[CPU] Data Processing Instruction w/ S set and Rd == 15", .{});
+
+            var op1: u32 = undefined;
+            if (rn == 0xF) {
+                op1 = cpu.fakePC();
+            } else {
+                op1 = cpu.r[rn];
+            }
 
             var op2: u32 = undefined;
             if (I) {
                 op2 = std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1);
             } else {
-                if (S and rd == 0xF) {
-                    std.debug.panic("[CPU] Data Processing Instruction w/ S set and Rd == 15", .{});
-                } else {
-                    op2 = BarrelShifter.exec(S, cpu, opcode);
-                }
+                op2 = BarrelShifter.exec(S, cpu, opcode);
             }
 
             switch (instrKind) {
                 0x4 => {
                     // ADD
                     var result: u32 = undefined;
-                    const didOverflow = @addWithOverflow(u32, cpu.r[op1], op2, &result);
+                    const didOverflow = @addWithOverflow(u32, op1, op2, &result);
                     cpu.r[rd] = result;
 
                     if (S and rd != 0xF) {
@@ -38,7 +43,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0x8 => {
                     // TST
-                    const result = cpu.r[op1] & op2;
+                    const result = op1 & op2;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
@@ -47,7 +52,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0x9 => {
                     // TEQ
-                    const result = cpu.r[op1] ^ op2;
+                    const result = op1 ^ op2;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
@@ -66,16 +71,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0xA => {
                     // CMP
-                    const result = cpu.r[op1] -% op2;
+                    const result = op1 -% op2;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(op2 <= cpu.r[op1]);
+                    cpu.cpsr.c.write(op2 <= op1);
                     cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0xC => {
                     // ORR
-                    const result = cpu.r[op1] | op2;
+                    const result = op1 | op2;
                     cpu.r[rd] = result;
 
                     if (S and rd != 0xF) {
