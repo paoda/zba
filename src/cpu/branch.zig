@@ -1,3 +1,4 @@
+const std = @import("std");
 const util = @import("../util.zig");
 
 const Bus = @import("../Bus.zig");
@@ -15,4 +16,12 @@ pub fn branch(comptime L: bool) InstrFn {
             cpu.r[15] = cpu.fakePC() +% util.u32SignExtend(24, opcode << 2);
         }
     }.inner;
+}
+
+pub fn branchAndExchange(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
+    const rn = opcode & 0xF;
+    cpu.cpsr.t.write(cpu.r[rn] & 1 == 1);
+
+    // TODO: Is this how I should do it?
+    cpu.r[15] = cpu.r[rn] & 0xFFFF_FFFE;
 }

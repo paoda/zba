@@ -13,6 +13,7 @@ const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTra
 const halfAndSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
 const blockDataTransfer = @import("cpu/block_data_transfer.zig").blockDataTransfer;
 const branch = @import("cpu/branch.zig").branch;
+const branchAndExchange = @import("cpu/branch.zig").branchAndExchange;
 
 pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 const arm_lut: [0x1000]InstrFn = populate();
@@ -57,7 +58,7 @@ pub const Arm7tdmi = struct {
 
     fn fetch(self: *Self) u32 {
         const word = self.bus.read32(self.r[15]);
-        self.r[15] += 4;
+        self.r[15] += if (self.cpsr.t.read()) @as(u32, 2) else @as(u32, 4);
         return word;
     }
 
@@ -140,6 +141,10 @@ fn populate() [0x1000]InstrFn {
                 const isSpsr = i >> 6 & 1 == 1;
 
                 lut[i] = psrTransfer(I, isSpsr);
+            }
+
+            if (i == 0x121) {
+                lut[i] = branchAndExchange;
             }
 
             if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
