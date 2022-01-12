@@ -13,7 +13,14 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
             const rn = opcode >> 16 & 0xF;
             const rd = opcode >> 12 & 0xF;
 
-            const base = cpu.r[rn];
+            var base: u32 = undefined;
+            if (rn == 0xF) {
+                base = cpu.fakePC();
+                if (!L) base += 4; // Offset of 12
+            } else {
+                base = cpu.r[rn];
+            }
+
             const offset = if (I) registerOffset(cpu, opcode) else opcode & 0xFFF;
 
             const modified_base = if (U) base + offset else base - offset;
@@ -25,9 +32,8 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
                     cpu.r[rd] = bus.read8(address);
                 } else {
                     // LDR
-
-                    // FIXME: Unsure about how I calculate the boundary offset
-                    cpu.r[rd] = std.math.rotl(u32, bus.read32(address), address % 4);
+                    const value = bus.read32(address & 0xFFFF_FFFC);
+                    cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
