@@ -13,7 +13,13 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
             const rm = opcode & 0xF;
             const imm_offset_high = opcode >> 8 & 0xF;
 
-            const base = cpu.r[rn];
+            var base: u32 = undefined;
+            if (rn == 0xF) {
+                base = cpu.fakePC();
+                if (!L) base += 4;
+            } else {
+                base = cpu.r[rn];
+            }
 
             var offset: u32 = undefined;
             if (I) {
@@ -33,7 +39,8 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     },
                     0b01 => {
                         // LDRH
-                        cpu.r[rd] = bus.read16(address);
+                        const value = bus.read16(address & 0xFFFF_FFFE);
+                        cpu.r[rd] = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
                     },
                     0b10 => {
                         // LDRSB
