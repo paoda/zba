@@ -23,7 +23,7 @@ pub const Arm7tdmi = struct {
     r: [16]u32,
     sched: *Scheduler,
     bus: *Bus,
-    cpsr: CPSR,
+    cpsr: PSR,
 
     pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return .{
@@ -97,7 +97,7 @@ fn armIdx(opcode: u32) u12 {
     return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
 }
 
-fn checkCond(cpsr: *const CPSR, opcode: u32) bool {
+fn checkCond(cpsr: *const PSR, opcode: u32) bool {
     // TODO: Should I implement an enum?
     return switch (@truncate(u4, opcode >> 28)) {
         0x0 => cpsr.z.read(), // EQ - Equal
@@ -183,7 +183,7 @@ fn populate() [0x1000]InstrFn {
     };
 }
 
-pub const CPSR = extern union {
+pub const PSR = extern union {
     mode: Bitfield(u32, 0, 5),
     t: Bit(u32, 5),
     f: Bit(u32, 6),

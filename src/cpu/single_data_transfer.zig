@@ -4,7 +4,7 @@ const util = @import("../util.zig");
 const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../Bus.zig");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
-const CPSR = @import("../cpu.zig").CPSR;
+const CPSR = @import("../cpu.zig").PSR;
 const InstrFn = @import("../cpu.zig").InstrFn;
 
 pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
