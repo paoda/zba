@@ -69,7 +69,7 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => self.iwram.set32(addr - 0x0200_0000, word),
         0x0300_0000...0x0300_7FFF => self.ewram.set32(addr - 0x0300_0000, word),
-        0x0400_0000...0x0400_03FE => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in I/O", .{ word, addr }),
+        0x0400_0000...0x0400_03FE => self.io.write32(addr, word),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.set32(@as(usize, addr - 0x0500_0000), word),
@@ -153,7 +153,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => self.iwram.set8(addr - 0x0200_0000, byte),
         0x0300_0000...0x0300_7FFF => self.ewram.set8(addr - 0x0300_0000, byte),
-        0x0400_0000...0x0400_03FE => self.io.set8(addr - 0x0400_0000, byte),
+        0x0400_0000...0x0400_03FE => self.io.write8(addr, byte),
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in Game Pak SRAM", .{ byte, addr }),
