@@ -8,6 +8,9 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Timer = std.time.Timer;
 
+const window_scale = 3;
+const gba_width = @import("ppu.zig").width;
+const gba_height = @import("ppu.zig").height;
 const buf_pitch = @import("ppu.zig").buf_pitch;
 
 pub fn main() anyerror!void {
@@ -49,8 +52,8 @@ pub fn main() anyerror!void {
         "Gameboy Advance Emulator",
         SDL.SDL_WINDOWPOS_CENTERED,
         SDL.SDL_WINDOWPOS_CENTERED,
-        240 * 3,
-        160 * 3,
+        gba_width * window_scale,
+        gba_height * window_scale,
         SDL.SDL_WINDOW_SHOWN,
     ) orelse sdlPanic();
     defer SDL.SDL_DestroyWindow(window);

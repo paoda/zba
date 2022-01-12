@@ -5,8 +5,8 @@ const Io = @import("bus/io.zig").Io;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Allocator = std.mem.Allocator;
-const width = 240;
-const height = 160;
+pub const width = 240;
+pub const height = 160;
 pub const buf_pitch = width * @sizeOf(u16);
 const buf_len = buf_pitch * height;
 
