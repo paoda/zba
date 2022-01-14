@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const Bus = @import("../Bus.zig");
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../cpu.zig").InstrFn;
+const Bus = @import("../../Bus.zig");
+const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
+const InstrFn = @import("../../cpu.zig").InstrFn;
 
 pub fn psrTransfer(comptime I: bool, comptime isSpsr: bool) InstrFn {
     return struct {

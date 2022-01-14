@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
-const CPSR = @import("../cpu.zig").PSR;
+const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
+const CPSR = @import("../../cpu.zig").PSR;
 
 pub fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var shift_amt: u8 = undefined;

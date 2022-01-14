@@ -1,19 +1,19 @@
 const std = @import("std");
 const util = @import("util.zig");
 
-const BarrelShifter = @import("cpu/barrel_shifter.zig");
+const BarrelShifter = @import("cpu/arm/barrel_shifter.zig");
 const Bus = @import("Bus.zig");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
-const dataProcessing = @import("cpu/data_processing.zig").dataProcessing;
-const psrTransfer = @import("cpu/psr_transfer.zig").psrTransfer;
-const singleDataTransfer = @import("cpu/single_data_transfer.zig").singleDataTransfer;
-const halfAndSignedDataTransfer = @import("cpu/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
-const blockDataTransfer = @import("cpu/block_data_transfer.zig").blockDataTransfer;
-const branch = @import("cpu/branch.zig").branch;
-const branchAndExchange = @import("cpu/branch.zig").branchAndExchange;
+const dataProcessing = @import("cpu/arm/data_processing.zig").dataProcessing;
+const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
+const singleDataTransfer = @import("cpu/arm/single_data_transfer.zig").singleDataTransfer;
+const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
+const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
+const branch = @import("cpu/arm/branch.zig").branch;
+const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 
 pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 const arm_lut: [0x1000]InstrFn = populate();
