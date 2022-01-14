@@ -3,7 +3,7 @@ const util = @import("../../util.zig");
 
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").InstrFn;
+const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
 pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {

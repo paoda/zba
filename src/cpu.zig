@@ -15,8 +15,10 @@ const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTr
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 
-pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
-const arm_lut: [0x1000]InstrFn = populate();
+pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
+pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
+const arm_lut: [0x1000]ArmInstrFn = armPopulate();
+const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
 pub const Arm7tdmi = struct {
     const Self = @This();
@@ -49,16 +51,29 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) u64 {
-        const opcode = self.fetch();
-        // self.mgbaLog(opcode);
+        if (self.cpsr.t.read()) {
+            const opcode = self.thumbFetch();
+            thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
+        } else {
+            const opcode = self.fetch();
 
-        if (checkCond(&self.cpsr, opcode)) arm_lut[armIdx(opcode)](self, self.bus, opcode);
+            if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
+                arm_lut[armIdx(opcode)](self, self.bus, opcode);
+            }
+        }
+
         return 1;
+    }
+
+    fn thumbFetch(self: *Self) u16 {
+        const halfword = self.bus.read16(self.r[15]);
+        self.r[15] += 2;
+        return halfword;
     }
 
     fn fetch(self: *Self) u32 {
         const word = self.bus.read32(self.r[15]);
-        self.r[15] += if (self.cpsr.t.read()) @as(u32, 2) else @as(u32, 4);
+        self.r[15] += 4;
         return word;
     }
 
@@ -98,9 +113,13 @@ fn armIdx(opcode: u32) u12 {
     return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
 }
 
-fn checkCond(cpsr: *const PSR, opcode: u32) bool {
+fn thumbIdx(opcode: u16) u10 {
+    return @truncate(u10, opcode >> 6);
+}
+
+fn checkCond(cpsr: PSR, cond: u4) bool {
     // TODO: Should I implement an enum?
-    return switch (@truncate(u4, opcode >> 28)) {
+    return switch (cond) {
         0x0 => cpsr.z.read(), // EQ - Equal
         0x1 => !cpsr.z.read(), // NE - Not equal
         0x2 => cpsr.c.read(), // CS - Unsigned higher or same
@@ -120,10 +139,24 @@ fn checkCond(cpsr: *const PSR, opcode: u32) bool {
     };
 }
 
-fn populate() [0x1000]InstrFn {
+fn thumbPopulate() [0x400]ThumbInstrFn {
+    return comptime {
+        @setEvalBranchQuota(0x800);
+        var lut = [_]ThumbInstrFn{thumbUndefined} ** 0x400;
+
+        var i: usize = 0;
+        while (i < lut.len) : (i += 1) {
+            lut[i] = thumbUndefined;
+        }
+
+        return lut;
+    };
+}
+
+fn armPopulate() [0x1000]ArmInstrFn {
     return comptime {
         @setEvalBranchQuota(0x5000); // TODO: Figure out exact size
-        var lut = [_]InstrFn{undefinedInstruction} ** 0x1000;
+        var lut = [_]ArmInstrFn{armUndefined} ** 0x1000;
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
@@ -210,7 +243,12 @@ const Mode = enum(u5) {
     System = 0b11111,
 };
 
-fn undefinedInstruction(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
+fn armUndefined(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
+    std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
+}
+
+fn thumbUndefined(_: *Arm7tdmi, _: *Bus, opcode: u16) void {
+    const id = thumbIdx(opcode);
     std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
 }

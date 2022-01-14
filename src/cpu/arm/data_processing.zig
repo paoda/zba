@@ -3,7 +3,7 @@ const std = @import("std");
 const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").InstrFn;
+const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
 pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4) InstrFn {
     return struct {
