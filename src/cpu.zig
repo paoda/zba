@@ -102,7 +102,7 @@ fn checkCond(cpsr: *const PSR, opcode: u32) bool {
     // TODO: Should I implement an enum?
     return switch (@truncate(u4, opcode >> 28)) {
         0x0 => cpsr.z.read(), // EQ - Equal
-        0x1 => !cpsr.z.read(), // NEQ - Not equal
+        0x1 => !cpsr.z.read(), // NE - Not equal
         0x2 => cpsr.c.read(), // CS - Unsigned higher or same
         0x3 => !cpsr.c.read(), // CC - Unsigned lower
         0x4 => cpsr.n.read(), // MI - Negative
@@ -113,7 +113,7 @@ fn checkCond(cpsr: *const PSR, opcode: u32) bool {
         0x9 => !cpsr.c.read() and cpsr.z.read(), // LS - unsigned lower or same
         0xA => cpsr.n.read() == cpsr.v.read(), // GE - Greater or equal
         0xB => cpsr.n.read() != cpsr.v.read(), // LT - Less than
-        0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.z.read()), // GT - Greater than
+        0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.v.read()), // GT - Greater than
         0xD => cpsr.z.read() or (cpsr.n.read() != cpsr.v.read()), // LE - Less than or equal
         0xE => true, // AL - Always
         0xF => std.debug.panic("[CPU] 0xF is a reserved condition field", .{}),
