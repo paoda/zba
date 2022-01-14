@@ -24,15 +24,13 @@ pub fn psrTransfer(comptime I: bool, comptime isSpsr: bool) InstrFn {
 
                     switch (@truncate(u3, opcode >> 16)) {
                         0b000 => {
-                            const right = if (I) std.math.rotr(u32, opcode & 0xFF, opcode >> 8 & 0xF) else cpu.r[rm];
+                            const right = if (I) std.math.rotr(u32, opcode & 0xFF, opcode >> 7 & 0xF) else cpu.r[rm];
 
                             if (isSpsr) {
                                 std.debug.panic("[CPU] TODO: MSR (flags only) on SPSR_<current_mode> is unimplemented", .{});
                             } else {
-                                cpu.cpsr.n.write(right >> 31 & 1 == 1);
-                                cpu.cpsr.z.write(right >> 30 & 1 == 1);
-                                cpu.cpsr.c.write(right >> 29 & 1 == 1);
-                                cpu.cpsr.v.write(right >> 28 & 1 == 1);
+                                const mask: u32 = 0xF000_0000;
+                                cpu.cpsr.raw = (cpu.cpsr.raw & ~mask) | (right & mask);
                             }
                         },
                         0b001 => {
