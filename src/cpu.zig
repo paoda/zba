@@ -7,6 +7,7 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
+// ARM Instruction Groups
 const dataProcessing = @import("cpu/arm/data_processing.zig").dataProcessing;
 const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
 const singleDataTransfer = @import("cpu/arm/single_data_transfer.zig").singleDataTransfer;
@@ -14,6 +15,9 @@ const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig
 const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
+
+// THUMB Instruction Groups
+const format3 = @import("cpu/thumb/format3.zig").format3;
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
@@ -141,12 +145,17 @@ fn checkCond(cpsr: PSR, cond: u4) bool {
 
 fn thumbPopulate() [0x400]ThumbInstrFn {
     return comptime {
-        @setEvalBranchQuota(0x800);
+        @setEvalBranchQuota(0xC00);
         var lut = [_]ThumbInstrFn{thumbUndefined} ** 0x400;
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
-            lut[i] = thumbUndefined;
+            if (i >> 7 & 0x7 == 0b001) {
+                const op = i >> 5 & 0x3;
+                const rd = i >> 2 & 0x7;
+
+                lut[i] = format3(op, rd);
+            }
         }
 
         return lut;
@@ -245,10 +254,10 @@ const Mode = enum(u5) {
 
 fn armUndefined(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
-    std.debug.panic("[CPU:ARM] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
+    std.debug.panic("[CPU:ARM] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
 }
 
 fn thumbUndefined(_: *Arm7tdmi, _: *Bus, opcode: u16) void {
     const id = thumbIdx(opcode);
-    std.debug.panic("[CPU:THUMB] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
+    std.debug.panic("[CPU:THUMB] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
 }
