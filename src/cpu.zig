@@ -245,10 +245,10 @@ const Mode = enum(u5) {
 
 fn armUndefined(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
-    std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
+    std.debug.panic("[CPU:ARM] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
 }
 
 fn thumbUndefined(_: *Arm7tdmi, _: *Bus, opcode: u16) void {
     const id = thumbIdx(opcode);
-    std.debug.panic("[CPU] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
+    std.debug.panic("[CPU:THUMB] {{0x{X:}}} 0x{X:} is an illegal opcode", .{ id, opcode });
 }
