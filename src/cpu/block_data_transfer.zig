@@ -12,9 +12,10 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
 
             if (S and opcode >> 15 & 1 == 0) std.debug.panic("[CPU] TODO: STM/LDM with S set but R15 not in transfer list", .{});
 
+            var address: u32 = undefined;
             if (U) {
                 // Increment
-                var address = if (P) base + 4 else base;
+                address = if (P) base + 4 else base;
 
                 var i: u5 = 0;
                 while (i < 0x10) : (i += 1) {
@@ -23,24 +24,22 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                         address += 4;
                     }
                 }
-
-                if (W and P or !P) cpu.r[rn] = address - 4;
             } else {
                 // Decrement
-                var address = if (P) base - 4 else base;
+                address = if (P) base - 4 else base;
 
                 var i: u5 = 0x10;
                 while (i > 0) : (i -= 1) {
-                    const reg_idx = i - 1;
+                    const j = i - 1;
 
-                    if (opcode >> reg_idx & 1 == 1) {
-                        transfer(cpu, bus, reg_idx, address);
+                    if (opcode >> j & 1 == 1) {
+                        transfer(cpu, bus, j, address);
                         address -= 4;
                     }
                 }
-
-                if (W and P or !P) cpu.r[rn] = address + 4;
             }
+
+            if (W and P or !P) cpu.r[rn] = if (U) address else address + 4;
         }
 
         fn transfer(cpu: *Arm7tdmi, bus: *Bus, i: u5, address: u32) void {
