@@ -91,3 +91,12 @@ pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, amount: u8) u32 {
 
     return result;
 }
+
+pub fn rotateRightExtended(comptime S: bool, cpsr: *CPSR, rm: u32) u32 {
+    if (!S) std.debug.panic("[BarrelShifter] Turns out I don't know how RRX works", .{});
+
+    const carry: u32 = @boolToInt(cpsr.c.read());
+    cpsr.c.write(rm & 1 == 1);
+
+    return (carry << 31) | (rm >> 1);
+}
