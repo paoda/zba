@@ -22,18 +22,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
 
             var op2: u32 = undefined;
             if (I) {
-                const amt = @truncate(u8, (opcode >> 8 & 0xF) << 1);
-
-                if (S) {
-                    op2 = BarrelShifter.rotateRight(&cpu.cpsr, opcode & 0xFF, amt);
-                } else {
-                    const PSR = @import("../../cpu.zig").PSR;
-                    var dummy = PSR{ .raw = 0x0000_0000 };
-
-                    op2 = BarrelShifter.rotateRight(&dummy, opcode & 0xFF, amt);
-                }
-
-                // op2 = std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1);
+                const amount = @truncate(u8, (opcode >> 8 & 0xF) << 1);
+                op2 = BarrelShifter.rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount);
             } else {
                 op2 = BarrelShifter.exec(S, cpu, opcode);
             }

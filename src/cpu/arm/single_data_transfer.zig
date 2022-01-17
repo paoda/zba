@@ -4,7 +4,6 @@ const util = @import("../../util.zig");
 const BarrelShifter = @import("barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const CPSR = @import("../../cpu.zig").PSR;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
 pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
@@ -55,16 +54,13 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
 }
 
 fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
-    const shift_byte = @truncate(u8, opcode >> 7 & 0x1F);
-
+    const amount = @truncate(u8, opcode >> 7 & 0x1F);
     const rm = cpu.r[opcode & 0xF];
 
-    var dummy = CPSR{ .raw = 0x0000_0000 };
-
     return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => BarrelShifter.logicalLeft(&dummy, rm, shift_byte),
-        0b01 => BarrelShifter.logicalRight(&dummy, rm, shift_byte),
-        0b10 => BarrelShifter.arithmetic_right(&dummy, rm, shift_byte),
-        0b11 => BarrelShifter.rotateRight(&dummy, rm, shift_byte),
+        0b00 => BarrelShifter.logicalLeft(false, &cpu.cpsr, rm, amount),
+        0b01 => BarrelShifter.logicalRight(false, &cpu.cpsr, rm, amount),
+        0b10 => BarrelShifter.arithmeticRight(false, &cpu.cpsr, rm, amount),
+        0b11 => BarrelShifter.rotateRight(false, &cpu.cpsr, rm, amount),
     };
 }
