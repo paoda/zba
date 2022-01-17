@@ -57,9 +57,12 @@ pub const Arm7tdmi = struct {
     pub fn step(self: *Self) u64 {
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
+            // self.mgbaLog(@as(u32, opcode));
+
             thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch();
+            // self.mgbaLog(opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm_lut[armIdx(opcode)](self, self.bus, opcode);
@@ -109,7 +112,8 @@ pub const Arm7tdmi = struct {
 
         const cpsr = self.cpsr.raw;
 
-        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>8}:\n", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, cpsr, opcode }) catch return;
+        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, cpsr }) catch return;
+        nosuspend if (self.cpsr.t.read()) stderr.print("{X:0>4}:\n", .{@truncate(u16, opcode)}) catch return else stderr.print("{X:0>8}:\n", .{opcode}) catch return;
     }
 };
 
