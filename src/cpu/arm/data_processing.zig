@@ -54,6 +54,22 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                     }
                 },
+                0x5 => {
+                    // ADC
+                    const carry = @boolToInt(cpu.cpsr.c.read());
+                    var result: u32 = undefined;
+
+                    const did = @addWithOverflow(u32, op1, op2, &result);
+                    const overflow = @addWithOverflow(u32, result, carry, &result);
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        cpu.cpsr.c.write(did or overflow);
+                        cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                    }
+                },
                 0x8 => {
                     // TST
                     const result = op1 & op2;
