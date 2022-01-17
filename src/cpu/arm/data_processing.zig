@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const BarrelShifter = @import("barrel_shifter.zig");
+const shifter = @import("barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
@@ -11,21 +11,14 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             const rd = opcode >> 12 & 0xF;
             const rn = opcode >> 16 & 0xF;
 
-            if (S and rd == 0xF) std.debug.panic("[CPU] Data Processing Instruction w/ S set and Rd == 15", .{});
-
-            var op1: u32 = undefined;
-            if (rn == 0xF) {
-                op1 = cpu.fakePC();
-            } else {
-                op1 = cpu.r[rn];
-            }
+            const op1 = if (rn == 0xF) cpu.fakePC() else cpu.r[rn];
 
             var op2: u32 = undefined;
             if (I) {
                 const amount = @truncate(u8, (opcode >> 8 & 0xF) << 1);
-                op2 = BarrelShifter.rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount);
+                op2 = shifter.rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount);
             } else {
-                op2 = BarrelShifter.exec(S, cpu, opcode);
+                op2 = shifter.execute(S, cpu, opcode);
             }
 
             switch (instrKind) {
@@ -77,7 +70,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
                     // Barrel Shifter should always calc CPSR C in TST
-                    if (!S) _ = BarrelShifter.exec(true, cpu, opcode);
+                    if (!S) _ = shifter.execute(true, cpu, opcode);
                 },
                 0x9 => {
                     // TEQ
@@ -86,7 +79,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
                     // Barrel Shifter should always calc CPSR C in TEQ
-                    if (!S) _ = BarrelShifter.exec(true, cpu, opcode);
+                    if (!S) _ = shifter.execute(true, cpu, opcode);
                 },
                 0xD => {
                     // MOV
