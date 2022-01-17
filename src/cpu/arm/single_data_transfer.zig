@@ -62,9 +62,9 @@ fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
     var dummy = CPSR{ .raw = 0x0000_0000 };
 
     return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => BarrelShifter.logical_left(&dummy, rm, shift_byte),
-        0b01 => BarrelShifter.logical_right(&dummy, rm, shift_byte),
+        0b00 => BarrelShifter.logicalLeft(&dummy, rm, shift_byte),
+        0b01 => BarrelShifter.logicalRight(&dummy, rm, shift_byte),
         0b10 => BarrelShifter.arithmetic_right(&dummy, rm, shift_byte),
-        0b11 => BarrelShifter.rotate_right(&dummy, rm, shift_byte),
+        0b11 => BarrelShifter.rotateRight(&dummy, rm, shift_byte),
     };
 }

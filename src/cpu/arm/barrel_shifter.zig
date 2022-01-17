@@ -21,23 +21,23 @@ pub fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
 
     if (S) {
         return switch (@truncate(u2, opcode >> 5)) {
-            0b00 => logical_left(&cpu.cpsr, value, shift_amt),
-            0b01 => logical_right(&cpu.cpsr, value, shift_amt),
+            0b00 => logicalLeft(&cpu.cpsr, value, shift_amt),
+            0b01 => logicalRight(&cpu.cpsr, value, shift_amt),
             0b10 => arithmetic_right(&cpu.cpsr, value, shift_amt),
-            0b11 => rotate_right(&cpu.cpsr, value, shift_amt),
+            0b11 => rotateRight(&cpu.cpsr, value, shift_amt),
         };
     } else {
         var dummy = CPSR{ .raw = 0x0000_0000 };
         return switch (@truncate(u2, opcode >> 5)) {
-            0b00 => logical_left(&dummy, value, shift_amt),
-            0b01 => logical_right(&dummy, value, shift_amt),
+            0b00 => logicalLeft(&dummy, value, shift_amt),
+            0b01 => logicalRight(&dummy, value, shift_amt),
             0b10 => arithmetic_right(&dummy, value, shift_amt),
-            0b11 => rotate_right(&dummy, value, shift_amt),
+            0b11 => rotateRight(&dummy, value, shift_amt),
         };
     }
 }
 
-pub fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
+pub fn logicalLeft(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     const shift_amt = @truncate(u5, shift_byte);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -64,7 +64,7 @@ pub fn logical_left(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     return result;
 }
 
-pub fn logical_right(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
+pub fn logicalRight(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
     const shift_amt = @truncate(u5, shift_byte);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -92,7 +92,12 @@ pub fn arithmetic_right(_: *CPSR, _: u32, _: u8) u32 {
     std.debug.panic("[BarrelShifter] implement arithmetic shift right", .{});
 }
 
-pub fn rotate_right(_: *CPSR, _: u32, _: u8) u32 {
-    // std.math.rotr(u32, r_val, amount)
-    std.debug.panic("[BarrelShifter] implement rotate right", .{});
+pub fn rotateRight(cpsr: *CPSR, rm: u32, shift_byte: u8) u32 {
+    const result = std.math.rotr(u32, rm, shift_byte);
+
+    if (result != 0) {
+        cpsr.c.write(result >> 31 & 1 == 1);
+    }
+
+    return result;
 }
