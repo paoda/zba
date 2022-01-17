@@ -67,7 +67,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     if (S and rd != 0xF) {
                         cpu.cpsr.n.write(op2 >> 31 & 1 == 1);
                         cpu.cpsr.z.write(op2 == 0);
-                        // C set by Barr0x15el Shifter, V is unnafected
+                        // C set by Barrel Shifter, V is unaffected
                     }
                 },
                 0xA => {
@@ -87,7 +87,18 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     if (S and rd != 0xF) {
                         cpu.cpsr.n.write(result >> 31 & 1 == 1);
                         cpu.cpsr.z.write(result == 0);
-                        // C set by Barr0x15el Shifter, V is unnafected
+                        // C set by Barrel Shifter, V is unaffected
+                    }
+                },
+                0xF => {
+                    // MVN
+                    const result = ~op2;
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        // C set by Barrel Shifter, V is unaffected
                     }
                 },
                 else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
