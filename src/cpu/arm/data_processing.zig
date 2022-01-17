@@ -29,6 +29,18 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             }
 
             switch (instrKind) {
+                0x2 => {
+                    // SUB
+                    const result = op1 -% op2;
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        cpu.cpsr.c.write(op2 <= op1);
+                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
+                    }
+                },
                 0x4 => {
                     // ADD
                     var result: u32 = undefined;
