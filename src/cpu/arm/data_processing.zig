@@ -24,6 +24,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
 
             switch (instrKind) {
                 0x0 => {
+                    // AND
                     const result = op1 & op2;
                     cpu.r[rd] = result;
 
@@ -102,6 +103,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     cpu.cpsr.z.write(result == 0);
                     cpu.cpsr.c.write(op2 <= op1);
                     cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
+                },
+                0xB => {
+                    // CMN
+                    var result: u32 = undefined;
+                    const didOverflow = @addWithOverflow(u32, op1, op2, &result);
+
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.c.write(didOverflow);
+                    cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0xC => {
                     // ORR
