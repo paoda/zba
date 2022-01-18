@@ -10,6 +10,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
             const rd = opcode >> 12 & 0xF;
             const rn = opcode >> 16 & 0xF;
+            const old_carry = @boolToInt(cpu.cpsr.c.read());
 
             const op1 = if (rn == 0xF) cpu.fakePC() else cpu.r[rn];
 
@@ -49,11 +50,10 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0x5 => {
                     // ADC
-                    const carry = @boolToInt(cpu.cpsr.c.read());
                     var result: u32 = undefined;
 
                     const did = @addWithOverflow(u32, op1, op2, &result);
-                    const overflow = @addWithOverflow(u32, result, carry, &result);
+                    const overflow = @addWithOverflow(u32, result, old_carry, &result);
                     cpu.r[rd] = result;
 
                     if (S and rd != 0xF) {
@@ -61,6 +61,20 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         cpu.cpsr.z.write(result == 0);
                         cpu.cpsr.c.write(did or overflow);
                         cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                    }
+                },
+                0x6 => {
+                    // SBC
+                    // TODO: Make your own
+                    const subtrahend = @as(u64, op2) - old_carry + 1;
+                    const result = @truncate(u32, op1 -% subtrahend);
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        cpu.cpsr.c.write(subtrahend <= op1);
+                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                     }
                 },
                 0x8 => {
