@@ -139,7 +139,7 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
         }
     }
 
-    std.debug.panic("[BarrelShifter] implement arithmetic shift right", .{});
+    return result;
 }
 
 pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
