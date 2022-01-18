@@ -146,6 +146,17 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         // C set by Barrel Shifter, V is unaffected
                     }
                 },
+                0xE => {
+                    // BIC
+                    const result = op1 & ~op2;
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        // C set by Barrel Shifter, V is unaffected
+                    }
+                },
                 0xF => {
                     // MVN
                     const result = ~op2;
