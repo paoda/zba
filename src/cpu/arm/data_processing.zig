@@ -8,7 +8,7 @@ const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
-            const rd = opcode >> 12 & 0xF;
+            const rd = @truncate(u4, opcode >> 12 & 0xF);
             const rn = opcode >> 16 & 0xF;
             const old_carry = @boolToInt(cpu.cpsr.c.read());
 
@@ -44,18 +44,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         // C set by Barrel Shifter, V is unaffected
                     }
                 },
-                0x2 => {
-                    // SUB
-                    const result = op1 -% op2;
-                    cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        cpu.cpsr.c.write(op2 <= op1);
-                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
-                    }
-                },
+                0x2 => sub(S, cpu, rd, op1, op2), // SUB
+                0x3 => sub(S, cpu, rd, op2, op1), // RSB
                 0x4 => {
                     // ADD
                     var result: u32 = undefined;
@@ -116,16 +106,6 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // Barrel Shifter should always calc CPSR C in TEQ
                     if (!S) _ = shifter.execute(true, cpu, opcode);
                 },
-                0xD => {
-                    // MOV
-                    cpu.r[rd] = op2;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(op2 >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(op2 == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
-                },
                 0xA => {
                     // CMP
                     const result = op1 -% op2;
@@ -143,6 +123,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     if (S and rd != 0xF) {
                         cpu.cpsr.n.write(result >> 31 & 1 == 1);
                         cpu.cpsr.z.write(result == 0);
+                        // C set by Barrel Shifter, V is unaffected
+                    }
+                },
+                0xD => {
+                    // MOV
+                    cpu.r[rd] = op2;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(op2 >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(op2 == 0);
                         // C set by Barrel Shifter, V is unaffected
                     }
                 },
@@ -172,4 +162,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             }
         }
     }.inner;
+}
+
+fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) void {
+    const result = left -% right;
+    cpu.r[rd] = result;
+
+    if (S and rd != 0xF) {
+        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+        cpu.cpsr.z.write(result == 0);
+        cpu.cpsr.c.write(right <= left);
+        cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+    }
 }
