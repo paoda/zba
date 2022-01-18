@@ -81,7 +81,7 @@ pub fn logicalLeft(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32
         // We can perform a well-defined shift here
         result = rm << amount;
 
-        if (S) {
+        if (S and total_amount != 0) {
             const carry_bit = @truncate(u5, bit_count - amount);
             cpsr.c.write(rm >> carry_bit & 1 == 1);
         }
@@ -107,7 +107,7 @@ pub fn logicalRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u32) u
     if (total_amount < bit_count) {
         // We can perform a well-defined shift
         result = rm >> amount;
-        if (S) cpsr.c.write(rm >> (amount - 1) & 1 == 1);
+        if (S and total_amount != 0) cpsr.c.write(rm >> (amount - 1) & 1 == 1);
     } else {
         if (S) {
             if (total_amount == bit_count) {
@@ -130,7 +130,7 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
     var result: u32 = 0x0000_0000;
     if (total_amount < bit_count) {
         result = @bitCast(u32, @bitCast(i32, rm) >> amount);
-        if (S) cpsr.c.write(rm >> (amount - 1) & 1 == 1);
+        if (S and total_amount != 0) cpsr.c.write(rm >> (amount - 1) & 1 == 1);
     } else {
         if (S) {
             // ASR #32 and ASR #>32 have the same result
@@ -142,10 +142,10 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
     std.debug.panic("[BarrelShifter] implement arithmetic shift right", .{});
 }
 
-pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, amount: u8) u32 {
-    const result = std.math.rotr(u32, rm, amount);
+pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
+    const result = std.math.rotr(u32, rm, total_amount);
 
-    if (S and result != 0) {
+    if (S and total_amount != 0) {
         cpsr.c.write(result >> 31 & 1 == 1);
     }
 
