@@ -74,20 +74,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                     }
                 },
-                0x6 => {
-                    // SBC
-                    // TODO: Make your own
-                    const subtrahend = @as(u64, op2) - old_carry + 1;
-                    const result = @truncate(u32, op1 -% subtrahend);
-                    cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        cpu.cpsr.c.write(subtrahend <= op1);
-                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
-                    }
-                },
+                0x6 => sbc(S, cpu, rd, op1, op2, old_carry), // SBC
+                0x7 => sbc(S, cpu, rd, op2, op1, old_carry), // RSC
                 0x8 => {
                     // TST
                     const result = op1 & op2;
@@ -158,10 +146,23 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                         // C set by Barrel Shifter, V is unaffected
                     }
                 },
-                else => std.debug.panic("[CPU] TODO: implement data processing type {}", .{instrKind}),
             }
         }
     }.inner;
+}
+
+fn sbc(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32, old_carry: u1) void {
+    // TODO: Make your own version (thanks peach.bot)
+    const subtrahend = @as(u64, right) - old_carry + 1;
+    const result = @truncate(u32, left -% subtrahend);
+    cpu.r[rd] = result;
+
+    if (S and rd != 0xF) {
+        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+        cpu.cpsr.z.write(result == 0);
+        cpu.cpsr.c.write(subtrahend <= left);
+        cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+    }
 }
 
 fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) void {
