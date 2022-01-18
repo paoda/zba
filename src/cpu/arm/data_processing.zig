@@ -23,6 +23,16 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             }
 
             switch (instrKind) {
+                0x0 => {
+                    const result = op1 & op2;
+                    cpu.r[rd] = result;
+
+                    if (S and rd != 0xF) {
+                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                        cpu.cpsr.z.write(result == 0);
+                        // C set by Barrel Shifter, V is unaffected
+                    }
+                },
                 0x2 => {
                     // SUB
                     const result = op1 -% op2;
