@@ -33,7 +33,7 @@ fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const amount = @truncate(u8, opcode >> 7 & 0x1F);
 
     const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() + 4 else cpu.r[rm_idx];
+    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
 
     var result: u32 = undefined;
     if (amount == 0) {
