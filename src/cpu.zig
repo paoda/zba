@@ -33,6 +33,17 @@ pub const Arm7tdmi = struct {
     sched: *Scheduler,
     bus: *Bus,
     cpsr: PSR,
+    spsr: PSR,
+
+    /// Storage  for R8_fiq -> R12_fiq and their normal counterparts
+    /// e.g [r[0 + 8], fiq_r[0 + 8], r[1 + 8], fiq_r[1 + 8]...]
+    banked_fiq: [2 * 5]u32,
+
+    /// Storage for r13_<mode>, r14_<mode>
+    /// e.g. [r13, r14, r13_svc, r14_svc]
+    banked_r: [2 * 6]u32,
+
+    banked_spsr: [5]PSR,
 
     pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return .{
@@ -40,7 +51,98 @@ pub const Arm7tdmi = struct {
             .sched = sched,
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_00DF },
+            .spsr = .{ .raw = 0x0000_0000 },
+            .banked_fiq = [_]u32{0x00} ** 10,
+            .banked_r = [_]u32{0x00} ** 12,
+            .banked_spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
         };
+    }
+
+    fn bankedIdx(mode: Mode) usize {
+        return switch (mode) {
+            .User, .System => 0,
+            .Supervisor => 1,
+            .Abort => 2,
+            .Undefined => 3,
+            .IRQ => 4,
+            .FIQ => 5,
+        };
+    }
+
+    fn spsrIdx(mode: Mode) usize {
+        return switch (mode) {
+            .Supervisor => 0,
+            .Abort => 1,
+            .Undefined => 2,
+            .IRQ => 3,
+            .FIQ => 4,
+            else => std.debug.panic("{} does not have a SPSR Register", .{mode}),
+        };
+    }
+
+    pub fn hasSPSR(self: *const Self) bool {
+        return switch (getMode(self.cpsr.mode.read())) {
+            .System, .User => false,
+            else => true,
+        };
+    }
+
+    pub fn isPrivileged(self: *const Self) bool {
+        return switch (getMode(self.cpsr.mode.read())) {
+            .User => false,
+            else => true,
+        };
+    }
+
+    pub fn setCpsr(self: *Self, value: u32) void {
+        if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeMode(@truncate(u5, value & 0x1F));
+        self.cpsr.raw = value;
+    }
+
+    fn changeMode(self: *Self, next_idx: u5) void {
+        const next = getMode(next_idx);
+        const now = getMode(self.cpsr.mode.read());
+
+        // Bank R8 -> r12
+        var r: usize = 8;
+        while (r <= 12) : (r += 1) {
+            self.banked_fiq[(r - 8) * 2 + if (now == .FIQ) @as(usize, 1) else 0] = self.r[r];
+        }
+
+        // Bank r13, r14, SPSR
+        switch (now) {
+            .User, .System => {
+                self.banked_r[bankedIdx(now) * 2 + 0] = self.r[13];
+                self.banked_r[bankedIdx(now) * 2 + 1] = self.r[14];
+            },
+            else => {
+                self.banked_r[bankedIdx(now) * 2 + 0] = self.r[13];
+                self.banked_r[bankedIdx(now) * 2 + 1] = self.r[14];
+                self.banked_spsr[spsrIdx(now)] = self.spsr;
+            },
+        }
+
+        // Grab R8 -> R12
+        r = 8;
+        while (r <= 12) : (r += 1) {
+            self.r[r] = self.banked_fiq[(r - 8) * 2 + if (next == .FIQ) @as(usize, 1) else 0];
+        }
+
+        // Grab r13, r14, SPSR
+        switch (next) {
+            .User, .System => {
+                self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];
+                self.r[14] = self.banked_r[bankedIdx(next) * 2 + 1];
+                // FIXME: Should we clear out SPSR?
+            },
+            else => {
+                self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];
+                self.r[14] = self.banked_r[bankedIdx(next) * 2 + 1];
+                self.spsr = self.banked_spsr[spsrIdx(next)];
+            },
+        }
+
+        self.cpsr.mode.write(next_idx);
     }
 
     pub fn skipBios(self: *Self) void {
@@ -112,9 +214,9 @@ pub const Arm7tdmi = struct {
         const r14 = self.r[14];
         const r15 = self.r[15];
 
-        const cpsr = self.cpsr.raw;
+        const c_psr = self.cpsr.raw;
 
-        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, cpsr }) catch return;
+        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr }) catch return;
         nosuspend if (self.cpsr.t.read()) stderr.print("{X:0>4}:\n", .{@truncate(u16, opcode)}) catch return else stderr.print("{X:0>8}:\n", .{opcode}) catch return;
     }
 };
@@ -273,6 +375,10 @@ const Mode = enum(u5) {
     Undefined = 0b11011,
     System = 0b11111,
 };
+
+pub fn getMode(bits: u5) Mode {
+    return std.meta.intToEnum(Mode, bits) catch unreachable;
+}
 
 fn armUndefined(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);

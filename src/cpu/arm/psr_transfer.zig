@@ -13,32 +13,21 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                     // MRS
                     const rd = opcode >> 12 & 0xF;
 
-                    if (R) {
-                        std.debug.panic("[CPU/PSR Transfer] TODO: MRS on SPSR_<current_mode> is unimplemented", .{});
-                    } else {
-                        cpu.r[rd] = cpu.cpsr.raw;
-                    }
+                    if (R and !cpu.hasSPSR()) std.log.warn("[CPU/PSR Transfer] Tried to read SPSR from User/System Mode", .{});
+                    cpu.r[rd] = if (R) cpu.spsr.raw else cpu.cpsr.raw;
                 },
                 0b10 => {
                     // MSR
                     const field_mask = @truncate(u4, opcode >> 16 & 0xF);
+                    const rm_idx = opcode & 0xF;
+                    const right = if (I) std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1) else cpu.r[rm_idx];
 
-                    if (I) {
-                        const imm = std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1);
+                    if (R and !cpu.hasSPSR()) std.log.warn("[CPU/PSR Transfer] Tried to write to SPSR User/System Mode", .{});
 
-                        if (R) {
-                            std.debug.panic("[CPU/PSR Transfer] TODO: MSR (flags only) on SPSR_<current_mode> is unimplemented", .{});
-                        } else {
-                            cpu.cpsr.raw = fieldMask(&cpu.cpsr, field_mask, imm);
-                        }
+                    if (R) {
+                        if (cpu.isPrivileged()) cpu.spsr.raw = fieldMask(&cpu.spsr, field_mask, right);
                     } else {
-                        const rm_idx = opcode & 0xF;
-
-                        if (R) {
-                            std.debug.panic("[CPU/PSR Transfer] TODO: MSR on SPSR_<current_mode> is unimplemented", .{});
-                        } else {
-                            cpu.cpsr.raw = fieldMask(&cpu.cpsr, field_mask, cpu.r[rm_idx]);
-                        }
+                        if (cpu.isPrivileged()) cpu.setCpsr(fieldMask(&cpu.cpsr, field_mask, right));
                     }
                 },
                 else => std.debug.panic("[CPU/PSR Transfer] Bits 21:220 of {X:0>8} are undefined", .{opcode}),
