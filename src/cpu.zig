@@ -201,9 +201,10 @@ fn armPopulate() [0x1000]ArmInstrFn {
             if (i >> 10 & 0x3 == 0b00 and i >> 7 & 0x3 == 0b10 and i >> 4 & 1 == 0) {
                 // PSR Transfer
                 const I = i >> 9 & 1 == 1;
-                const isSpsr = i >> 6 & 1 == 1;
+                const R = i >> 6 & 1 == 1;
+                const kind = i >> 4 & 0x3;
 
-                lut[i] = psrTransfer(I, isSpsr);
+                lut[i] = psrTransfer(I, R, kind);
             }
 
             if (i == 0x121) {
