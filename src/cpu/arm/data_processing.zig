@@ -27,37 +27,31 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // AND
                     const result = op1 & op2;
                     cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, result);
                 },
                 0x1 => {
                     // EOR
                     const result = op1 ^ op2;
                     cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, result);
                 },
-                0x2 => sub(S, cpu, rd, op1, op2), // SUB
-                0x3 => sub(S, cpu, rd, op2, op1), // RSB
+                0x2 => cpu.r[rd] = sub(S, cpu, rd, op1, op2), // SUB
+                0x3 => cpu.r[rd] = sub(S, cpu, rd, op2, op1), // RSB
                 0x4 => {
                     // ADD
                     var result: u32 = undefined;
                     const didOverflow = @addWithOverflow(u32, op1, op2, &result);
                     cpu.r[rd] = result;
 
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        cpu.cpsr.c.write(didOverflow);
-                        cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                    if (S) {
+                        if (rd == 0xF) {
+                            cpu.setCpsr(cpu.spsr.raw);
+                        } else {
+                            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                            cpu.cpsr.z.write(result == 0);
+                            cpu.cpsr.c.write(didOverflow);
+                            cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                        }
                     }
                 },
                 0x5 => {
@@ -68,32 +62,28 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     const overflow = @addWithOverflow(u32, result, old_carry, &result);
                     cpu.r[rd] = result;
 
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        cpu.cpsr.c.write(did or overflow);
-                        cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                    if (S) {
+                        if (rd == 0xF) {
+                            cpu.setCpsr(cpu.spsr.raw);
+                        } else {
+                            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                            cpu.cpsr.z.write(result == 0);
+                            cpu.cpsr.c.write(did or overflow);
+                            cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
+                        }
                     }
                 },
-                0x6 => sbc(S, cpu, rd, op1, op2, old_carry), // SBC
-                0x7 => sbc(S, cpu, rd, op2, op1, old_carry), // RSC
+                0x6 => cpu.r[rd] = sbc(S, cpu, rd, op1, op2, old_carry), // SBC
+                0x7 => cpu.r[rd] = sbc(S, cpu, rd, op2, op1, old_carry), // RSC
                 0x8 => {
                     // TST
                     const result = op1 & op2;
-
-                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                    cpu.cpsr.z.write(result == 0);
-                    // Barrel Shifter should always calc CPSR C in TST
-                    if (!S) _ = shifter.execute(true, cpu, opcode);
+                    testFlags(S, cpu, opcode, result);
                 },
                 0x9 => {
                     // TEQ
                     const result = op1 ^ op2;
-
-                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                    cpu.cpsr.z.write(result == 0);
-                    // Barrel Shifter should always calc CPSR C in TEQ
-                    if (!S) _ = shifter.execute(true, cpu, opcode);
+                    testFlags(S, cpu, opcode, result);
                 },
                 0xA => {
                     // CMP
@@ -118,72 +108,81 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // ORR
                     const result = op1 | op2;
                     cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, result);
                 },
                 0xD => {
                     // MOV
                     cpu.r[rd] = op2;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(op2 >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(op2 == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, op2);
                 },
                 0xE => {
                     // BIC
                     const result = op1 & ~op2;
                     cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, result);
                 },
                 0xF => {
                     // MVN
                     const result = ~op2;
                     cpu.r[rd] = result;
-
-                    if (S and rd != 0xF) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        // C set by Barrel Shifter, V is unaffected
-                    }
+                    logicFlags(S, cpu, rd, result);
                 },
             }
         }
     }.inner;
 }
 
-fn sbc(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32, old_carry: u1) void {
+fn sbc(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32, old_carry: u1) u32 {
     // TODO: Make your own version (thanks peach.bot)
     const subtrahend = @as(u64, right) - old_carry + 1;
     const result = @truncate(u32, left -% subtrahend);
-    cpu.r[rd] = result;
 
-    if (S and rd != 0xF) {
-        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-        cpu.cpsr.z.write(result == 0);
-        cpu.cpsr.c.write(subtrahend <= left);
-        cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+    if (S) {
+        if (rd == 0xF) {
+            cpu.setCpsr(cpu.spsr.raw);
+        } else {
+            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+            cpu.cpsr.z.write(result == 0);
+            cpu.cpsr.c.write(subtrahend <= left);
+            cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+        }
+    }
+
+    return result;
+}
+
+fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) u32 {
+    const result = left -% right;
+
+    if (S) {
+        if (rd == 0xF) {
+            cpu.setCpsr(cpu.spsr.raw);
+        } else {
+            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+            cpu.cpsr.z.write(result == 0);
+            cpu.cpsr.c.write(right <= left);
+            cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+        }
+    }
+
+    return result;
+}
+
+fn logicFlags(comptime S: bool, cpu: *Arm7tdmi, rd: u4, result: u32) void {
+    if (S) {
+        if (rd == 0xF) {
+            cpu.setCpsr(cpu.spsr.raw);
+        } else {
+            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+            cpu.cpsr.z.write(result == 0);
+            // C set by Barrel Shifter, V is unaffected
+        }
     }
 }
 
-fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) void {
-    const result = left -% right;
-    cpu.r[rd] = result;
-
-    if (S and rd != 0xF) {
-        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-        cpu.cpsr.z.write(result == 0);
-        cpu.cpsr.c.write(right <= left);
-        cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
-    }
+fn testFlags(comptime S: bool, cpu: *Arm7tdmi, opcode: u32, result: u32) void {
+    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+    cpu.cpsr.z.write(result == 0);
+    // Barrel Shifter should always calc CPSR C in TST
+    if (!S) _ = shifter.execute(true, cpu, opcode);
 }
