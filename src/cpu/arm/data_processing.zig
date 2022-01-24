@@ -12,6 +12,9 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             const rn = opcode >> 16 & 0xF;
             const old_carry = @boolToInt(cpu.cpsr.c.read());
 
+            // If certain conditions are met, PC is 12 ahead instead of 8
+            if (!I and opcode >> 4 & 1 == 1) cpu.r[15] += 4;
+
             const op1 = if (rn == 0xF) cpu.fakePC() else cpu.r[rn];
 
             var op2: u32 = undefined;
@@ -21,6 +24,9 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             } else {
                 op2 = shifter.execute(S, cpu, opcode);
             }
+
+            // Undo special condition from above
+            if (!I and opcode >> 4 & 1 == 1) cpu.r[15] -= 4;
 
             switch (instrKind) {
                 0x0 => {

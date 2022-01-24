@@ -19,7 +19,7 @@ fn registerShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const rs = @truncate(u8, cpu.r[rs_idx]);
 
     const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() + 4 else cpu.r[rm_idx];
+    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
 
     return switch (@truncate(u2, opcode >> 5)) {
         0b00 => logicalLeft(S, &cpu.cpsr, rm, rs),
