@@ -40,7 +40,12 @@ pub fn main() anyerror!void {
     var bus = try Bus.init(alloc, &scheduler, zba_args[0]);
     defer bus.deinit();
 
+    // Support for Sky's Logs
+    const file = try std.fs.cwd().createFile("zba.bin", .{ .read = true });
+    defer file.close();
+
     var cpu = Arm7tdmi.init(&scheduler, &bus);
+    cpu.useLogger(&file, true);
     cpu.fastBoot();
 
     // Initialize SDL

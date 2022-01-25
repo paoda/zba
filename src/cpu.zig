@@ -7,6 +7,8 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
+const File = std.fs.File;
+
 // ARM Instruction Groups
 const dataProcessing = @import("cpu/arm/data_processing.zig").dataProcessing;
 const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
@@ -27,6 +29,8 @@ pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
 const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
+const logging_enabled: bool = true;
+
 pub const Arm7tdmi = struct {
     const Self = @This();
 
@@ -46,6 +50,10 @@ pub const Arm7tdmi = struct {
 
     banked_spsr: [5]PSR,
 
+    log_file: ?*const File,
+    log_buf: [0x100]u8,
+    binary_log: bool,
+
     pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return .{
             .r = [_]u32{0x00} ** 16,
@@ -56,7 +64,15 @@ pub const Arm7tdmi = struct {
             .banked_fiq = [_]u32{0x00} ** 10,
             .banked_r = [_]u32{0x00} ** 12,
             .banked_spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
+            .log_file = null,
+            .log_buf = undefined,
+            .binary_log = false,
         };
+    }
+
+    pub fn useLogger(self: *Self, file: *const File, is_binary: bool) void {
+        self.log_file = file;
+        self.binary_log = is_binary;
     }
 
     fn bankedIdx(mode: Mode) usize {
@@ -150,8 +166,8 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn fastBoot(self: *Self) void {
-        self.r[0] = 0x08000000;
-        self.r[1] = 0x000000EA;
+        // self.r[0] = 0x08000000;
+        // self.r[1] = 0x000000EA;
         // GPRs 2 -> 12 *should* already be 0 initialized
         self.r[13] = 0x0300_7F00;
         self.r[14] = 0x0000_0000;
@@ -161,18 +177,18 @@ pub const Arm7tdmi = struct {
         self.banked_r[bankedIdx(.Irq) * 2 + 0] = 0x0300_7FA0;
         self.banked_r[bankedIdx(.Supervisor) * 2 + 0] = 0x0300_7FE0;
 
-        self.cpsr.raw = 0x6000001F;
+        // self.cpsr.raw = 0x6000001F;
     }
 
     pub fn step(self: *Self) u64 {
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
-            // self.mgbaLog(@as(u32, opcode));
+            if (logging_enabled) if (self.log_file) |file| self.log(file, @as(u32, opcode));
 
             thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch();
-            // self.mgbaLog(opcode);
+            if (logging_enabled) if (self.log_file) |file| self.log(file, @as(u32, opcode));
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm_lut[armIdx(opcode)](self, self.bus, opcode);
@@ -198,10 +214,39 @@ pub const Arm7tdmi = struct {
         return self.r[15] + 4;
     }
 
-    fn mgbaLog(self: *const Self, opcode: u32) void {
-        const stderr = std.io.getStdErr().writer();
-        std.debug.getStderrMutex().lock();
-        defer std.debug.getStderrMutex().unlock();
+    fn log(self: *const Self, file: *const File, opcode: u32) void {
+        if (self.binary_log) {
+            self.skyLog(file) catch unreachable;
+        } else {
+            self.mgbaLog(file, opcode) catch unreachable;
+        }
+    }
+
+    fn skyLog(self: *const Self, file: *const File) !void {
+        var buf: [18 * @sizeOf(u32)]u8 = undefined;
+
+        // Write Registers
+        var i: usize = 0;
+        while (i < 0x10) : (i += 1) {
+            skyWrite(&buf, i, self.r[i]);
+        }
+
+        skyWrite(&buf, 0x10, self.cpsr.raw);
+        skyWrite(&buf, 0x11, if (self.hasSPSR()) self.spsr.raw else self.cpsr.raw);
+        _ = try file.writeAll(&buf);
+    }
+
+    fn skyWrite(buf: []u8, i: usize, num: u32) void {
+        buf[(@sizeOf(u32) * i) + 3] = @truncate(u8, num >> 24 & 0xFF);
+        buf[(@sizeOf(u32) * i) + 2] = @truncate(u8, num >> 16 & 0xFF);
+        buf[(@sizeOf(u32) * i) + 1] = @truncate(u8, num >> 8 & 0xFF);
+        buf[(@sizeOf(u32) * i) + 0] = @truncate(u8, num >> 0 & 0xFF);
+    }
+
+    fn mgbaLog(self: *const Self, file: *const File, opcode: u32) !void {
+        const thumb_fmt = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>4}:\n";
+        const arm_fmt = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>8}:\n";
+        var buf: [0x100]u8 = [_]u8{0x00} ** 0x100; // this is larger than it needs to be
 
         const r0 = self.r[0];
         const r1 = self.r[1];
@@ -222,8 +267,14 @@ pub const Arm7tdmi = struct {
 
         const c_psr = self.cpsr.raw;
 
-        nosuspend stderr.print("{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ", .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr }) catch return;
-        nosuspend if (self.cpsr.t.read()) stderr.print("{X:0>4}:\n", .{@truncate(u16, opcode)}) catch return else stderr.print("{X:0>8}:\n", .{opcode}) catch return;
+        var log_str: []u8 = undefined;
+        if (self.cpsr.t.read()) {
+            log_str = try std.fmt.bufPrint(&buf, thumb_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, opcode });
+        } else {
+            log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, opcode });
+        }
+
+        _ = try file.writeAll(log_str);
     }
 };
 
