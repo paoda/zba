@@ -41,7 +41,7 @@ pub fn main() anyerror!void {
     defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
-    cpu.skipBios();
+    cpu.fastBoot();
 
     // Initialize SDL
     const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO);

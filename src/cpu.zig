@@ -149,7 +149,7 @@ pub const Arm7tdmi = struct {
         self.cpsr.mode.write(@enumToInt(next));
     }
 
-    pub fn skipBios(self: *Self) void {
+    pub fn fastBoot(self: *Self) void {
         self.r[0] = 0x08000000;
         self.r[1] = 0x000000EA;
         // GPRs 2 -> 12 *should* already be 0 initialized
