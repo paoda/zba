@@ -4,6 +4,7 @@
 /zig-out
 /docs
 **/*.log
+**/*.bin
 
 # Build on WIndows
 /.build_config
