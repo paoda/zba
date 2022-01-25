@@ -15,6 +15,7 @@ const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig
 const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
+const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
 
 // THUMB Instruction Groups
 const format3 = @import("cpu/thumb/format3.zig").format3;
@@ -95,12 +96,15 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn setCpsr(self: *Self, value: u32) void {
-        if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeMode(@truncate(u5, value & 0x1F));
+        if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
         self.cpsr.raw = value;
     }
 
-    fn changeMode(self: *Self, next_idx: u5) void {
-        const next = getMode(next_idx);
+    fn changeModeFromIdx(self: *Self, next: u5) void {
+        self.changeMode(getMode(next));
+    }
+
+    pub fn changeMode(self: *Self, next: Mode) void {
         const now = getMode(self.cpsr.mode.read());
 
         // Bank R8 -> r12
@@ -142,7 +146,7 @@ pub const Arm7tdmi = struct {
             },
         }
 
-        self.cpsr.mode.write(next_idx);
+        self.cpsr.mode.write(@enumToInt(next));
     }
 
     pub fn skipBios(self: *Self) void {
@@ -348,6 +352,8 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const L = i >> 8 & 1 == 1;
                 lut[i] = branch(L);
             }
+
+            if (i >> 8 & 0xF == 0b1111) lut[i] = softwareInterrupt();
         }
 
         return lut;
