@@ -85,6 +85,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // TST
                     if (rd == 0xF) {
                         undefinedTestBehaviour(cpu);
+                        cpu.r[15] += 4; // FIXME: This is objectively wrong I think
                         return;
                     }
 
@@ -95,6 +96,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // TEQ
                     if (rd == 0xF) {
                         undefinedTestBehaviour(cpu);
+                        cpu.r[15] += 4; // FIXME: This is objectively wrong I think
                         return;
                     }
 
@@ -105,6 +107,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // CMP
                     if (rd == 0xF) {
                         undefinedTestBehaviour(cpu);
+                        cpu.r[15] += 4; // FIXME: This is objectively wrong I think
                         return;
                     }
 
@@ -119,6 +122,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     // CMN
                     if (rd == 0xF) {
                         undefinedTestBehaviour(cpu);
+                        cpu.r[15] += 4; // FIXME: This is objectively wrong I think
                         return;
                     }
 
