@@ -83,16 +83,31 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 0x7 => cpu.r[rd] = sbc(S, cpu, rd, op2, op1, old_carry), // RSC
                 0x8 => {
                     // TST
+                    if (rd == 0xF) {
+                        undefinedTestBehaviour(cpu);
+                        return;
+                    }
+
                     const result = op1 & op2;
                     testFlags(S, cpu, opcode, result);
                 },
                 0x9 => {
                     // TEQ
+                    if (rd == 0xF) {
+                        undefinedTestBehaviour(cpu);
+                        return;
+                    }
+
                     const result = op1 ^ op2;
                     testFlags(S, cpu, opcode, result);
                 },
                 0xA => {
                     // CMP
+                    if (rd == 0xF) {
+                        undefinedTestBehaviour(cpu);
+                        return;
+                    }
+
                     const result = op1 -% op2;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
@@ -102,6 +117,11 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0xB => {
                     // CMN
+                    if (rd == 0xF) {
+                        undefinedTestBehaviour(cpu);
+                        return;
+                    }
+
                     var result: u32 = undefined;
                     const didOverflow = @addWithOverflow(u32, op1, op2, &result);
 
@@ -191,4 +211,9 @@ fn testFlags(comptime S: bool, cpu: *Arm7tdmi, opcode: u32, result: u32) void {
     cpu.cpsr.z.write(result == 0);
     // Barrel Shifter should always calc CPSR C in TST
     if (!S) _ = shifter.execute(true, cpu, opcode);
+}
+
+fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
+    @setCold(true);
+    cpu.setCpsr(cpu.spsr.raw);
 }
