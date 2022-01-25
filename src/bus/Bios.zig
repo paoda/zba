@@ -23,16 +23,13 @@ pub fn deinit(self: Self) void {
 }
 
 pub fn get32(self: *const Self, idx: usize) u32 {
-    std.debug.panic("[BIOS] TODO: BIOS is not implemented", .{});
     return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
 }
 
 pub fn get16(self: *const Self, idx: usize) u16 {
-    std.debug.panic("[BIOS] TODO: BIOS is not implemented", .{});
     return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
 }
 
 pub fn get8(self: *const Self, idx: usize) u8 {
-    std.debug.panic("[BIOS] TODO: BIOS is not implemented", .{});
     return self.buf[idx];
 }
