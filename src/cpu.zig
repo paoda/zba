@@ -29,7 +29,7 @@ pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
 const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
-const logging_enabled: bool = true;
+const logging_enabled: bool = false;
 
 pub const Arm7tdmi = struct {
     const Self = @This();
