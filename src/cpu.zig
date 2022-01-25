@@ -65,8 +65,8 @@ pub const Arm7tdmi = struct {
             .Supervisor => 1,
             .Abort => 2,
             .Undefined => 3,
-            .IRQ => 4,
-            .FIQ => 5,
+            .Irq => 4,
+            .Fiq => 5,
         };
     }
 
@@ -75,8 +75,8 @@ pub const Arm7tdmi = struct {
             .Supervisor => 0,
             .Abort => 1,
             .Undefined => 2,
-            .IRQ => 3,
-            .FIQ => 4,
+            .Irq => 3,
+            .Fiq => 4,
             else => std.debug.panic("{} does not have a SPSR Register", .{mode}),
         };
     }
@@ -110,7 +110,7 @@ pub const Arm7tdmi = struct {
         // Bank R8 -> r12
         var r: usize = 8;
         while (r <= 12) : (r += 1) {
-            self.banked_fiq[(r - 8) * 2 + if (now == .FIQ) @as(usize, 1) else 0] = self.r[r];
+            self.banked_fiq[(r - 8) * 2 + if (now == .Fiq) @as(usize, 1) else 0] = self.r[r];
         }
 
         // Bank r13, r14, SPSR
@@ -129,7 +129,7 @@ pub const Arm7tdmi = struct {
         // Grab R8 -> R12
         r = 8;
         while (r <= 12) : (r += 1) {
-            self.r[r] = self.banked_fiq[(r - 8) * 2 + if (next == .FIQ) @as(usize, 1) else 0];
+            self.r[r] = self.banked_fiq[(r - 8) * 2 + if (next == .Fiq) @as(usize, 1) else 0];
         }
 
         // Grab r13, r14, SPSR
@@ -157,7 +157,9 @@ pub const Arm7tdmi = struct {
         self.r[14] = 0x0000_0000;
         self.r[15] = 0x0800_0000;
 
-        // TODO: Set sp_irq = 0x0300_7FA0, sp_svc = 0x0300_7FE0
+        // Set r13_irq and r14_svc to their respective values
+        self.banked_r[bankedIdx(.Irq) * 2 + 0] = 0x0300_7FA0;
+        self.banked_r[bankedIdx(.Supervisor) * 2 + 0] = 0x0300_7FE0;
 
         self.cpsr.raw = 0x6000001F;
     }
@@ -374,8 +376,8 @@ pub const PSR = extern union {
 
 const Mode = enum(u5) {
     User = 0b10000,
-    FIQ = 0b10001,
-    IRQ = 0b10010,
+    Fiq = 0b10001,
+    Irq = 0b10010,
     Supervisor = 0b10011,
     Abort = 0b10111,
     Undefined = 0b11011,
