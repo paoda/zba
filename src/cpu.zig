@@ -166,8 +166,8 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn fastBoot(self: *Self) void {
-        // self.r[0] = 0x08000000;
-        // self.r[1] = 0x000000EA;
+        self.r[0] = 0x08000000;
+        self.r[1] = 0x000000EA;
         // GPRs 2 -> 12 *should* already be 0 initialized
         self.r[13] = 0x0300_7F00;
         self.r[14] = 0x0000_0000;
@@ -177,7 +177,7 @@ pub const Arm7tdmi = struct {
         self.banked_r[bankedIdx(.Irq) * 2 + 0] = 0x0300_7FA0;
         self.banked_r[bankedIdx(.Supervisor) * 2 + 0] = 0x0300_7FE0;
 
-        // self.cpsr.raw = 0x6000001F;
+        self.cpsr.raw = 0x6000001F;
     }
 
     pub fn step(self: *Self) u64 {
