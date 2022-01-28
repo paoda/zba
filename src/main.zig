@@ -7,14 +7,18 @@ const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Timer = std.time.Timer;
+const Thread = std.Thread;
+const Atomic = std.atomic.Atomic;
 
 const window_scale = 3;
 const gba_width = @import("ppu.zig").width;
 const gba_height = @import("ppu.zig").height;
 const buf_pitch = @import("ppu.zig").buf_pitch;
 
+pub const enable_logging: bool = false;
+
 pub fn main() anyerror!void {
-    // Allocator for Emulator + CLI Aruments
+    // Allocator for Emulator + CLI
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
     defer std.debug.assert(!gpa.deinit());
@@ -40,13 +44,25 @@ pub fn main() anyerror!void {
     var bus = try Bus.init(alloc, &scheduler, zba_args[0]);
     defer bus.deinit();
 
-    // Support for Sky's Logs
-    const file = try std.fs.cwd().createFile("zba.bin", .{ .read = true });
-    defer file.close();
-
     var cpu = Arm7tdmi.init(&scheduler, &bus);
-    cpu.useLogger(&file, true);
     cpu.fastBoot();
+
+    if (enable_logging) {
+        const is_binary: bool = true;
+        const file_name = if (is_binary) "zba.bin" else "zba.log";
+
+        const file = try std.fs.cwd().createFile(file_name, .{ .read = true });
+        defer file.close();
+
+        cpu.useLogger(&file, is_binary);
+    }
+
+    // Init Atomics
+    var quit = Atomic(bool).init(false);
+
+    // Create Emulator Thread
+    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &scheduler, &cpu, &bus });
+    defer emu_thread.join();
 
     // Initialize SDL
     const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO);
@@ -74,8 +90,6 @@ pub fn main() anyerror!void {
     var title_buf: [0x30]u8 = [_]u8{0x00} ** 0x30;
 
     emu_loop: while (true) {
-        emu.runFrame(&scheduler, &cpu, &bus);
-
         var event: SDL.SDL_Event = undefined;
         _ = SDL.SDL_PollEvent(&event);
 
@@ -84,7 +98,9 @@ pub fn main() anyerror!void {
             else => {},
         }
 
+        // TODO: Make this Thread Safe
         const buf_ptr = bus.ppu.frame_buf.ptr;
+
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, buf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
@@ -93,6 +109,8 @@ pub fn main() anyerror!void {
         const title = std.fmt.bufPrint(&title_buf, "Gameboy Advance Emulator FPS: {d}", .{fps}) catch unreachable;
         SDL.SDL_SetWindowTitle(window, title.ptr);
     }
+
+    quit.store(true, .Unordered); // Terminate Emulator Thread
 }
 
 fn sdlPanic() noreturn {

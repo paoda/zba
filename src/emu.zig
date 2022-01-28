@@ -1,7 +1,10 @@
+const std = @import("std");
+
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
+const Atomic = std.atomic.Atomic;
 const cycles_per_frame: u64 = 160 * (308 * 4);
 
 pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
@@ -13,5 +16,11 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
         while (sched.tick >= sched.nextTimestamp()) {
             sched.handleEvent(cpu, bus);
         }
+    }
+}
+
+pub fn runEmuThread(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+    while (!quit.load(.Unordered)) {
+        runFrame(sched, cpu, bus);
     }
 }

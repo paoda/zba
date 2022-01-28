@@ -29,7 +29,7 @@ pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
 const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
-const logging_enabled: bool = false;
+const enable_logging = @import("main.zig").enable_logging;
 
 pub const Arm7tdmi = struct {
     const Self = @This();
@@ -183,12 +183,12 @@ pub const Arm7tdmi = struct {
     pub fn step(self: *Self) u64 {
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
-            if (logging_enabled) if (self.log_file) |file| self.log(file, @as(u32, opcode));
+            if (enable_logging) if (self.log_file) |file| self.log(file, @as(u32, opcode));
 
             thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch();
-            if (logging_enabled) if (self.log_file) |file| self.log(file, @as(u32, opcode));
+            if (enable_logging) if (self.log_file) |file| self.log(file, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm_lut[armIdx(opcode)](self, self.bus, opcode);
