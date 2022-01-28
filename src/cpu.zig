@@ -75,7 +75,7 @@ pub const Arm7tdmi = struct {
         self.binary_log = is_binary;
     }
 
-    fn bankedIdx(mode: Mode) usize {
+    inline fn bankedIdx(mode: Mode) usize {
         return switch (mode) {
             .User, .System => 0,
             .Supervisor => 1,
@@ -86,7 +86,7 @@ pub const Arm7tdmi = struct {
         };
     }
 
-    fn spsrIdx(mode: Mode) usize {
+    inline fn spsrIdx(mode: Mode) usize {
         return switch (mode) {
             .Supervisor => 0,
             .Abort => 1,
@@ -97,14 +97,14 @@ pub const Arm7tdmi = struct {
         };
     }
 
-    pub fn hasSPSR(self: *const Self) bool {
+    pub inline fn hasSPSR(self: *const Self) bool {
         return switch (getMode(self.cpsr.mode.read())) {
             .System, .User => false,
             else => true,
         };
     }
 
-    pub fn isPrivileged(self: *const Self) bool {
+    pub inline fn isPrivileged(self: *const Self) bool {
         return switch (getMode(self.cpsr.mode.read())) {
             .User => false,
             else => true,
@@ -278,11 +278,11 @@ pub const Arm7tdmi = struct {
     }
 };
 
-fn armIdx(opcode: u32) u12 {
+inline fn armIdx(opcode: u32) u12 {
     return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
 }
 
-fn thumbIdx(opcode: u16) u10 {
+inline fn thumbIdx(opcode: u16) u10 {
     return @truncate(u10, opcode >> 6);
 }
 
