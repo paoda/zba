@@ -70,7 +70,7 @@ pub fn main() anyerror!void {
     defer SDL.SDL_Quit();
 
     var window = SDL.SDL_CreateWindow(
-        "Gameboy Advance Emulator",
+        "ZBA",
         SDL.SDL_WINDOWPOS_CENTERED,
         SDL.SDL_WINDOWPOS_CENTERED,
         gba_width * window_scale,
@@ -106,7 +106,7 @@ pub fn main() anyerror!void {
         SDL.SDL_RenderPresent(renderer);
 
         const fps = std.time.ns_per_s / timer.lap();
-        const title = std.fmt.bufPrint(&title_buf, "Gameboy Advance Emulator FPS: {d}", .{fps}) catch unreachable;
+        const title = std.fmt.bufPrint(&title_buf, "ZBA FPS: {d}", .{fps}) catch unreachable;
         SDL.SDL_SetWindowTitle(window, title.ptr);
     }
 
