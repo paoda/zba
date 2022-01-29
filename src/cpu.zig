@@ -1,7 +1,6 @@
 const std = @import("std");
 const util = @import("util.zig");
 
-const BarrelShifter = @import("cpu/arm/barrel_shifter.zig");
 const Bus = @import("Bus.zig");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;

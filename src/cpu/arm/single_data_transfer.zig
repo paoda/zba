@@ -1,7 +1,7 @@
 const std = @import("std");
 const util = @import("../../util.zig");
 
-const BarrelShifter = @import("barrel_shifter.zig");
+const shifter = @import("../barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
@@ -58,9 +58,9 @@ fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
     const rm = cpu.r[opcode & 0xF];
 
     return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => BarrelShifter.logicalLeft(false, &cpu.cpsr, rm, amount),
-        0b01 => BarrelShifter.logicalRight(false, &cpu.cpsr, rm, amount),
-        0b10 => BarrelShifter.arithmeticRight(false, &cpu.cpsr, rm, amount),
-        0b11 => BarrelShifter.rotateRight(false, &cpu.cpsr, rm, amount),
+        0b00 => shifter.logicalLeft(false, &cpu.cpsr, rm, amount),
+        0b01 => shifter.logicalRight(false, &cpu.cpsr, rm, amount),
+        0b10 => shifter.arithmeticRight(false, &cpu.cpsr, rm, amount),
+        0b11 => shifter.rotateRight(false, &cpu.cpsr, rm, amount),
     };
 }

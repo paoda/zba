@@ -3,7 +3,7 @@ const std = @import("std");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
-const shifter = @import("../arm/barrel_shifter.zig");
+const shifter = @import("../barrel_shifter.zig");
 
 pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
     return struct {

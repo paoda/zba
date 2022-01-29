@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const shifter = @import("barrel_shifter.zig");
+const shifter = @import("../barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
