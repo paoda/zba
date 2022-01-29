@@ -36,26 +36,26 @@ pub const Scheduler = struct {
                     std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
                 },
                 .HBlank => {
-                    // The End of a Hblank
-                    const scanline = bus.io.vcount.scanline.read();
-                    const new_scanline = scanline + 1;
+                    // The End of a Hblank (During Draw or Vblank)
+                    const old_scanline = bus.io.vcount.scanline.read();
+                    const scanline = (old_scanline + 1) % 228;
 
-                    // TODO: Should this be done @ end of Draw instead of end of Hblank?
-                    bus.ppu.drawScanline(&bus.io);
+                    bus.io.vcount.scanline.write(scanline);
+                    bus.io.dispstat.hblank.unset();
 
-                    bus.io.vcount.scanline.write(new_scanline);
-
-                    if (new_scanline < 160) {
+                    if (scanline < 160) {
                         // Transitioning to another Draw
                         self.push(.Draw, self.tick + (240 * 4));
                     } else {
                         // Transitioning to a Vblank
-                        bus.io.dispstat.vblank.set();
-                        self.push(.VBlank, self.tick + (308 * 4));
+                        if (scanline < 227) bus.io.dispstat.vblank.set() else bus.io.dispstat.vblank.unset();
+
+                        self.push(.VBlank, self.tick + (240 * 4));
                     }
                 },
                 .Draw => {
                     // The end of a Draw
+                    bus.ppu.drawScanline(&bus.io);
 
                     // Transitioning to a Hblank
                     bus.io.dispstat.hblank.set();
@@ -63,23 +63,7 @@ pub const Scheduler = struct {
                 },
                 .VBlank => {
                     // The end of a Vblank
-
-                    const scanline = bus.io.vcount.scanline.read();
-                    const new_scanline = scanline + 1;
-                    bus.io.vcount.scanline.write(new_scanline);
-
-                    if (new_scanline == 227) bus.io.dispstat.vblank.unset();
-
-                    if (new_scanline < 228) {
-                        // Transition to another Vblank
-                        self.push(.VBlank, self.tick + (308 * 4));
-                    } else {
-                        // Transition to another Draw
-                        bus.io.vcount.scanline.write(0); // Reset Scanline
-
-                        // DISPSTAT was disabled on scanline 227
-                        self.push(.Draw, self.tick + (240 * 4));
-                    }
+                    self.push(.HBlank, self.tick + (68 * 4));
                 },
             }
         }
