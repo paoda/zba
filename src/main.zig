@@ -16,6 +16,7 @@ const gba_height = @import("ppu.zig").height;
 const buf_pitch = @import("ppu.zig").buf_pitch;
 
 pub const enable_logging: bool = false;
+const is_binary: bool = false;
 
 pub fn main() anyerror!void {
     // Allocator for Emulator + CLI
@@ -48,7 +49,6 @@ pub fn main() anyerror!void {
     cpu.fastBoot();
 
     if (enable_logging) {
-        const is_binary: bool = true;
         const file_name = if (is_binary) "zba.bin" else "zba.log";
 
         const file = try std.fs.cwd().createFile(file_name, .{ .read = true });
