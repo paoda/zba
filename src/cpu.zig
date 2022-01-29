@@ -25,6 +25,7 @@ const format3 = @import("cpu/thumb/format3.zig").format3;
 const format5 = @import("cpu/thumb/format5.zig").format5;
 const format6 = @import("cpu/thumb/format6.zig").format6;
 const format12 = @import("cpu/thumb/format12.zig").format12;
+const format16 = @import("cpu/thumb/format16.zig").format16;
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
@@ -288,7 +289,7 @@ inline fn thumbIdx(opcode: u16) u10 {
     return @truncate(u10, opcode >> 6);
 }
 
-fn checkCond(cpsr: PSR, cond: u4) bool {
+pub fn checkCond(cpsr: PSR, cond: u4) bool {
     // TODO: Should I implement an enum?
     return switch (cond) {
         0x0 => cpsr.z.read(), // EQ - Equal
@@ -350,6 +351,12 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                 const rd = i >> 2 & 0x7;
 
                 lut[i] = format12(isSP, rd);
+            }
+
+            if (i >> 6 & 0xF == 0b1101) {
+                const cond = i >> 2 & 0xF;
+
+                lut[i] = format16(cond);
             }
         }
 
