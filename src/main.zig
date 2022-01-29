@@ -9,6 +9,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
+const File = std.fs.File;
 
 const window_scale = 3;
 const gba_width = @import("ppu.zig").width;
@@ -48,14 +49,15 @@ pub fn main() anyerror!void {
     var cpu = Arm7tdmi.init(&scheduler, &bus);
     cpu.fastBoot();
 
+    var log_file: ?File = undefined;
     if (enable_logging) {
-        const file_name = if (is_binary) "zba.bin" else "zba.log";
-
+        const file_name: []const u8 = if (is_binary) "zba.bin" else "zba.log";
         const file = try std.fs.cwd().createFile(file_name, .{ .read = true });
-        defer file.close();
-
         cpu.useLogger(&file, is_binary);
+
+        log_file = file;
     }
+    defer if (log_file) |file| file.close();
 
     // Init Atomics
     var quit = Atomic(bool).init(false);
