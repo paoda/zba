@@ -15,7 +15,7 @@ pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
                 0b00 => shifter.logicalLeft(true, &cpu.cpsr, cpu.r[rs], offset),
                 0b01 => shifter.logicalRight(true, &cpu.cpsr, cpu.r[rs], offset),
                 0b10 => shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset),
-                else => std.debug.panic("{} is an invalid op for Format 1 THUMB Instructions", .{op}),
+                else => std.debug.panic("[CPU|THUMB|Fmt1] {} is an invalid op", .{op}),
             };
 
             cpu.r[rd] = result;
