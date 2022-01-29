@@ -20,6 +20,7 @@ const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
 
 // THUMB Instruction Groups
+const format1 = @import("cpu/thumb/format1.zig").format1;
 const format3 = @import("cpu/thumb/format3.zig").format3;
 const format5 = @import("cpu/thumb/format5.zig").format5;
 const format6 = @import("cpu/thumb/format6.zig").format6;
@@ -316,6 +317,13 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
+            if (i >> 7 & 0x7 == 0b000) {
+                const op = i >> 5 & 0x3;
+                const offset = i & 0x1F;
+
+                lut[i] = format1(op, offset);
+            }
+
             if (i >> 7 & 0x7 == 0b001) {
                 const op = i >> 5 & 0x3;
                 const rd = i >> 2 & 0x7;
