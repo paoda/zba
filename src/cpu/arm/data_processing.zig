@@ -43,23 +43,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0x2 => cpu.r[rd] = sub(S, cpu, rd, op1, op2), // SUB
                 0x3 => cpu.r[rd] = sub(S, cpu, rd, op2, op1), // RSB
-                0x4 => {
-                    // ADD
-                    var result: u32 = undefined;
-                    const didOverflow = @addWithOverflow(u32, op1, op2, &result);
-                    cpu.r[rd] = result;
-
-                    if (S) {
-                        if (rd == 0xF) {
-                            cpu.setCpsr(cpu.spsr.raw);
-                        } else {
-                            cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                            cpu.cpsr.z.write(result == 0);
-                            cpu.cpsr.c.write(didOverflow);
-                            cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
-                        }
-                    }
-                },
+                0x4 => cpu.r[rd] = add(S, cpu, rd, op1, op2), // ADD
                 0x5 => {
                     // ADC
                     var result: u32 = undefined;
@@ -181,7 +165,7 @@ fn sbc(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32, old_carr
     return result;
 }
 
-fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) u32 {
+pub fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) u32 {
     const result = left -% right;
 
     if (S) {
@@ -192,6 +176,24 @@ fn sub(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) u32 {
             cpu.cpsr.z.write(result == 0);
             cpu.cpsr.c.write(right <= left);
             cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
+        }
+    }
+
+    return result;
+}
+
+pub fn add(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32) u32 {
+    var result: u32 = undefined;
+    const didOverflow = @addWithOverflow(u32, left, right, &result);
+
+    if (S) {
+        if (rd == 0xF) {
+            cpu.setCpsr(cpu.spsr.raw);
+        } else {
+            cpu.cpsr.n.write(result >> 31 & 1 == 1);
+            cpu.cpsr.z.write(result == 0);
+            cpu.cpsr.c.write(didOverflow);
+            cpu.cpsr.v.write(((left ^ result) & (right ^ result)) >> 31 & 1 == 1);
         }
     }
 

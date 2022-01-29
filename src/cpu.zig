@@ -22,6 +22,7 @@ const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInte
 // THUMB Instruction Groups
 const format1 = @import("cpu/thumb/format1.zig").format1;
 const format3 = @import("cpu/thumb/format3.zig").format3;
+const format2 = @import("cpu/thumb/format2.zig").format2;
 const format5 = @import("cpu/thumb/format5.zig").format5;
 const format6 = @import("cpu/thumb/format6.zig").format6;
 const format12 = @import("cpu/thumb/format12.zig").format12;
@@ -331,6 +332,13 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                 const offset = i & 0x1F;
 
                 lut[i] = format1(op, offset);
+            }
+            if (i >> 5 & 0x1F == 0b00011) {
+                const I = i >> 4 & 1 == 1;
+                const is_sub = i >> 3 & 1 == 1;
+                const rn = i & 0x7;
+
+                lut[i] = format2(I, is_sub, rn);
             }
 
             if (i >> 7 & 0x7 == 0b001) {
