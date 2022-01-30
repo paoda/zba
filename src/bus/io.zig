@@ -12,14 +12,16 @@ pub const Io = struct {
     /// Read / Write
     ime: bool,
     ie: InterruptEnable,
+    keyinput: KeyInput,
 
     pub fn init() Self {
         return .{
-            .dispcnt = .{ .raw = 0x0000_0000 },
-            .dispstat = .{ .raw = 0x0000_0000 },
-            .vcount = .{ .raw = 0x0000_0000 },
+            .dispcnt = .{ .raw = 0x0000 },
+            .dispstat = .{ .raw = 0x0000 },
+            .vcount = .{ .raw = 0x0000 },
             .ime = false,
-            .ie = .{ .raw = 0x0000_0000 },
+            .ie = .{ .raw = 0x0000 },
+            .keyinput = .{ .raw = 0x01FF },
         };
     }
 
@@ -48,6 +50,7 @@ pub const Io = struct {
             0x0400_0000 => self.dispcnt.raw,
             0x0400_0004 => self.dispstat.raw,
             0x0400_0006 => self.vcount.raw,
+            0x0400_0130 => self.keyinput.raw,
             0x0400_0200 => self.ie.raw,
             0x0400_0208 => @boolToInt(self.ime),
             else => std.debug.panic("[I/O:16] tried to read from {X:}", .{addr}),
@@ -127,5 +130,21 @@ const InterruptEnable = extern union {
     dma3: Bit(u16, 11),
     keypad: Bit(u16, 12),
     game_pak: Bit(u16, 13),
+    raw: u16,
+};
+
+/// Read Only
+/// 0 = Pressed, 1 = Released
+const KeyInput = extern union {
+    a: Bit(u16, 0),
+    b: Bit(u16, 1),
+    select: Bit(u16, 2),
+    start: Bit(u16, 3),
+    right: Bit(u16, 4),
+    left: Bit(u16, 5),
+    up: Bit(u16, 6),
+    down: Bit(u16, 7),
+    shoulder_r: Bit(u16, 8),
+    shoulder_l: Bit(u16, 9),
     raw: u16,
 };
