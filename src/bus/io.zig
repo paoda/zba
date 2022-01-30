@@ -36,6 +36,7 @@ pub const Io = struct {
 
     pub fn write32(self: *Self, addr: u32, word: u32) void {
         switch (addr) {
+            0x0400_0000 => self.dispcnt.raw = @truncate(u16, word),
             0x0400_0200 => self.ie.raw = @truncate(u16, word),
             0x0400_0208 => self.ime = word & 1 == 1,
             else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
