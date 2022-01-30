@@ -394,8 +394,8 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
             }
 
             if (i >> 6 & 0xF == 0b1011 and i >> 3 & 0x3 == 0b10) {
-                const L = i >> 11 & 1 == 1;
-                const R = i >> 8 & 1 == 1;
+                const L = i >> 5 & 1 == 1;
+                const R = i >> 2 & 1 == 1;
 
                 lut[i] = format14(L, R);
             }

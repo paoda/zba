@@ -44,7 +44,7 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
                 }
             }
 
-            cpu.r[13] = address;
+            cpu.r[13] = address + if (!L) 4 else 0;
         }
     }.inner;
 }
