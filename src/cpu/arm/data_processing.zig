@@ -263,7 +263,7 @@ fn setArmLogicOpFlags(comptime S: bool, cpu: *Arm7tdmi, rd: u4, result: u32) voi
     }
 }
 
-fn setLogicOpFlags(comptime S: bool, cpu: *Arm7tdmi, result: u32) void {
+pub fn setLogicOpFlags(comptime S: bool, cpu: *Arm7tdmi, result: u32) void {
     if (S) {
         cpu.cpsr.n.write(result >> 31 & 1 == 1);
         cpu.cpsr.z.write(result == 0);

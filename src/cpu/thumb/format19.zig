@@ -8,6 +8,7 @@ const u32SignExtend = @import("../../util.zig").u32SignExtend;
 pub fn format19(comptime is_low: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
+            // BL
             const offset = opcode & 0x3FF;
 
             if (is_low) {

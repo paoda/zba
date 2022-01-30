@@ -4,6 +4,11 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 
+const add = @import("../arm/data_processing.zig").add;
+const sub = @import("../arm/data_processing.zig").sub;
+const cmp = @import("../arm/data_processing.zig").cmp;
+const setLogicOpFlags = @import("../arm/data_processing.zig").setLogicOpFlags;
+
 pub fn format3(comptime op: u2, comptime rd: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
@@ -13,44 +18,11 @@ pub fn format3(comptime op: u2, comptime rd: u3) InstrFn {
                 0b00 => {
                     // MOV
                     cpu.r[rd] = offset;
-
-                    cpu.cpsr.n.unset();
-                    cpu.cpsr.z.write(offset == 0);
+                    setLogicOpFlags(true, cpu, offset);
                 },
-                0b01 => {
-                    // CMP
-                    const left = cpu.r[rd];
-                    const result = left -% offset;
-
-                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                    cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(offset <= left);
-                    cpu.cpsr.v.write(((left ^ result) & (~offset ^ result)) >> 31 & 1 == 1);
-                },
-                0b10 => {
-                    // ADD
-                    const left = cpu.r[rd];
-
-                    var result: u32 = undefined;
-                    const didOverflow = @addWithOverflow(u32, left, offset, &result);
-                    cpu.r[rd] = result;
-
-                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                    cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(didOverflow);
-                    cpu.cpsr.v.write(((left ^ result) & (offset ^ result)) >> 31 & 1 == 1);
-                },
-                0b11 => {
-                    // SUB
-                    const left = cpu.r[rd];
-                    const result = left -% offset;
-                    cpu.r[rd] = result;
-
-                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                    cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(offset <= left);
-                    cpu.cpsr.v.write(((left ^ result) & (~offset ^ result)) >> 31 & 1 == 1);
-                },
+                0b01 => cmp(cpu, cpu.r[rd], offset), // CMP
+                0b10 => cpu.r[rd] = add(true, cpu, cpu.r[rd], offset), // ADD
+                0b11 => cpu.r[rd] = sub(true, cpu, cpu.r[rd], offset), // SUB
             }
         }
     }.inner;
