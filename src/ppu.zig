@@ -117,8 +117,16 @@ const Vram = struct {
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
+        // In Modes 3 and 4, parts of the VRAM are copied to the
+        // frame buffer, therefore we want to zero-initialize Vram
+        //
+        // some programs like Armwrestler assume that VRAM is zeroed-out.
+        const black = std.mem.zeroes([0x18000]u8);
+        const buf = try alloc.alloc(u8, 0x18000);
+        std.mem.copy(u8, buf, &black);
+
         return Self{
-            .buf = try alloc.alloc(u8, 0x18000),
+            .buf = buf,
             .alloc = alloc,
         };
     }
