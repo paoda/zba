@@ -402,7 +402,7 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
             if (i >> 6 & 0xF == 0b1100) {
                 const L = i >> 5 & 1 == 1;
-                const rb = i >> 2 & 0x3;
+                const rb = i >> 2 & 0x7;
 
                 lut[i] = format15(L, rb);
             }
