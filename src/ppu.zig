@@ -65,7 +65,7 @@ pub const Ppu = struct {
                     self.frame_buf[fb_start + fb_i] = self.palette.buf[byte];
                 }
             },
-            else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
+            else => {}, // std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
         }
     }
 };
