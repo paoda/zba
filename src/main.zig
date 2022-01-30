@@ -88,8 +88,8 @@ pub fn main() anyerror!void {
     defer SDL.SDL_DestroyTexture(texture);
 
     // Init FPS Timer
-    var timer = Timer.start() catch unreachable;
-    var title_buf: [0x30]u8 = [_]u8{0x00} ** 0x30;
+    // var timer = Timer.start() catch unreachable;
+    // var title_buf: [0x30]u8 = [_]u8{0x00} ** 0x30;
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
@@ -107,9 +107,9 @@ pub fn main() anyerror!void {
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
 
-        const fps = std.time.ns_per_s / timer.lap();
-        const title = std.fmt.bufPrint(&title_buf, "ZBA FPS: {d}", .{fps}) catch unreachable;
-        SDL.SDL_SetWindowTitle(window, title.ptr);
+        // const fps = std.time.ns_per_s / timer.lap();
+        // const title = std.fmt.bufPrint(&title_buf, "ZBA FPS: {d}", .{fps}) catch unreachable;
+        // SDL.SDL_SetWindowTitle(window, title.ptr);
     }
 
     quit.store(true, .Unordered); // Terminate Emulator Thread
