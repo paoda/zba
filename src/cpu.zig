@@ -25,6 +25,7 @@ const format4 = @import("cpu/thumb/format4.zig").format4;
 const format2 = @import("cpu/thumb/format2.zig").format2;
 const format5 = @import("cpu/thumb/format5.zig").format5;
 const format6 = @import("cpu/thumb/format6.zig").format6;
+const format9 = @import("cpu/thumb/format9.zig").format9;
 const format12 = @import("cpu/thumb/format12.zig").format12;
 const format15 = @import("cpu/thumb/format15.zig").format15;
 const format16 = @import("cpu/thumb/format16.zig").format16;
@@ -367,6 +368,14 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                 const rd = i >> 2 & 0x7;
 
                 lut[i] = format6(rd);
+            }
+
+            if (i >> 7 & 0x7 == 0b011) {
+                const B = i >> 6 & 1 == 1;
+                const L = i >> 5 & 1 == 1;
+                const offset = i & 0x1F;
+
+                lut[i] = format9(B, L, offset);
             }
 
             if (i >> 6 & 0xF == 0b1010) {
