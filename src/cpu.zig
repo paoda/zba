@@ -17,6 +17,7 @@ const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTr
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
+const multiply = @import("cpu/arm/multiply.zig").multiply;
 
 // THUMB Instruction Groups
 const format1 = @import("cpu/thumb/format1.zig").format1;
@@ -446,6 +447,13 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const kind = i >> 4 & 0x3;
 
                 lut[i] = psrTransfer(I, R, kind);
+            }
+
+            if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
+                const A = i >> 5 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
+
+                lut[i] = multiply(A, S);
             }
 
             if (i == 0x121) {

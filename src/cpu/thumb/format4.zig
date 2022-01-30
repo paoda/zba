@@ -92,7 +92,10 @@ pub fn format4(comptime op: u4) InstrFn {
                     // MUL
                     const result = cpu.r[rs] * cpu.r[rd];
                     cpu.r[rd] = result;
-                    std.debug.panic("[CPU|THUMB|MUL] TODO: Set flags on ALU MUL", .{});
+
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    // V is unaffected, assuming similar behaviour to ARMv4 MUL C is undefined
                 },
                 0xE => {
                     // BIC
