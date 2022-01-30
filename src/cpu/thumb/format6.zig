@@ -11,7 +11,7 @@ pub fn format6(comptime rd: u3) InstrFn {
             const offset = (opcode & 0xFF) << 2;
 
             // FIXME: Should this overflow?
-            cpu.r[rd] = bus.read32((cpu.fakePC() & 0xFFFF_FFFC) + offset);
+            cpu.r[rd] = bus.read32((cpu.r[15] + 2 & 0xFFFF_FFFD) + offset);
         }
     }.inner;
 }

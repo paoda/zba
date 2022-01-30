@@ -19,7 +19,7 @@ pub fn format16(comptime cond: u4) InstrFn {
             };
 
             if (should_execute) {
-                cpu.r[15] = (cpu.fakePC() & 0xFFFF_FFFC) +% offset;
+                cpu.r[15] = (cpu.r[15] + 2) +% offset;
             }
         }
     }.inner;

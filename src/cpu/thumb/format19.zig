@@ -19,7 +19,7 @@ pub fn format19(comptime is_low: bool) InstrFn {
                 cpu.r[14] = old_pc | 1;
             } else {
                 // Instruction 1
-                cpu.r[14] = (cpu.fakePC() & 0xFFFF_FFFC) + (u32SignExtend(11, @as(u32, offset)) << 12);
+                cpu.r[14] = (cpu.r[15] + 2) + (u32SignExtend(11, @as(u32, offset)) << 12);
             }
         }
     }.inner;
