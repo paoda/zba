@@ -449,13 +449,6 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 lut[i] = psrTransfer(I, R, kind);
             }
 
-            if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
-                const A = i >> 5 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-
-                lut[i] = multiply(A, S);
-            }
-
             if (i == 0x121) {
                 lut[i] = branchAndExchange;
             }
@@ -468,6 +461,13 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const L = i >> 4 & 1 == 1;
 
                 lut[i] = halfAndSignedDataTransfer(P, U, I, W, L);
+            }
+
+            if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
+                const A = i >> 5 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
+
+                lut[i] = multiply(A, S);
             }
 
             if (i >> 10 & 0x3 == 0b01) {

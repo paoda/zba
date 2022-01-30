@@ -58,7 +58,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     // STRH
                     bus.write16(address, @truncate(u16, cpu.r[rd]));
                 } else {
-                    std.debug.panic("[CPU] TODO: Figure out if this is also SWP", .{});
+                    std.debug.print("[CPU|ARM|SignedDataTransfer] {X:0>8} was improperly decoded", .{opcode});
                 }
             }
 
