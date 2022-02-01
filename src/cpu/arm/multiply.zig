@@ -12,7 +12,8 @@ pub fn multiply(comptime A: bool, comptime S: bool) InstrFn {
             const rs = opcode >> 8 & 0xF;
             const rm = opcode & 0xF;
 
-            const result = cpu.r[rm] * cpu.r[rs] + if (A) cpu.r[rn] else 0;
+            const temp: u64 = @as(u64, cpu.r[rm]) * @as(u64, cpu.r[rs]) + if (A) cpu.r[rn] else 0;
+            const result = @truncate(u32, temp);
             cpu.r[rd] = result;
 
             if (S) {
