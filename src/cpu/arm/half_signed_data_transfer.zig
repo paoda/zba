@@ -35,7 +35,9 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                 switch (@truncate(u2, opcode >> 5)) {
                     0b00 => {
                         // SWP
-                        std.debug.panic("[CPU] TODO: Implement SWP", .{});
+                        const value = bus.read32(cpu.r[rn]);
+                        const tmp = std.math.rotr(u32, value, 8 * (cpu.r[rn] & 0x3));
+                        bus.write32(cpu.r[rm], tmp);
                     },
                     0b01 => {
                         // LDRH
@@ -45,12 +47,12 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     0b10 => {
                         // LDRSB
                         cpu.r[rd] = util.u32SignExtend(8, @as(u32, bus.read8(address)));
-                        std.debug.panic("TODO: Affect the CPSR", .{});
+                        std.debug.panic("[CPU|ARM|LDRSB] TODO: Affect the CPSR", .{});
                     },
                     0b11 => {
                         // LDRSH
                         cpu.r[rd] = util.u32SignExtend(16, @as(u32, bus.read16(address)));
-                        std.debug.panic("TODO: Affect the CPSR", .{});
+                        std.debug.panic("[CPU|ARM|LDRSH] TODO: Affect the CPSR", .{});
                     },
                 }
             } else {
