@@ -33,6 +33,7 @@ const format13 = @import("cpu/thumb/format13.zig").format13;
 const format14 = @import("cpu/thumb/format14.zig").format14;
 const format15 = @import("cpu/thumb/format15.zig").format15;
 const format16 = @import("cpu/thumb/format16.zig").format16;
+const format18 = @import("cpu/thumb/format18.zig").format18;
 const format19 = @import("cpu/thumb/format19.zig").format19;
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
@@ -470,6 +471,10 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                 const cond = i >> 2 & 0xF;
 
                 lut[i] = format16(cond);
+            }
+
+            if (i >> 5 & 0x1F == 0b11100) {
+                lut[i] = format18();
             }
 
             if (i >> 6 & 0xF == 0b1111) {
