@@ -10,7 +10,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             const rn = opcode >> 16 & 0xF;
             const base = cpu.r[rn];
 
-            if (S and opcode >> 15 & 1 == 0) std.debug.panic("[CPU] TODO: STM/LDM with S set but R15 not in transfer list", .{});
+            if (S and opcode >> 15 & 1 == 0) cpu.panic("[CPU] TODO: STM/LDM with S set but R15 not in transfer list", .{});
 
             var address: u32 = undefined;
             if (U) {
@@ -45,14 +45,14 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
         fn transfer(cpu: *Arm7tdmi, bus: *Bus, i: u5, address: u32) void {
             if (L) {
                 cpu.r[i] = bus.read32(address);
-                if (S and i == 0xF) std.debug.panic("[CPU] TODO: SPSR_<mode> is transferred to CPSR", .{});
+                if (S and i == 0xF) cpu.panic("[CPU] TODO: SPSR_<mode> is transferred to CPSR", .{});
             } else {
                 if (i == 0xF) {
                     if (!S) {
                         // TODO: Assure that this is Address of STM instruction + 12
                         bus.write32(address, cpu.r[i] + (12 - 4));
                     } else {
-                        std.debug.panic("[CPU] TODO: STM with S set and R15 in transfer list", .{});
+                        cpu.panic("[CPU] TODO: STM with S set and R15 in transfer list", .{});
                     }
                 } else {
                     bus.write32(address, cpu.r[i]);

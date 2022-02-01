@@ -30,7 +30,7 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                         if (cpu.isPrivileged()) cpu.setCpsr(fieldMask(&cpu.cpsr, field_mask, right));
                     }
                 },
-                else => std.debug.panic("[CPU/PSR Transfer] Bits 21:220 of {X:0>8} are undefined", .{opcode}),
+                else => cpu.panic("[CPU/PSR Transfer] Bits 21:220 of {X:0>8} are undefined", .{opcode}),
             }
         }
     }.inner;

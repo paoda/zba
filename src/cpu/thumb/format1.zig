@@ -17,7 +17,7 @@ pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
                 0b00 => shifter.logicalLeft(true, &cpu.cpsr, cpu.r[rs], offset), // LSL
                 0b01 => shifter.logicalRight(true, &cpu.cpsr, cpu.r[rs], offset), // LSR
                 0b10 => shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset), // ASR
-                else => std.debug.panic("[CPU|THUMB|Fmt1] {} is an invalid op", .{op}),
+                else => cpu.panic("[CPU|THUMB|Fmt1] {} is an invalid op", .{op}),
             };
 
             // Equivalent to an ARM MOVS

@@ -109,14 +109,16 @@ pub const Arm7tdmi = struct {
     }
 
     pub inline fn hasSPSR(self: *const Self) bool {
-        return switch (getMode(self.cpsr.mode.read())) {
+        const mode = getMode(self.cpsr.mode.read()) orelse unreachable;
+        return switch (mode) {
             .System, .User => false,
             else => true,
         };
     }
 
     pub inline fn isPrivileged(self: *const Self) bool {
-        return switch (getMode(self.cpsr.mode.read())) {
+        const mode = getMode(self.cpsr.mode.read()) orelse unreachable;
+        return switch (mode) {
             .User => false,
             else => true,
         };
@@ -128,11 +130,12 @@ pub const Arm7tdmi = struct {
     }
 
     fn changeModeFromIdx(self: *Self, next: u5) void {
-        self.changeMode(getMode(next));
+        const mode = getMode(next) orelse unreachable;
+        self.changeMode(mode);
     }
 
     pub fn changeMode(self: *Self, next: Mode) void {
-        const now = getMode(self.cpsr.mode.read());
+        const now = getMode(self.cpsr.mode.read()) orelse unreachable;
 
         // Bank R8 -> r12
         var r: usize = 8;
@@ -231,6 +234,53 @@ pub const Arm7tdmi = struct {
         } else {
             self.mgbaLog(file, opcode) catch unreachable;
         }
+    }
+
+    pub fn panic(self: *const Self, comptime format: []const u8, args: anytype) noreturn {
+        var i: usize = 0;
+        while (i < 16) : (i += 4) {
+            const i_1 = i + 1;
+            const i_2 = i + 2;
+            const i_3 = i + 3;
+            std.debug.print("R{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\n", .{ i, self.r[i], i_1, self.r[i_1], i_2, self.r[i_2], i_3, self.r[i_3] });
+        }
+        std.debug.print("cpsr: 0x{X:0>8} ", .{self.cpsr.raw});
+        prettyPrintPsr(&self.cpsr);
+
+        std.debug.print("spsr: 0x{X:0>8} ", .{self.spsr.raw});
+        prettyPrintPsr(&self.spsr);
+
+        std.debug.print("tick: {}\n\n", .{self.sched.tick});
+
+        std.debug.panic(format, args);
+    }
+
+    fn prettyPrintPsr(psr: *const PSR) void {
+        std.debug.print("[", .{});
+
+        if (psr.n.read()) std.debug.print("N", .{}) else std.debug.print("-", .{});
+        if (psr.z.read()) std.debug.print("Z", .{}) else std.debug.print("-", .{});
+        if (psr.c.read()) std.debug.print("C", .{}) else std.debug.print("-", .{});
+        if (psr.v.read()) std.debug.print("V", .{}) else std.debug.print("-", .{});
+        if (psr.i.read()) std.debug.print("I", .{}) else std.debug.print("-", .{});
+        if (psr.f.read()) std.debug.print("F", .{}) else std.debug.print("-", .{});
+        if (psr.t.read()) std.debug.print("T", .{}) else std.debug.print("-", .{});
+        std.debug.print("|", .{});
+        if (getMode(psr.mode.read())) |mode| std.debug.print("{s}", .{modeString(mode)}) else std.debug.print("---", .{});
+
+        std.debug.print("]\n", .{});
+    }
+
+    fn modeString(mode: Mode) []const u8 {
+        return switch (mode) {
+            .User => "usr",
+            .Fiq => "fiq",
+            .Irq => "irq",
+            .Supervisor => "svc",
+            .Abort => "abt",
+            .Undefined => "und",
+            .System => "sys",
+        };
     }
 
     fn skyLog(self: *const Self, file: *const File) !void {
@@ -533,16 +583,16 @@ const Mode = enum(u5) {
     System = 0b11111,
 };
 
-pub fn getMode(bits: u5) Mode {
-    return std.meta.intToEnum(Mode, bits) catch unreachable;
+pub fn getMode(bits: u5) ?Mode {
+    return std.meta.intToEnum(Mode, bits) catch null;
 }
 
-fn armUndefined(_: *Arm7tdmi, _: *Bus, opcode: u32) void {
+fn armUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
-    std.debug.panic("[CPU:ARM] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
+    cpu.panic("[CPU:ARM] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
 }
 
-fn thumbUndefined(_: *Arm7tdmi, _: *Bus, opcode: u16) void {
+fn thumbUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
     const id = thumbIdx(opcode);
-    std.debug.panic("[CPU:THUMB] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
+    cpu.panic("[CPU:THUMB] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
 }

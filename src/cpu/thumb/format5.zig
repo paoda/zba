@@ -20,7 +20,7 @@ pub fn format5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
                     cpu.cpsr.t.write(cpu.r[src] & 1 == 1);
                     cpu.r[15] = cpu.r[src] & 0xFFFF_FFFE;
                 },
-                else => std.debug.panic("[CPU|THUMB|Fmt5] {} is an invalid op", .{op}),
+                else => cpu.panic("[CPU|THUMB|Fmt5] {} is an invalid op", .{op}),
             }
         }
     }.inner;

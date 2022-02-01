@@ -47,12 +47,12 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     0b10 => {
                         // LDRSB
                         cpu.r[rd] = util.u32SignExtend(8, @as(u32, bus.read8(address)));
-                        std.debug.panic("[CPU|ARM|LDRSB] TODO: Affect the CPSR", .{});
+                        cpu.panic("[CPU|ARM|LDRSB] TODO: Affect the CPSR", .{});
                     },
                     0b11 => {
                         // LDRSH
                         cpu.r[rd] = util.u32SignExtend(16, @as(u32, bus.read16(address)));
-                        std.debug.panic("[CPU|ARM|LDRSH] TODO: Affect the CPSR", .{});
+                        cpu.panic("[CPU|ARM|LDRSH] TODO: Affect the CPSR", .{});
                     },
                 }
             } else {
