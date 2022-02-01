@@ -61,13 +61,14 @@ pub fn main() anyerror!void {
 
     // Init Atomics
     var quit = Atomic(bool).init(false);
+    var pause = Atomic(bool).init(false);
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &pause, &scheduler, &cpu, &bus });
     defer emu_thread.join();
 
     // Initialize SDL
-    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO);
+    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
     if (status < 0) sdlPanic();
     defer SDL.SDL_Quit();
 
@@ -93,16 +94,52 @@ pub fn main() anyerror!void {
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
-        _ = SDL.SDL_PollEvent(&event);
+        if (SDL.SDL_PollEvent(&event) != 0) {
+            // Pause Emulation Thread during Input Writing
+            pause.store(true, .Unordered);
 
-        switch (event.type) {
-            SDL.SDL_QUIT => break :emu_loop,
-            else => {},
+            switch (event.type) {
+                SDL.SDL_QUIT => break :emu_loop,
+                SDL.SDL_KEYDOWN => {
+                    const key_code = event.key.keysym.sym;
+
+                    switch (key_code) {
+                        SDL.SDLK_UP => bus.io.keyinput.up.unset(),
+                        SDL.SDLK_DOWN => bus.io.keyinput.down.unset(),
+                        SDL.SDLK_LEFT => bus.io.keyinput.left.unset(),
+                        SDL.SDLK_RIGHT => bus.io.keyinput.right.unset(),
+                        SDL.SDLK_x => bus.io.keyinput.a.unset(),
+                        SDL.SDLK_z => bus.io.keyinput.b.unset(),
+                        SDL.SDLK_a => bus.io.keyinput.shoulder_l.unset(),
+                        SDL.SDLK_s => bus.io.keyinput.shoulder_r.unset(),
+                        SDL.SDLK_RETURN => bus.io.keyinput.start.unset(),
+                        SDL.SDLK_RSHIFT => bus.io.keyinput.select.unset(),
+                        else => {},
+                    }
+                },
+                SDL.SDL_KEYUP => {
+                    const key_code = event.key.keysym.sym;
+
+                    switch (key_code) {
+                        SDL.SDLK_UP => bus.io.keyinput.up.set(),
+                        SDL.SDLK_DOWN => bus.io.keyinput.down.set(),
+                        SDL.SDLK_LEFT => bus.io.keyinput.left.set(),
+                        SDL.SDLK_RIGHT => bus.io.keyinput.right.set(),
+                        SDL.SDLK_x => bus.io.keyinput.a.set(),
+                        SDL.SDLK_z => bus.io.keyinput.b.set(),
+                        SDL.SDLK_a => bus.io.keyinput.shoulder_l.set(),
+                        SDL.SDLK_s => bus.io.keyinput.shoulder_r.set(),
+                        SDL.SDLK_RETURN => bus.io.keyinput.start.set(),
+                        SDL.SDLK_RSHIFT => bus.io.keyinput.select.set(),
+                        else => {},
+                    }
+                },
+                else => {},
+            }
         }
 
-        // TODO: Make this Thread Safe
+        // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
         const buf_ptr = bus.ppu.frame_buf.ptr;
-
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, buf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
@@ -110,6 +147,8 @@ pub fn main() anyerror!void {
         // const fps = std.time.ns_per_s / timer.lap();
         // const title = std.fmt.bufPrint(&title_buf, "ZBA FPS: {d}", .{fps}) catch unreachable;
         // SDL.SDL_SetWindowTitle(window, title.ptr);
+
+        pause.store(false, .Unordered);
     }
 
     quit.store(true, .Unordered); // Terminate Emulator Thread

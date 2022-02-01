@@ -19,8 +19,8 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     }
 }
 
-pub fn runEmuThread(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runEmuThread(quit: *Atomic(bool), pause: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     while (!quit.load(.Unordered)) {
-        runFrame(sched, cpu, bus);
+        if (!pause.load(.Unordered)) runFrame(sched, cpu, bus);
     }
 }
