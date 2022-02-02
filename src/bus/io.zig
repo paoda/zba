@@ -21,7 +21,7 @@ pub const Io = struct {
             .vcount = .{ .raw = 0x0000 },
             .ime = false,
             .ie = .{ .raw = 0x0000 },
-            .keyinput = .{ .raw = 0x01FF },
+            .keyinput = .{ .raw = 0x03FF },
         };
     }
 
