@@ -90,7 +90,8 @@ pub fn format4(comptime op: u4) InstrFn {
                 },
                 0xD => {
                     // MUL
-                    const result = cpu.r[rs] * cpu.r[rd];
+                    const temp = @as(u64, cpu.r[rs]) * @as(u64, cpu.r[rd]);
+                    const result = @truncate(u32, temp);
                     cpu.r[rd] = result;
 
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
