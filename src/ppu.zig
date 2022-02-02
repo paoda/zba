@@ -50,19 +50,20 @@ pub const Ppu = struct {
                 std.mem.copy(u8, self.frame_buf[start..end], self.vram.buf[start..end]);
             },
             0x4 => {
-                const frame_select = io.dispcnt.frame_select.read();
+                const select = io.dispcnt.frame_select.read();
+                const vram_start = width * @as(usize, scanline);
+                const buf_start = vram_start * @sizeOf(u16);
 
-                const fb_start = buf_pitch * @as(usize, scanline);
-                const vram_start = fb_start >> 1;
+                const start = vram_start + if (select) 0xA000 else @as(usize, 0);
+                const end = start + width; // Each Entry is only a byte long
 
-                const start = if (frame_select) 0xA000 + vram_start else vram_start;
-                const end = start + width;
-
+                // Render Current Scanline
                 for (self.vram.buf[start..end]) |byte, i| {
-                    const fb_i = i * @sizeOf(u16);
+                    const id = byte * 2;
+                    const j = i * @sizeOf(u16);
 
-                    self.frame_buf[fb_start + fb_i + 1] = self.palette.buf[byte + 1];
-                    self.frame_buf[fb_start + fb_i] = self.palette.buf[byte];
+                    self.frame_buf[buf_start + j + 1] = self.palette.buf[id + 1];
+                    self.frame_buf[buf_start + j] = self.palette.buf[id];
                 }
             },
             else => {}, // std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
