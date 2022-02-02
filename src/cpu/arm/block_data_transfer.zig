@@ -11,34 +11,39 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             const rn = opcode >> 16 & 0xF;
             const base = cpu.r[rn];
 
-            var address: u32 = undefined;
+            const in_list = opcode >> @truncate(u4, rn) & 1 == 1;
+
+            var address: u32 = base;
             if (U) {
                 // Increment
-                address = if (P) base + 4 else base;
-
                 var i: u5 = 0;
                 while (i < 0x10) : (i += 1) {
                     if (opcode >> i & 1 == 1) {
+                        if (P) address += 4;
                         transfer(cpu, bus, r15_present, i, address);
-                        address += 4;
+                        if (!P) address += 4;
                     }
                 }
             } else {
                 // Decrement
-                address = if (P) base - 4 else base;
 
                 var i: u5 = 0x10;
                 while (i > 0) : (i -= 1) {
                     const j = i - 1;
 
                     if (opcode >> j & 1 == 1) {
+                        if (P) address -= 4;
                         transfer(cpu, bus, r15_present, j, address);
-                        address -= 4;
+                        if (!P) address -= 4;
                     }
                 }
             }
 
-            if (W and P or !P) cpu.r[rn] = if (U) address else address + 4;
+            if (W) {
+                if (!L or (L and !in_list)) {
+                    cpu.r[rn] = address;
+                }
+            }
         }
 
         fn transfer(cpu: *Arm7tdmi, bus: *Bus, r15_present: bool, i: u5, address: u32) void {
