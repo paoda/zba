@@ -20,19 +20,20 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
                 base = cpu.r[rn];
             }
 
-            const offset = if (I) registerOffset(cpu, opcode) else opcode & 0xFFF;
+            const offset = if (I) shifter.immShift(false, cpu, opcode) else opcode & 0xFFF;
 
-            const modified_base = if (U) base + offset else base - offset;
+            const modified_base = if (U) base +% offset else base -% offset;
             var address = if (P) modified_base else base;
 
+            var result: u32 = undefined;
             if (L) {
                 if (B) {
                     // LDRB
-                    cpu.r[rd] = bus.read8(address);
+                    result = bus.read8(address);
                 } else {
                     // LDR
                     const value = bus.read32(address & 0xFFFF_FFFC);
-                    cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
+                    result = std.math.rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
@@ -47,20 +48,7 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
 
             address = modified_base;
             if (W and P or !P) cpu.r[rn] = address;
-
-            // TODO: W-bit forces non-privledged mode for the transfer
+            if (L) cpu.r[rd] = result; // This emulates the LDR rd == rn behaviour
         }
     }.inner;
-}
-
-fn registerOffset(cpu: *Arm7tdmi, opcode: u32) u32 {
-    const amount = @truncate(u8, opcode >> 7 & 0x1F);
-    const rm = cpu.r[opcode & 0xF];
-
-    return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => shifter.logicalLeft(false, &cpu.cpsr, rm, amount),
-        0b01 => shifter.logicalRight(false, &cpu.cpsr, rm, amount),
-        0b10 => shifter.arithmeticRight(false, &cpu.cpsr, rm, amount),
-        0b11 => shifter.rotateRight(false, &cpu.cpsr, rm, amount),
-    };
 }

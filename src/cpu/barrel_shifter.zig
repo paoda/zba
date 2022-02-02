@@ -29,7 +29,7 @@ fn registerShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     };
 }
 
-fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
+pub fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const amount = @truncate(u8, opcode >> 7 & 0x1F);
 
     const rm_idx = opcode & 0xF;
@@ -132,11 +132,9 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
         result = @bitCast(u32, @bitCast(i32, rm) >> amount);
         if (S and total_amount != 0) cpsr.c.write(rm >> (amount - 1) & 1 == 1);
     } else {
-        if (S) {
-            // ASR #32 and ASR #>32 have the same result
-            result = @bitCast(u32, @bitCast(i32, rm) >> 31);
-            cpsr.c.write(result >> 31 & 1 == 1);
-        }
+        // ASR #32 and ASR #>32 have the same result
+        result = @bitCast(u32, @bitCast(i32, rm) >> 31);
+        if (S) cpsr.c.write(result >> 31 & 1 == 1);
     }
 
     return result;

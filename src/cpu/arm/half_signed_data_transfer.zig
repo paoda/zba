@@ -28,25 +28,24 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                 offset = cpu.r[rm];
             }
 
-            const modified_base = if (U) base + offset else base - offset;
+            const modified_base = if (U) base +% offset else base -% offset;
             var address = if (P) modified_base else base;
 
+            var result: u32 = undefined;
             if (L) {
                 switch (@truncate(u2, opcode >> 5)) {
                     0b01 => {
                         // LDRH
                         const value = bus.read16(address & 0xFFFF_FFFE);
-                        cpu.r[rd] = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
+                        result = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
                     },
                     0b10 => {
                         // LDRSB
-                        cpu.r[rd] = util.u32SignExtend(8, @as(u32, bus.read8(address)));
-                        cpu.panic("[CPU|ARM|LDRSB] TODO: Affect the CPSR", .{});
+                        result = util.u32SignExtend(8, @as(u32, bus.read8(address)));
                     },
                     0b11 => {
                         // LDRSH
-                        cpu.r[rd] = util.u32SignExtend(16, @as(u32, bus.read16(address)));
-                        cpu.panic("[CPU|ARM|LDRSH] TODO: Affect the CPSR", .{});
+                        result = util.u32SignExtend(16, @as(u32, bus.read16(address & 0xFFFF_FFFE)));
                     },
                     0b00 => unreachable, // SWP
                 }
@@ -59,6 +58,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
 
             address = modified_base;
             if (W and P or !P) cpu.r[rn] = address;
+            if (L) cpu.r[rd] = result; // // This emulates the LDR rd == rn behaviour
         }
     }.inner;
 }
