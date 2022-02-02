@@ -19,6 +19,7 @@ const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
 const multiply = @import("cpu/arm/multiply.zig").multiply;
 const multiplyLong = @import("cpu/arm/multiply_long.zig").multiplyLong;
+const singleDataSwap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
 
 // THUMB Instruction Groups
 const format1 = @import("cpu/thumb/format1.zig").format1;
@@ -491,33 +492,35 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
 fn armPopulate() [0x1000]ArmInstrFn {
     return comptime {
-        @setEvalBranchQuota(0x5000); // TODO: Figure out exact size
+        @setEvalBranchQuota(0xC000); // TODO: Figure out exact size
         var lut = [_]ArmInstrFn{armUndefined} ** 0x1000;
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
-            if (i >> 10 & 0x3 == 0b00) {
-                const I = i >> 9 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-                const instrKind = i >> 5 & 0xF;
-
-                lut[i] = dataProcessing(I, S, instrKind);
-            }
-
-            if (i >> 10 & 0x3 == 0b00 and i >> 7 & 0x3 == 0b10 and i >> 4 & 1 == 0) {
-                // PSR Transfer
-                const I = i >> 9 & 1 == 1;
-                const R = i >> 6 & 1 == 1;
-                const kind = i >> 4 & 0x3;
-
-                lut[i] = psrTransfer(I, R, kind);
-            }
-
+            // Instructions with Opcode[27] == 0
             if (i == 0x121) {
+                // Bits 27:20 and 7:4
                 lut[i] = branchAndExchange;
-            }
+            } else if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
+                // Bits 27:22 and 7:4
+                const A = i >> 5 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
 
-            if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
+                lut[i] = multiply(A, S);
+            } else if (i >> 7 & 0x1F == 0b00010 and i >> 4 & 0x3 == 0b00 and i & 0xF == 0b1001) {
+                // Bits 27:23, 21:20 and 7:4
+                const B = i >> 6 & 1 == 1;
+
+                lut[i] = singleDataSwap(B);
+            } else if (i >> 7 & 0x1F == 0b00001 and i & 0xF == 0b1001) {
+                // Bits 27:23 and bits 7:4
+                const U = i >> 6 & 1 == 1;
+                const A = i >> 5 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
+
+                lut[i] = multiplyLong(U, A, S);
+            } else if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
+                // Bits 27:25, 7 and 4
                 const P = i >> 8 & 1 == 1;
                 const U = i >> 7 & 1 == 1;
                 const I = i >> 6 & 1 == 1;
@@ -525,24 +528,18 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const L = i >> 4 & 1 == 1;
 
                 lut[i] = halfAndSignedDataTransfer(P, U, I, W, L);
-            }
+            } else if (i >> 9 & 0x7 == 0b011 and i & 1 == 1) {
+                // Bits 27:25 and 4
+                lut[i] = armUndefined;
+            } else if (i >> 10 & 0x3 == 0b00 and i >> 7 & 0x3 == 0b10 and i >> 4 & 1 == 0) {
+                // Bits 27:26, 24:23 and 20
+                const I = i >> 9 & 1 == 1;
+                const R = i >> 6 & 1 == 1;
+                const kind = i >> 4 & 0x3;
 
-            if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
-                const A = i >> 5 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-
-                lut[i] = multiply(A, S);
-            }
-
-            if (i >> 7 & 0x1F == 0b00001 and i & 0xF == 0b1001) {
-                const U = i >> 6 & 1 == 1;
-                const A = i >> 5 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-
-                lut[i] = multiplyLong(U, A, S);
-            }
-
-            if (i >> 10 & 0x3 == 0b01) {
+                lut[i] = psrTransfer(I, R, kind);
+            } else if (i >> 10 & 0x3 == 0b01) {
+                // Bits 27:26
                 const I = i >> 9 & 1 == 1;
                 const P = i >> 8 & 1 == 1;
                 const U = i >> 7 & 1 == 1;
@@ -551,9 +548,18 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const L = i >> 4 & 1 == 1;
 
                 lut[i] = singleDataTransfer(I, P, U, B, W, L);
+            } else if (i >> 10 & 0x3 == 0b00) {
+                // Bits 27:26
+                const I = i >> 9 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
+                const instrKind = i >> 5 & 0xF;
+
+                lut[i] = dataProcessing(I, S, instrKind);
             }
 
+            // Instructions with Opcode[27] == 1
             if (i >> 9 & 0x7 == 0b100) {
+                // Bits 27:25
                 const P = i >> 8 & 1 == 1;
                 const U = i >> 7 & 1 == 1;
                 const S = i >> 6 & 1 == 1;
@@ -561,14 +567,11 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const L = i >> 4 & 1 == 1;
 
                 lut[i] = blockDataTransfer(P, U, S, W, L);
-            }
-
-            if (i >> 9 & 0x7 == 0b101) {
+            } else if (i >> 9 & 0x7 == 0b101) {
+                // Bits 27:25
                 const L = i >> 8 & 1 == 1;
                 lut[i] = branch(L);
-            }
-
-            if (i >> 8 & 0xF == 0b1111) lut[i] = softwareInterrupt();
+            } else if (i >> 8 & 0xF == 0b1111) lut[i] = softwareInterrupt(); // Bits 27:24
         }
 
         return lut;

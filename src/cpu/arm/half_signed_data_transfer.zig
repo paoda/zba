@@ -33,12 +33,6 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
 
             if (L) {
                 switch (@truncate(u2, opcode >> 5)) {
-                    0b00 => {
-                        // SWP
-                        const value = bus.read32(cpu.r[rn]);
-                        const tmp = std.math.rotr(u32, value, 8 * (cpu.r[rn] & 0x3));
-                        bus.write32(cpu.r[rm], tmp);
-                    },
                     0b01 => {
                         // LDRH
                         const value = bus.read16(address & 0xFFFF_FFFE);
@@ -54,14 +48,13 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                         cpu.r[rd] = util.u32SignExtend(16, @as(u32, bus.read16(address)));
                         cpu.panic("[CPU|ARM|LDRSH] TODO: Affect the CPSR", .{});
                     },
+                    0b00 => unreachable, // SWP
                 }
             } else {
                 if (opcode >> 5 & 0x01 == 0x01) {
                     // STRH
                     bus.write16(address, @truncate(u16, cpu.r[rd]));
-                } else {
-                    std.debug.print("[CPU|ARM|SignedDataTransfer] {X:0>8} was improperly decoded", .{opcode});
-                }
+                } else unreachable; // SWP
             }
 
             address = modified_base;
