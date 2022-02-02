@@ -137,6 +137,49 @@ pub const Arm7tdmi = struct {
         self.changeMode(mode);
     }
 
+    pub fn setUserModeRegister(self: *Self, idx: usize, value: u32) void {
+        const current = getMode(self.cpsr.mode.read()) orelse unreachable;
+
+        if (idx < 8) {
+            self.r[idx] = value;
+        } else if (idx < 13) {
+            if (current == .Fiq) {
+                const user_offset: usize = 0;
+                self.banked_fiq[(idx - 8) * 2 + user_offset] = value;
+            } else self.r[idx] = value;
+        } else if (idx < 15) {
+            switch (current) {
+                .User, .System => self.r[idx] = value,
+                else => {
+                    self.banked_r[bankedIdx(.User) * 2 + (idx - 13)] = value;
+                },
+            }
+        } else self.r[idx] = value;
+    }
+
+    pub fn getUserModeRegister(self: *Self, idx: usize) u32 {
+        const current = getMode(self.cpsr.mode.read()) orelse unreachable;
+
+        var result: u32 = undefined;
+        if (idx < 8) {
+            result = self.r[idx];
+        } else if (idx < 13) {
+            if (current == .Fiq) {
+                const user_offset: usize = 0;
+                result = self.banked_fiq[(idx - 8) * 2 + user_offset];
+            } else result = self.r[idx];
+        } else if (idx < 15) {
+            switch (current) {
+                .User, .System => result = self.r[idx],
+                else => {
+                    result = self.banked_r[bankedIdx(.User) * 2 + (idx - 13)];
+                },
+            }
+        } else result = self.r[idx];
+
+        return result;
+    }
+
     pub fn changeMode(self: *Self, next: Mode) void {
         const now = getMode(self.cpsr.mode.read()) orelse unreachable;
 

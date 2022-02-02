@@ -7,10 +7,9 @@ const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
+            const r15_present = opcode >> 15 & 1 == 1;
             const rn = opcode >> 16 & 0xF;
             const base = cpu.r[rn];
-
-            if (S and opcode >> 15 & 1 == 0) cpu.panic("[CPU] TODO: STM/LDM with S set but R15 not in transfer list", .{});
 
             var address: u32 = undefined;
             if (U) {
@@ -20,7 +19,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                 var i: u5 = 0;
                 while (i < 0x10) : (i += 1) {
                     if (opcode >> i & 1 == 1) {
-                        transfer(cpu, bus, i, address);
+                        transfer(cpu, bus, r15_present, i, address);
                         address += 4;
                     }
                 }
@@ -33,7 +32,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                     const j = i - 1;
 
                     if (opcode >> j & 1 == 1) {
-                        transfer(cpu, bus, j, address);
+                        transfer(cpu, bus, r15_present, j, address);
                         address -= 4;
                     }
                 }
@@ -42,20 +41,24 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             if (W and P or !P) cpu.r[rn] = if (U) address else address + 4;
         }
 
-        fn transfer(cpu: *Arm7tdmi, bus: *Bus, i: u5, address: u32) void {
+        fn transfer(cpu: *Arm7tdmi, bus: *Bus, r15_present: bool, i: u5, address: u32) void {
             if (L) {
-                cpu.r[i] = bus.read32(address);
-                if (S and i == 0xF) cpu.panic("[CPU] TODO: SPSR_<mode> is transferred to CPSR", .{});
-            } else {
-                if (i == 0xF) {
-                    if (!S) {
-                        // TODO: Assure that this is Address of STM instruction + 12
-                        bus.write32(address, cpu.r[i] + (12 - 4));
-                    } else {
-                        cpu.panic("[CPU] TODO: STM with S set and R15 in transfer list", .{});
-                    }
+                if (S and !r15_present) {
+                    // Always Transfer User mode Registers
+                    cpu.setUserModeRegister(i, bus.read32(address));
                 } else {
-                    bus.write32(address, cpu.r[i]);
+                    const value = bus.read32(address);
+                    cpu.r[i] = if (i == 0xF) value & 0xFFFF_FFFC else value;
+                    if (S and i == 0xF) cpu.setCpsr(cpu.spsr.raw);
+                }
+            } else {
+                if (S) {
+                    // Always Transfer User mode Registers
+                    // This happens regardless if r15 is in the list
+                    const value = cpu.getUserModeRegister(i);
+                    bus.write32(address, value + if (i == 0xF) 8 else @as(u32, 0)); // PC is already 4 ahead to make 12
+                } else {
+                    bus.write32(address, cpu.r[i] + if (i == 0xF) 8 else @as(u32, 0));
                 }
             }
         }
