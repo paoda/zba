@@ -492,7 +492,7 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
 fn armPopulate() [0x1000]ArmInstrFn {
     return comptime {
-        @setEvalBranchQuota(0xC000); // TODO: Figure out exact size
+        @setEvalBranchQuota(0xE000);
         var lut = [_]ArmInstrFn{armUndefined} ** 0x1000;
 
         var i: usize = 0;
@@ -558,7 +558,11 @@ fn armPopulate() [0x1000]ArmInstrFn {
             }
 
             // Instructions with Opcode[27] == 1
-            if (i >> 9 & 0x7 == 0b100) {
+            if (i >> 8 & 0xF == 0b1110) {
+                // bits 27:24
+                // Coprocessor Data Opertation + Register Transfer
+                lut[i] = armUndefined;
+            } else if (i >> 9 & 0x7 == 0b100) {
                 // Bits 27:25
                 const P = i >> 8 & 1 == 1;
                 const U = i >> 7 & 1 == 1;
@@ -571,7 +575,14 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 // Bits 27:25
                 const L = i >> 8 & 1 == 1;
                 lut[i] = branch(L);
-            } else if (i >> 8 & 0xF == 0b1111) lut[i] = softwareInterrupt(); // Bits 27:24
+            } else if (i >> 9 & 0x7 == 0b110) {
+                // Bits 27:25
+                // Coprocessor Data Transfer
+                lut[i] = armUndefined;
+            } else if (i >> 8 & 0xF == 0b1111) {
+                // Bits 27:24
+                lut[i] = softwareInterrupt();
+            }
         }
 
         return lut;
