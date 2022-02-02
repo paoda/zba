@@ -18,6 +18,7 @@ const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
 const multiply = @import("cpu/arm/multiply.zig").multiply;
+const multiplyLong = @import("cpu/arm/multiply_long.zig").multiplyLong;
 
 // THUMB Instruction Groups
 const format1 = @import("cpu/thumb/format1.zig").format1;
@@ -531,6 +532,14 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 const S = i >> 4 & 1 == 1;
 
                 lut[i] = multiply(A, S);
+            }
+
+            if (i >> 7 & 0x1F == 0b00001 and i & 0xF == 0b1001) {
+                const U = i >> 6 & 1 == 1;
+                const A = i >> 5 & 1 == 1;
+                const S = i >> 4 & 1 == 1;
+
+                lut[i] = multiplyLong(U, A, S);
             }
 
             if (i >> 10 & 0x3 == 0b01) {
