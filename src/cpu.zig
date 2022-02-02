@@ -424,60 +424,45 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
 
 fn thumbPopulate() [0x400]ThumbInstrFn {
     return comptime {
-        @setEvalBranchQuota(0xC00);
+        @setEvalBranchQuota(0x5000);
         var lut = [_]ThumbInstrFn{thumbUndefined} ** 0x400;
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
-            if (i >> 7 & 0x7 == 0b000) {
-                const op = i >> 5 & 0x3;
-                const offset = i & 0x1F;
-
-                lut[i] = format1(op, offset);
-            }
-            if (i >> 5 & 0x1F == 0b00011) {
-                const I = i >> 4 & 1 == 1;
-                const is_sub = i >> 3 & 1 == 1;
-                const rn = i & 0x7;
-
-                lut[i] = format2(I, is_sub, rn);
-            }
-
-            if (i >> 7 & 0x7 == 0b001) {
-                const op = i >> 5 & 0x3;
-                const rd = i >> 2 & 0x7;
-
-                lut[i] = format3(op, rd);
-            }
-
             if (i >> 4 & 0x3F == 0b010000) {
                 const op = i & 0xF;
 
                 lut[i] = format4(op);
-            }
-
-            if (i >> 4 & 0x3F == 0b010001) {
+            } else if (i >> 4 & 0x3F == 0b010001) {
                 const op = i >> 2 & 0x3;
                 const h1 = i >> 1 & 1;
                 const h2 = i & 1;
 
                 lut[i] = format5(op, h1, h2);
-            }
+            } else if (i >> 5 & 0x1F == 0b00011) {
+                const I = i >> 4 & 1 == 1;
+                const is_sub = i >> 3 & 1 == 1;
+                const rn = i & 0x7;
 
-            if (i >> 5 & 0x1F == 0b01001) {
+                lut[i] = format2(I, is_sub, rn);
+            } else if (i >> 5 & 0x1F == 0b01001) {
                 const rd = i >> 2 & 0x7;
 
                 lut[i] = format6(rd);
-            }
-
-            if (i >> 6 & 0xF == 0b1000) {
-                const L = i >> 5 & 1 == 1;
+            } else if (i >> 6 & 0xF == 0b0101) {
+                // TODO: Format 7 and Format 8
+                lut[i] = thumbUndefined;
+            } else if (i >> 7 & 0x7 == 0b000) {
+                const op = i >> 5 & 0x3;
                 const offset = i & 0x1F;
 
-                lut[i] = format10(L, offset);
-            }
+                lut[i] = format1(op, offset);
+            } else if (i >> 7 & 0x7 == 0b001) {
+                const op = i >> 5 & 0x3;
+                const rd = i >> 2 & 0x7;
 
-            if (i >> 7 & 0x7 == 0b011) {
+                lut[i] = format3(op, rd);
+            } else if (i >> 7 & 0x7 == 0b011) {
                 const B = i >> 6 & 1 == 1;
                 const L = i >> 5 & 1 == 1;
                 const offset = i & 0x1F;
@@ -485,44 +470,43 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                 lut[i] = format9(B, L, offset);
             }
 
-            if (i >> 6 & 0xF == 0b1010) {
-                const isSP = i >> 5 & 1 == 1;
-                const rd = i >> 2 & 0x7;
-
-                lut[i] = format12(isSP, rd);
-            }
-
             if (i >> 2 & 0xFF == 0xB0) {
                 const S = i >> 1 & 1 == 1;
 
                 lut[i] = format13(S);
-            }
+            } else if (i >> 2 & 0xFF == 0xDF) {
+                // Format 17 | Software Interrupt
+                lut[i] = thumbUndefined;
+            } else if (i >> 6 & 0xF == 0b1000) {
+                const L = i >> 5 & 1 == 1;
+                const offset = i & 0x1F;
 
-            if (i >> 6 & 0xF == 0b1011 and i >> 3 & 0x3 == 0b10) {
+                lut[i] = format10(L, offset);
+            } else if (i >> 6 & 0xF == 0b1001) {
+                // Format 11 | SP-relative load / store
+                lut[i] = thumbUndefined;
+            } else if (i >> 6 & 0xF == 0b1010) {
+                const isSP = i >> 5 & 1 == 1;
+                const rd = i >> 2 & 0x7;
+
+                lut[i] = format12(isSP, rd);
+            } else if (i >> 6 & 0xF == 0b1011 and i >> 3 & 0x3 == 0b10) {
                 const L = i >> 5 & 1 == 1;
                 const R = i >> 2 & 1 == 1;
 
                 lut[i] = format14(L, R);
-            }
-
-            if (i >> 6 & 0xF == 0b1100) {
+            } else if (i >> 6 & 0xF == 0b1100) {
                 const L = i >> 5 & 1 == 1;
                 const rb = i >> 2 & 0x7;
 
                 lut[i] = format15(L, rb);
-            }
-
-            if (i >> 6 & 0xF == 0b1101) {
+            } else if (i >> 6 & 0xF == 0b1101) {
                 const cond = i >> 2 & 0xF;
 
                 lut[i] = format16(cond);
-            }
-
-            if (i >> 5 & 0x1F == 0b11100) {
+            } else if (i >> 5 & 0x1F == 0b11100) {
                 lut[i] = format18();
-            }
-
-            if (i >> 6 & 0xF == 0b1111) {
+            } else if (i >> 6 & 0xF == 0b1111) {
                 const is_low = i >> 5 & 1 == 1;
 
                 lut[i] = format19(is_low);
