@@ -7,7 +7,7 @@ buf: []u8,
 alloc: Allocator,
 
 pub fn init(alloc: Allocator, path: []const u8) !Self {
-    const file = try std.fs.cwd().openFile(path, .{ .read = true });
+    const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
     const len = try file.getEndPos();

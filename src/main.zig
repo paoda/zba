@@ -52,7 +52,7 @@ pub fn main() anyerror!void {
     var log_file: ?File = undefined;
     if (enable_logging) {
         const file_name: []const u8 = if (is_binary) "zba.bin" else "zba.log";
-        const file = try std.fs.cwd().createFile(file_name, .{ .read = true });
+        const file = try std.fs.cwd().createFile(file_name, .{});
         cpu.useLogger(&file, is_binary);
 
         log_file = file;
