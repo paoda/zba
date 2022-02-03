@@ -10,17 +10,23 @@ const add = @import("../arm/data_processing.zig").add;
 pub fn format5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
-            const src = @as(u4, h2) << 3 | (opcode >> 3 & 0x7);
-            const dst = @as(u4, h1) << 3 | (opcode & 0x7);
+            const src_idx = @as(u4, h2) << 3 | (opcode >> 3 & 0x7);
+            const dst_idx = @as(u4, h1) << 3 | (opcode & 0x7);
+
+            const src = if (src_idx == 0xF) (cpu.r[src_idx] + 2) & 0xFFFF_FFFE else cpu.r[src_idx];
+            const dst = if (dst_idx == 0xF) (cpu.r[dst_idx] + 2) & 0xFFFF_FFFE else cpu.r[dst_idx];
 
             switch (op) {
-                0b00 => cpu.r[dst] = add(false, cpu, cpu.r[dst], cpu.r[src]), // ADD
-                0b01 => cmp(cpu, cpu.r[dst], cpu.r[src]), // CMP
-                0b10 => cpu.r[dst] = cpu.r[src], // MOV
+                0b00 => cpu.r[dst_idx] = add(false, cpu, dst, src) & if (dst_idx == 0xF) 0xFFFF_FFFC else @as(u32, 0xFFF_FFFF), // ADD
+                0b01 => cmp(cpu, dst, src), // CMP
+                0b10 => {
+                    // MOV
+                    cpu.r[dst_idx] = if (dst_idx == 0xF) src & 0xFFFF_FFFC else src;
+                },
                 0b11 => {
                     // BX
-                    cpu.cpsr.t.write(cpu.r[src] & 1 == 1);
-                    cpu.r[15] = cpu.r[src] & 0xFFFF_FFFE;
+                    cpu.cpsr.t.write(src & 1 == 1);
+                    cpu.r[15] = src & 0xFFFF_FFFE;
                 },
             }
         }
