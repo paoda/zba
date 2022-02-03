@@ -4,10 +4,11 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 
-pub fn format13(comptime _: bool) InstrFn {
+pub fn format13(comptime S: bool) InstrFn {
     return struct {
-        fn inner(cpu: *Arm7tdmi, _: *Bus, _: u16) void {
-            cpu.panic("[CPU|THUMB|Fmt13] Implement Format 13 THUMB Instructions", .{});
+        fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
+            const offset = (opcode & 0x7F) << 2;
+            cpu.r[13] = if (S) cpu.r[13] - offset else cpu.r[13] + offset;
         }
     }.inner;
 }
