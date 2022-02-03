@@ -72,7 +72,7 @@ pub fn format4(comptime op: u4) InstrFn {
                 },
                 0x9 => {
                     // NEG
-                    cpu.r[rd] = sub(true, cpu, cpu.r[rs], cpu.r[rd]); // FIXME: I think this is wrong?
+                    cpu.r[rd] = sub(true, cpu, 0, cpu.r[rs]);
                 },
                 0xA => {
                     // CMP
