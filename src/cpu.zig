@@ -453,7 +453,7 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
                 lut[i] = format6(rd);
             } else if (i >> 6 & 0xF == 0b0101) {
-                const op = i >> 5 & 0x3;
+                const op = i >> 4 & 0x3;
                 const T = i >> 3 & 1 == 1;
 
                 lut[i] = format78(op, T);
