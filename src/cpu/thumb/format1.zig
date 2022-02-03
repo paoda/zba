@@ -14,9 +14,32 @@ pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
             const rd = opcode & 0x7;
 
             const result = switch (op) {
-                0b00 => shifter.logicalLeft(true, &cpu.cpsr, cpu.r[rs], offset), // LSL
-                0b01 => shifter.logicalRight(true, &cpu.cpsr, cpu.r[rs], offset), // LSR
-                0b10 => shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset), // ASR
+                0b00 => blk: {
+                    // LSL
+                    if (offset == 0) {
+                        break :blk cpu.r[rs];
+                    } else {
+                        break :blk shifter.logicalLeft(true, &cpu.cpsr, cpu.r[rs], offset);
+                    }
+                },
+                0b01 => blk: {
+                    // LSR
+                    if (offset == 0) {
+                        cpu.cpsr.c.write(cpu.r[rs] >> 31 & 1 == 1);
+                        break :blk @as(u32, 0);
+                    } else {
+                        break :blk shifter.logicalRight(true, &cpu.cpsr, cpu.r[rs], offset);
+                    }
+                },
+                0b10 => blk: {
+                    // ASR
+                    if (offset == 0) {
+                        cpu.cpsr.c.write(cpu.r[rs] >> 31 & 1 == 1);
+                        break :blk @bitCast(u32, @bitCast(i32, cpu.r[rs]) >> 31);
+                    } else {
+                        break :blk shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset);
+                    }
+                },
                 else => cpu.panic("[CPU|THUMB|Fmt1] {} is an invalid op", .{op}),
             };
 
