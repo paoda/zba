@@ -14,7 +14,8 @@ pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
 
             if (L) {
                 // LDRH
-                cpu.r[rd] = bus.read16(address & 0xFFFF_FFFE);
+                const value = bus.read16(address & 0xFFFF_FFFE);
+                cpu.r[rd] = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
             } else {
                 // STRH
                 bus.write16(address & 0xFFFF_FFFE, @truncate(u16, cpu.r[rd]));

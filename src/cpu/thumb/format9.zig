@@ -18,7 +18,8 @@ pub fn format9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn 
                 } else {
                     // LDR
                     const address = cpu.r[rb] + (@as(u32, offset) << 2);
-                    cpu.r[rd] = bus.read32(address & 0xFFFF_FFFC);
+                    const value = bus.read32(address & 0xFFFF_FFFC);
+                    cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
