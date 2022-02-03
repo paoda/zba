@@ -145,7 +145,7 @@ fn armSbc(comptime S: bool, cpu: *Arm7tdmi, rd: u4, left: u32, right: u32, old_c
 
 pub fn sbc(comptime S: bool, cpu: *Arm7tdmi, left: u32, right: u32, old_carry: u1) u32 {
     // TODO: Make your own version (thanks peach.bot)
-    const subtrahend = @as(u64, right) - old_carry + 1;
+    const subtrahend = @as(u64, right) -% old_carry +% 1;
     const result = @truncate(u32, left -% subtrahend);
 
     if (S) {

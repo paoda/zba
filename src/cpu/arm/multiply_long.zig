@@ -15,14 +15,14 @@ pub fn multiplyLong(comptime U: bool, comptime A: bool, comptime S: bool) InstrF
             if (U) {
                 // Signed (WHY IS IT U THEN?)
                 var result: i64 = @as(i64, @bitCast(i32, cpu.r[rm])) * @as(i64, @bitCast(i32, cpu.r[rs]));
-                if (A) result += @bitCast(i64, @as(u64, cpu.r[rd_hi]) << 32 | @as(u64, cpu.r[rd_lo]));
+                if (A) result +%= @bitCast(i64, @as(u64, cpu.r[rd_hi]) << 32 | @as(u64, cpu.r[rd_lo]));
 
                 cpu.r[rd_hi] = @bitCast(u32, @truncate(i32, result >> 32));
                 cpu.r[rd_lo] = @bitCast(u32, @truncate(i32, result));
             } else {
                 // Unsigned
                 var result: u64 = @as(u64, cpu.r[rm]) * @as(u64, cpu.r[rs]);
-                if (A) result += @as(u64, cpu.r[rd_hi]) << 32 | @as(u64, cpu.r[rd_lo]);
+                if (A) result +%= @as(u64, cpu.r[rd_hi]) << 32 | @as(u64, cpu.r[rd_lo]);
 
                 cpu.r[rd_hi] = @truncate(u32, result >> 32);
                 cpu.r[rd_lo] = @truncate(u32, result);
