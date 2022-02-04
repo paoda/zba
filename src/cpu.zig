@@ -432,96 +432,97 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
 
 fn thumbPopulate() [0x400]ThumbInstrFn {
     return comptime {
-        @setEvalBranchQuota(0x5000);
+        @setEvalBranchQuota(5025); // This is exact
         var lut = [_]ThumbInstrFn{thumbUndefined} ** 0x400;
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
-            if (i >> 4 & 0x3F == 0b010000) {
-                const op = i & 0xF;
+            lut[i] = switch (@as(u3, i >> 7 & 0x7)) {
+                0b000 => if (i >> 5 & 0x3 == 0b11) blk: {
+                    const I = i >> 4 & 1 == 1;
+                    const is_sub = i >> 3 & 1 == 1;
+                    const rn = i & 0x7;
+                    break :blk format2(I, is_sub, rn);
+                } else blk: {
+                    const op = i >> 5 & 0x3;
+                    const offset = i & 0x1F;
+                    break :blk format1(op, offset);
+                },
+                0b001 => blk: {
+                    const op = i >> 5 & 0x3;
+                    const rd = i >> 2 & 0x7;
+                    break :blk format3(op, rd);
+                },
+                0b010 => switch (@as(u2, i >> 5 & 0x3)) {
+                    0b00 => if (i >> 4 & 1 == 1) blk: {
+                        const op = i >> 2 & 0x3;
+                        const h1 = i >> 1 & 1;
+                        const h2 = i & 1;
+                        break :blk format5(op, h1, h2);
+                    } else blk: {
+                        const op = i & 0xF;
+                        break :blk format4(op);
+                    },
+                    0b01 => blk: {
+                        const rd = i >> 2 & 0x7;
+                        break :blk format6(rd);
+                    },
+                    else => blk: {
+                        const op = i >> 4 & 0x3;
+                        const T = i >> 3 & 1 == 1;
+                        break :blk format78(op, T);
+                    },
+                },
+                0b011 => blk: {
+                    const B = i >> 6 & 1 == 1;
+                    const L = i >> 5 & 1 == 1;
+                    const offset = i & 0x1F;
+                    break :blk format9(B, L, offset);
+                },
+                else => switch (@as(u3, i >> 6 & 0x7)) {
+                    // MSB is guaranteed to be 1
+                    0b000 => blk: {
+                        const L = i >> 5 & 1 == 1;
+                        const offset = i & 0x1F;
+                        break :blk format10(L, offset);
+                    },
+                    0b001 => blk: {
+                        const L = i >> 5 & 1 == 1;
+                        const rd = i >> 2 & 0x3;
+                        break :blk format11(L, rd);
+                    },
+                    0b010 => blk: {
+                        const isSP = i >> 5 & 1 == 1;
+                        const rd = i >> 2 & 0x7;
+                        break :blk format12(isSP, rd);
+                    },
+                    0b011 => if (i >> 4 & 1 == 1) blk: {
+                        const L = i >> 5 & 1 == 1;
+                        const R = i >> 2 & 1 == 1;
+                        break :blk format14(L, R);
+                    } else blk: {
+                        const S = i >> 1 & 1 == 1;
+                        break :blk format13(S);
+                    },
+                    0b100 => blk: {
+                        const L = i >> 5 & 1 == 1;
+                        const rb = i >> 2 & 0x7;
 
-                lut[i] = format4(op);
-            } else if (i >> 4 & 0x3F == 0b010001) {
-                const op = i >> 2 & 0x3;
-                const h1 = i >> 1 & 1;
-                const h2 = i & 1;
-
-                lut[i] = format5(op, h1, h2);
-            } else if (i >> 5 & 0x1F == 0b00011) {
-                const I = i >> 4 & 1 == 1;
-                const is_sub = i >> 3 & 1 == 1;
-                const rn = i & 0x7;
-
-                lut[i] = format2(I, is_sub, rn);
-            } else if (i >> 5 & 0x1F == 0b01001) {
-                const rd = i >> 2 & 0x7;
-
-                lut[i] = format6(rd);
-            } else if (i >> 6 & 0xF == 0b0101) {
-                const op = i >> 4 & 0x3;
-                const T = i >> 3 & 1 == 1;
-
-                lut[i] = format78(op, T);
-            } else if (i >> 7 & 0x7 == 0b000) {
-                const op = i >> 5 & 0x3;
-                const offset = i & 0x1F;
-
-                lut[i] = format1(op, offset);
-            } else if (i >> 7 & 0x7 == 0b001) {
-                const op = i >> 5 & 0x3;
-                const rd = i >> 2 & 0x7;
-
-                lut[i] = format3(op, rd);
-            } else if (i >> 7 & 0x7 == 0b011) {
-                const B = i >> 6 & 1 == 1;
-                const L = i >> 5 & 1 == 1;
-                const offset = i & 0x1F;
-
-                lut[i] = format9(B, L, offset);
-            }
-
-            if (i >> 2 & 0xFF == 0xB0) {
-                const S = i >> 1 & 1 == 1;
-
-                lut[i] = format13(S);
-            } else if (i >> 2 & 0xFF == 0xDF) {
-                lut[i] = thumbSoftwareInterrupt();
-            } else if (i >> 6 & 0xF == 0b1000) {
-                const L = i >> 5 & 1 == 1;
-                const offset = i & 0x1F;
-
-                lut[i] = format10(L, offset);
-            } else if (i >> 6 & 0xF == 0b1001) {
-                const L = i >> 5 & 1 == 1;
-                const rd = i >> 2 & 0x3;
-
-                lut[i] = format11(L, rd);
-            } else if (i >> 6 & 0xF == 0b1010) {
-                const isSP = i >> 5 & 1 == 1;
-                const rd = i >> 2 & 0x7;
-
-                lut[i] = format12(isSP, rd);
-            } else if (i >> 6 & 0xF == 0b1011 and i >> 3 & 0x3 == 0b10) {
-                const L = i >> 5 & 1 == 1;
-                const R = i >> 2 & 1 == 1;
-
-                lut[i] = format14(L, R);
-            } else if (i >> 6 & 0xF == 0b1100) {
-                const L = i >> 5 & 1 == 1;
-                const rb = i >> 2 & 0x7;
-
-                lut[i] = format15(L, rb);
-            } else if (i >> 6 & 0xF == 0b1101) {
-                const cond = i >> 2 & 0xF;
-
-                lut[i] = format16(cond);
-            } else if (i >> 5 & 0x1F == 0b11100) {
-                lut[i] = format18();
-            } else if (i >> 6 & 0xF == 0b1111) {
-                const is_low = i >> 5 & 1 == 1;
-
-                lut[i] = format19(is_low);
-            }
+                        break :blk format15(L, rb);
+                    },
+                    0b101 => if (i >> 2 & 0xF == 0b1111) blk: {
+                        break :blk thumbSoftwareInterrupt();
+                    } else blk: {
+                        const cond = i >> 2 & 0xF;
+                        break :blk format16(cond);
+                    },
+                    0b110 => format18(),
+                    0b111 => blk: {
+                        const is_low = i >> 5 & 1 == 1;
+                        break :blk format19(is_low);
+                    },
+                },
+            };
         }
 
         return lut;
