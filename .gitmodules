@@ -1,3 +1,6 @@
 [submodule "lib/SDL.zig"]
 	path = lib/SDL.zig
 	url = https://github.com/MasterQ32/SDL.zig
+[submodule "lib/zig-clap"]
+	path = lib/zig-clap
+	url = https://github.com/Hejsil/zig-clap

@@ -15,7 +15,11 @@ pub fn build(b: *std.build.Builder) void {
     const exe = b.addExecutable("zba", "src/main.zig");
 
     // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
-    exe.addPackage(.{ .name = "bitfield", .path = .{ .path = "lib/util/bitfield.zig" } });
+    // exe.addPackage(.{ .name = "bitfield", .path = .{ .path = "lib/util/bitfield.zig" } });
+    exe.addPackagePath("bitfield", "lib/util/bitfield.zig");
+
+    // Argument Parsing Library
+    exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b);

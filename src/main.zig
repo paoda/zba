@@ -1,5 +1,6 @@
 const std = @import("std");
 const SDL = @import("sdl2");
+const clap = @import("clap");
 
 const emu = @import("emu.zig");
 const Bus = @import("Bus.zig");
@@ -25,25 +26,46 @@ pub fn main() anyerror!void {
     const alloc = gpa.allocator();
     defer std.debug.assert(!gpa.deinit());
 
-    // Handle CLI Arguments
-    const args = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args);
+    // Parse CLI Arguments
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help         Display this help and exit.     ") catch unreachable,
+        clap.parseParam("-b, --bios <PATH>  Optional Path to GBA BIOS ROM.  ") catch unreachable,
+        clap.parseParam("<PATH>             Path to GBA GamePak ROM         ") catch unreachable,
+    };
 
-    const zba_args: []const []const u8 = args[1..];
+    var args = try clap.parse(clap.Help, &params, .{});
+    defer args.deinit();
 
-    if (zba_args.len == 0) {
-        std.log.err("Expected PATH to Gameboy Advance ROM as a CLI argument", .{});
-        return;
-    } else if (zba_args.len > 1) {
-        std.log.err("Too many CLI arguments were provided", .{});
-        return;
+    if (args.flag("--help")) {
+        return clap.help(std.io.getStdErr().writer(), &params);
     }
+
+    var maybe_bios: ?[]const u8 = null;
+    if (args.option("--bios")) |path| {
+        maybe_bios = path;
+    }
+
+    const positionals = args.positionals();
+    const stderr = std.io.getStdErr();
+    defer stderr.close();
+
+    const rom_path = switch (positionals.len) {
+        1 => positionals[0],
+        0 => {
+            try stderr.writeAll("ZBA requires a positional path to a GamePak ROM.\n");
+            return CliError.InsufficientOptions;
+        },
+        else => {
+            try stderr.writeAll("ZBA received too many arguments.\n");
+            return CliError.UnneededOptions;
+        },
+    };
 
     // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
-    var bus = try Bus.init(alloc, &scheduler, zba_args[0]);
+    var bus = try Bus.init(alloc, &scheduler, rom_path, maybe_bios);
     defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
@@ -158,3 +180,8 @@ fn sdlPanic() noreturn {
     const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
     @panic(std.mem.sliceTo(str, 0));
 }
+
+const CliError = error{
+    InsufficientOptions,
+    UnneededOptions,
+};

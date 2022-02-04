@@ -18,10 +18,10 @@ iwram: Iwram,
 ewram: Ewram,
 io: Io,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, path: []const u8) !Self {
+pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bios: ?[]const u8) !Self {
     return Self{
-        .pak = try GamePak.init(alloc, path),
-        .bios = try Bios.init(alloc, "./bin/gba_bios.bin"), // TODO: don't hardcode this + bundle open-sorce Boot ROM
+        .pak = try GamePak.init(alloc, rom_path),
+        .bios = try Bios.init(alloc, maybe_bios),
         .ppu = try Ppu.init(alloc, sched),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
