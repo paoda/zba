@@ -17,29 +17,34 @@ const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTr
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
-const multiply = @import("cpu/arm/multiply.zig").multiply;
-const multiplyLong = @import("cpu/arm/multiply_long.zig").multiplyLong;
 const singleDataSwap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
 
+const multiply = @import("cpu/arm/multiply.zig").multiply;
+const multiplyLong = @import("cpu/arm/multiply.zig").multiplyLong;
+
 // THUMB Instruction Groups
-const format1 = @import("cpu/thumb/format1.zig").format1;
-const format2 = @import("cpu/thumb/format2.zig").format2;
-const format3 = @import("cpu/thumb/format3.zig").format3;
-const format4 = @import("cpu/thumb/format4.zig").format4;
-const format5 = @import("cpu/thumb/format5.zig").format5;
-const format6 = @import("cpu/thumb/format6.zig").format6;
-const format78 = @import("cpu/thumb/format78.zig").format78;
-const format9 = @import("cpu/thumb/format9.zig").format9;
-const format10 = @import("cpu/thumb/format10.zig").format10;
-const format11 = @import("cpu/thumb/format11.zig").format11;
-const format12 = @import("cpu/thumb/format12.zig").format12;
-const format13 = @import("cpu/thumb/format13.zig").format13;
-const format14 = @import("cpu/thumb/format14.zig").format14;
-const format15 = @import("cpu/thumb/format15.zig").format15;
-const format16 = @import("cpu/thumb/format16.zig").format16;
-const format17 = @import("cpu/thumb/format17.zig").format17;
-const format18 = @import("cpu/thumb/format18.zig").format18;
-const format19 = @import("cpu/thumb/format19.zig").format19;
+const format1 = @import("cpu/thumb/data_processing.zig").format1;
+const format2 = @import("cpu/thumb/data_processing.zig").format2;
+const format3 = @import("cpu/thumb/data_processing.zig").format3;
+const format12 = @import("cpu/thumb/data_processing.zig").format12;
+const format13 = @import("cpu/thumb/data_processing.zig").format13;
+
+const format4 = @import("cpu/thumb/alu.zig").format4;
+const format5 = @import("cpu/thumb/processing_branch.zig").format5;
+
+const format6 = @import("cpu/thumb/data_transfer.zig").format6;
+const format78 = @import("cpu/thumb/data_transfer.zig").format78;
+const format9 = @import("cpu/thumb/data_transfer.zig").format9;
+const format10 = @import("cpu/thumb/data_transfer.zig").format10;
+const format11 = @import("cpu/thumb/data_transfer.zig").format11;
+const format14 = @import("cpu/thumb/block_data_transfer.zig").format14;
+const format15 = @import("cpu/thumb/block_data_transfer.zig").format15;
+
+const format16 = @import("cpu/thumb/branch.zig").format16;
+const format18 = @import("cpu/thumb/branch.zig").format18;
+const format19 = @import("cpu/thumb/branch.zig").format19;
+
+const format17 = @import("cpu/thumb/software_interrupt.zig").format17;
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
