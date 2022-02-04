@@ -120,7 +120,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub inline fn hasSPSR(self: *const Self) bool {
-        const mode = getMode(self.cpsr.mode.read()) orelse unreachable;
+        const mode = getModeChecked(self, self.cpsr.mode.read());
         return switch (mode) {
             .System, .User => false,
             else => true,
@@ -128,7 +128,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub inline fn isPrivileged(self: *const Self) bool {
-        const mode = getMode(self.cpsr.mode.read()) orelse unreachable;
+        const mode = getModeChecked(self, self.cpsr.mode.read());
         return switch (mode) {
             .User => false,
             else => true,
@@ -141,12 +141,11 @@ pub const Arm7tdmi = struct {
     }
 
     fn changeModeFromIdx(self: *Self, next: u5) void {
-        const mode = getMode(next) orelse unreachable;
-        self.changeMode(mode);
+        self.changeMode(getModeChecked(self, next));
     }
 
     pub fn setUserModeRegister(self: *Self, idx: usize, value: u32) void {
-        const current = getMode(self.cpsr.mode.read()) orelse unreachable;
+        const current = getModeChecked(self, self.cpsr.mode.read());
 
         if (idx < 8) {
             self.r[idx] = value;
@@ -166,7 +165,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn getUserModeRegister(self: *Self, idx: usize) u32 {
-        const current = getMode(self.cpsr.mode.read()) orelse unreachable;
+        const current = getModeChecked(self, self.cpsr.mode.read());
 
         var result: u32 = undefined;
         if (idx < 8) {
@@ -189,7 +188,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn changeMode(self: *Self, next: Mode) void {
-        const now = getMode(self.cpsr.mode.read()) orelse unreachable;
+        const now = getModeChecked(self, self.cpsr.mode.read());
 
         // Bank R8 -> r12
         var r: usize = 8;
@@ -650,8 +649,12 @@ const Mode = enum(u5) {
     System = 0b11111,
 };
 
-pub fn getMode(bits: u5) ?Mode {
+fn getMode(bits: u5) ?Mode {
     return std.meta.intToEnum(Mode, bits) catch null;
+}
+
+fn getModeChecked(cpu: *const Arm7tdmi, bits: u5) Mode {
+    return getMode(bits) orelse cpu.panic("[CPU|CPSR] 0b{b:0>5} is an invalid CPU mode", .{bits});
 }
 
 fn armUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
