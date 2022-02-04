@@ -4,7 +4,7 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
-pub fn softwareInterrupt() InstrFn {
+pub fn armSoftwareInterrupt() InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, _: u32) void {
             // Copy Values from Current Mode

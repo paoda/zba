@@ -2,7 +2,7 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 
-pub fn format17() InstrFn {
+pub fn thumbSoftwareInterrupt() InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, _: u16) void {
             // Copy Values from Current Mode

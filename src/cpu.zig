@@ -16,7 +16,7 @@ const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig
 const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
 const branch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
-const softwareInterrupt = @import("cpu/arm/software_interrupt.zig").softwareInterrupt;
+const armSoftwareInterrupt = @import("cpu/arm/software_interrupt.zig").armSoftwareInterrupt;
 const singleDataSwap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
 
 const multiply = @import("cpu/arm/multiply.zig").multiply;
@@ -44,7 +44,7 @@ const format16 = @import("cpu/thumb/branch.zig").format16;
 const format18 = @import("cpu/thumb/branch.zig").format18;
 const format19 = @import("cpu/thumb/branch.zig").format19;
 
-const format17 = @import("cpu/thumb/software_interrupt.zig").format17;
+const thumbSoftwareInterrupt = @import("cpu/thumb/software_interrupt.zig").thumbSoftwareInterrupt;
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
 pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
@@ -485,7 +485,7 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
 
                 lut[i] = format13(S);
             } else if (i >> 2 & 0xFF == 0xDF) {
-                lut[i] = format17();
+                lut[i] = thumbSoftwareInterrupt();
             } else if (i >> 6 & 0xF == 0b1000) {
                 const L = i >> 5 & 1 == 1;
                 const offset = i & 0x1F;
@@ -619,7 +619,7 @@ fn armPopulate() [0x1000]ArmInstrFn {
                 lut[i] = armUndefined;
             } else if (i >> 8 & 0xF == 0b1111) {
                 // Bits 27:24
-                lut[i] = softwareInterrupt();
+                lut[i] = armSoftwareInterrupt();
             }
         }
 
