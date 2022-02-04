@@ -94,8 +94,11 @@ pub fn main() anyerror!void {
     if (status < 0) sdlPanic();
     defer SDL.SDL_Quit();
 
+    var title_buf: [0x20]u8 = [_]u8{0x00} ** 0x20;
+    const title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{bus.pak.title});
+
     var window = SDL.SDL_CreateWindow(
-        "ZBA",
+        title.ptr,
         SDL.SDL_WINDOWPOS_CENTERED,
         SDL.SDL_WINDOWPOS_CENTERED,
         gba_width * window_scale,
@@ -111,8 +114,8 @@ pub fn main() anyerror!void {
     defer SDL.SDL_DestroyTexture(texture);
 
     // Init FPS Timer
+    // var fps_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
     // var timer = Timer.start() catch unreachable;
-    // var title_buf: [0x30]u8 = [_]u8{0x00} ** 0x30;
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
@@ -167,8 +170,8 @@ pub fn main() anyerror!void {
         SDL.SDL_RenderPresent(renderer);
 
         // const fps = std.time.ns_per_s / timer.lap();
-        // const title = std.fmt.bufPrint(&title_buf, "ZBA FPS: {d}", .{fps}) catch unreachable;
-        // SDL.SDL_SetWindowTitle(window, title.ptr);
+        // const fps_title = std.fmt.bufPrint(&fps_buf, "{s} [FPS: {d}]", .{ title, fps }) catch unreachable;
+        // SDL.SDL_SetWindowTitle(window, fps_title.ptr);
 
         pause.store(false, .Unordered);
     }

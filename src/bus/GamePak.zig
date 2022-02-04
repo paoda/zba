@@ -3,18 +3,48 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Self = @This();
 
+title: [12]u8,
 buf: []u8,
 alloc: Allocator,
+
+const log = std.log.scoped(.GamePak);
 
 pub fn init(alloc: Allocator, path: []const u8) !Self {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
     const len = try file.getEndPos();
+    const buf = try file.readToEndAlloc(alloc, len);
+    const title = parseTitle(buf);
 
-    return Self{
-        .buf = try file.readToEndAlloc(alloc, len),
-        .alloc = alloc,
+    const pak = Self{ .buf = buf, .alloc = alloc, .title = title };
+    pak.parseHeader();
+
+    return pak;
+}
+
+fn parseHeader(self: *const Self) void {
+    const title = parseTitle(self.buf);
+    const code = self.buf[0xAC..0xB0];
+    const maker = self.buf[0xB0..0xB2];
+    const version = self.buf[0xBC];
+
+    log.info("Title: {s}", .{title});
+    if (version != 0) log.info("Version: {}", .{version});
+    log.info("Game Code: {s}", .{code});
+    if (lookupMaker(maker)) |c| log.info("Maker Code: {s}", .{c}) else log.info("Maker: {s}", .{maker});
+}
+
+fn parseTitle(buf: []u8) [12]u8 {
+    return buf[0xA0..0xAC].*;
+}
+
+fn lookupMaker(slice: *const [2]u8) ?[]const u8 {
+    const num = @as(u16, slice[1]) << 8 | @as(u16, slice[0]);
+
+    return switch (num) {
+        0x3130 => "Nintendo",
+        else => null,
     };
 }
 
