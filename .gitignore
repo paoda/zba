@@ -6,6 +6,9 @@
 **/*.log
 **/*.bin
 
-# Build on WIndows
+# Build on Windows
 /.build_config
 /lib/SDL2
+
+# Any Custom Scripts for Debugging purposes
+*.sh
