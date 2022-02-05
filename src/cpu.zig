@@ -303,6 +303,16 @@ pub const Arm7tdmi = struct {
         std.debug.print("spsr: 0x{X:0>8} ", .{self.spsr.raw});
         prettyPrintPsr(&self.spsr);
 
+        if (self.cpsr.t.read()) {
+            const opcode = self.bus.read16(self.r[15] - 4);
+            const id = thumbIdx(opcode);
+            std.debug.print("opcode: ID: 0x{b:0>10} 0x{X:0>4}\n", .{ id, opcode });
+        } else {
+            const opcode = self.bus.read32(self.r[15] - 4);
+            const id = armIdx(opcode);
+            std.debug.print("opcode: ID: 0x{X:0>3} 0x{X:0>8}\n", .{ id, opcode });
+        }
+
         std.debug.print("tick: {}\n\n", .{self.sched.tick});
 
         std.debug.panic(format, args);
