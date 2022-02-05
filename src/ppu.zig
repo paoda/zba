@@ -7,8 +7,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Allocator = std.mem.Allocator;
 pub const width = 240;
 pub const height = 160;
-pub const buf_pitch = width * @sizeOf(u16);
-const buf_len = buf_pitch * height;
+pub const framebuf_pitch = width * @sizeOf(u16);
 
 pub const Ppu = struct {
     const Self = @This();
@@ -16,24 +15,27 @@ pub const Ppu = struct {
     vram: Vram,
     palette: Palette,
     sched: *Scheduler,
-    frame_buf: []u8,
+    framebuf: []u8,
     alloc: Allocator,
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
         sched.push(.Draw, sched.tick + (240 * 4));
 
+        const framebuf = try alloc.alloc(u8, framebuf_pitch * height);
+        std.mem.set(u8, framebuf, 0);
+
         return Self{
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
             .sched = sched,
-            .frame_buf = try alloc.alloc(u8, buf_len),
+            .framebuf = framebuf,
             .alloc = alloc,
         };
     }
 
     pub fn deinit(self: Self) void {
-        self.alloc.free(self.frame_buf);
+        self.alloc.free(self.framebuf);
         self.vram.deinit();
         self.palette.deinit();
     }
@@ -44,10 +46,10 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x3 => {
-                const start = buf_pitch * @as(usize, scanline);
-                const end = start + buf_pitch;
+                const start = framebuf_pitch * @as(usize, scanline);
+                const end = start + framebuf_pitch;
 
-                std.mem.copy(u8, self.frame_buf[start..end], self.vram.buf[start..end]);
+                std.mem.copy(u8, self.framebuf[start..end], self.vram.buf[start..end]);
             },
             0x4 => {
                 const select = io.dispcnt.frame_select.read();
@@ -62,8 +64,8 @@ pub const Ppu = struct {
                     const id = byte * 2;
                     const j = i * @sizeOf(u16);
 
-                    self.frame_buf[buf_start + j + 1] = self.palette.buf[id + 1];
-                    self.frame_buf[buf_start + j] = self.palette.buf[id];
+                    self.framebuf[buf_start + j + 1] = self.palette.buf[id + 1];
+                    self.framebuf[buf_start + j] = self.palette.buf[id];
                 }
             },
             else => {}, // std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -78,8 +80,11 @@ const Palette = struct {
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
+        const buf = try alloc.alloc(u8, 0x400);
+        std.mem.set(u8, buf, 0);
+
         return Self{
-            .buf = try alloc.alloc(u8, 0x400),
+            .buf = buf,
             .alloc = alloc,
         };
     }
@@ -118,13 +123,8 @@ const Vram = struct {
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
-        // In Modes 3 and 4, parts of the VRAM are copied to the
-        // frame buffer, therefore we want to zero-initialize Vram
-        //
-        // some programs like Armwrestler assume that VRAM is zeroed-out.
-        const black = std.mem.zeroes([0x18000]u8);
         const buf = try alloc.alloc(u8, 0x18000);
-        std.mem.copy(u8, buf, &black);
+        std.mem.set(u8, buf, 0);
 
         return Self{
             .buf = buf,

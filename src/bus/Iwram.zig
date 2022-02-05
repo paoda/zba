@@ -7,8 +7,11 @@ buf: []u8,
 alloc: Allocator,
 
 pub fn init(alloc: Allocator) !Self {
+    const buf = try alloc.alloc(u8, 0x40000);
+    std.mem.set(u8, buf, 0);
+
     return Self{
-        .buf = try alloc.alloc(u8, 0x40000),
+        .buf = buf,
         .alloc = alloc,
     };
 }

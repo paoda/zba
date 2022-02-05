@@ -15,7 +15,7 @@ const File = std.fs.File;
 const window_scale = 3;
 const gba_width = @import("ppu.zig").width;
 const gba_height = @import("ppu.zig").height;
-const buf_pitch = @import("ppu.zig").buf_pitch;
+const framebuf_pitch = @import("ppu.zig").framebuf_pitch;
 
 pub const enable_logging: bool = false;
 const is_binary: bool = false;
@@ -164,8 +164,8 @@ pub fn main() anyerror!void {
         }
 
         // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
-        const buf_ptr = bus.ppu.frame_buf.ptr;
-        _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, buf_pitch);
+        const buf_ptr = bus.ppu.framebuf.ptr;
+        _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
 
