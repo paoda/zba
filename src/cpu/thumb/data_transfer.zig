@@ -28,19 +28,20 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
             const address = cpu.r[rb] + cpu.r[ro];
 
             if (T) {
+                // Format 8
                 switch (op) {
                     0b00 => {
                         // STRH
                         bus.write16(address & 0xFFFF_FFFE, @truncate(u16, cpu.r[rd]));
                     },
                     0b01 => {
+                        // LDSB
+                        cpu.r[rd] = u32SignExtend(8, @as(u32, bus.read8(address)));
+                    },
+                    0b10 => {
                         // LDRH
                         const value = bus.read16(address & 0xFFFF_FFFE);
                         cpu.r[rd] = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
-                    },
-                    0b10 => {
-                        // LDSB
-                        cpu.r[rd] = u32SignExtend(8, @as(u32, bus.read8(address)));
                     },
                     0b11 => {
                         // LDSH
@@ -48,6 +49,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     },
                 }
             } else {
+                // Format 7
                 switch (op) {
                     0b00 => {
                         // STR
