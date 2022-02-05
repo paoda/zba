@@ -44,8 +44,14 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                         cpu.r[rd] = std.math.rotr(u32, @as(u32, value), 8 * (address & 1));
                     },
                     0b11 => {
-                        // LDSH
-                        cpu.r[rd] = u32SignExtend(16, @as(u32, bus.read16(address & 0xFFFF_FFFE)));
+                        // LDRSH
+                        const value = if (address & 1 == 1) blk: {
+                            break :blk u32SignExtend(8, bus.read8(address));
+                        } else blk: {
+                            break :blk u32SignExtend(16, bus.read16(address));
+                        };
+
+                        cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 1));
                     },
                 }
             } else {
