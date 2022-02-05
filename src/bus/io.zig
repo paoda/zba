@@ -30,7 +30,6 @@ pub const Io = struct {
             0x0400_0000 => @as(u32, self.dispcnt.raw),
             0x0400_0004 => @as(u32, self.dispstat.raw),
             0x0400_0006 => @as(u32, self.vcount.raw),
-            0x0400_0130 => @as(u32, self.keyinput.raw),
             0x0400_0200 => @as(u32, self.ie.raw),
             0x0400_0208 => @boolToInt(self.ime),
             else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
