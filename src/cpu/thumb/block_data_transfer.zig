@@ -51,12 +51,18 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const base = cpu.r[rb];
+            var address = base;
 
-            var address: u32 = base;
+            if (opcode & 0xFF == 0) {
+                // List is Empty
+                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15]);
+                cpu.r[rb] += 0x40;
+                return;
+            }
 
-            var i: usize = 0;
+            var i: u4 = 0;
             while (i < 8) : (i += 1) {
-                if ((opcode >> @truncate(u3, i)) & 1 == 1) {
+                if (opcode >> i & 1 == 1) {
                     if (L) {
                         cpu.r[i] = bus.read32(address);
                     } else {
