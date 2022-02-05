@@ -545,92 +545,66 @@ fn armPopulate() [0x1000]ArmInstrFn {
 
         var i: usize = 0;
         while (i < lut.len) : (i += 1) {
-            // Instructions with Opcode[27] == 0
-            if (i == 0x121) {
-                // Bits 27:20 and 7:4
-                lut[i] = branchAndExchange;
-            } else if (i >> 6 & 0x3F == 0b000000 and i & 0xF == 0b1001) {
-                // Bits 27:22 and 7:4
-                const A = i >> 5 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-
-                lut[i] = multiply(A, S);
-            } else if (i >> 7 & 0x1F == 0b00010 and i >> 4 & 0x3 == 0b00 and i & 0xF == 0b1001) {
-                // Bits 27:23, 21:20 and 7:4
-                const B = i >> 6 & 1 == 1;
-
-                lut[i] = singleDataSwap(B);
-            } else if (i >> 7 & 0x1F == 0b00001 and i & 0xF == 0b1001) {
-                // Bits 27:23 and bits 7:4
-                const U = i >> 6 & 1 == 1;
-                const A = i >> 5 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-
-                lut[i] = multiplyLong(U, A, S);
-            } else if (i >> 9 & 0x7 == 0b000 and i >> 3 & 1 == 1 and i & 1 == 1) {
-                // Bits 27:25, 7 and 4
-                const P = i >> 8 & 1 == 1;
-                const U = i >> 7 & 1 == 1;
-                const I = i >> 6 & 1 == 1;
-                const W = i >> 5 & 1 == 1;
-                const L = i >> 4 & 1 == 1;
-
-                lut[i] = halfAndSignedDataTransfer(P, U, I, W, L);
-            } else if (i >> 9 & 0x7 == 0b011 and i & 1 == 1) {
-                // Bits 27:25 and 4
-                lut[i] = armUndefined;
-            } else if (i >> 10 & 0x3 == 0b00 and i >> 7 & 0x3 == 0b10 and i >> 4 & 1 == 0) {
-                // Bits 27:26, 24:23 and 20
-                const I = i >> 9 & 1 == 1;
-                const R = i >> 6 & 1 == 1;
-                const kind = i >> 4 & 0x3;
-
-                lut[i] = psrTransfer(I, R, kind);
-            } else if (i >> 10 & 0x3 == 0b01) {
-                // Bits 27:26
-                const I = i >> 9 & 1 == 1;
-                const P = i >> 8 & 1 == 1;
-                const U = i >> 7 & 1 == 1;
-                const B = i >> 6 & 1 == 1;
-                const W = i >> 5 & 1 == 1;
-                const L = i >> 4 & 1 == 1;
-
-                lut[i] = singleDataTransfer(I, P, U, B, W, L);
-            } else if (i >> 10 & 0x3 == 0b00) {
-                // Bits 27:26
-                const I = i >> 9 & 1 == 1;
-                const S = i >> 4 & 1 == 1;
-                const instrKind = i >> 5 & 0xF;
-
-                lut[i] = dataProcessing(I, S, instrKind);
-            }
-
-            // Instructions with Opcode[27] == 1
-            if (i >> 8 & 0xF == 0b1110) {
-                // bits 27:24
-                // Coprocessor Data Opertation + Register Transfer
-                lut[i] = armUndefined;
-            } else if (i >> 9 & 0x7 == 0b100) {
-                // Bits 27:25
-                const P = i >> 8 & 1 == 1;
-                const U = i >> 7 & 1 == 1;
-                const S = i >> 6 & 1 == 1;
-                const W = i >> 5 & 1 == 1;
-                const L = i >> 4 & 1 == 1;
-
-                lut[i] = blockDataTransfer(P, U, S, W, L);
-            } else if (i >> 9 & 0x7 == 0b101) {
-                // Bits 27:25
-                const L = i >> 8 & 1 == 1;
-                lut[i] = branch(L);
-            } else if (i >> 9 & 0x7 == 0b110) {
-                // Bits 27:25
-                // Coprocessor Data Transfer
-                lut[i] = armUndefined;
-            } else if (i >> 8 & 0xF == 0b1111) {
-                // Bits 27:24
-                lut[i] = armSoftwareInterrupt();
-            }
+            lut[i] = switch (@as(u2, i >> 10)) {
+                0b00 => if (i == 0x121) blk: {
+                    break :blk branchAndExchange;
+                } else if (i & 0xFCF == 0x009) blk: {
+                    const A = i >> 5 & 1 == 1;
+                    const S = i >> 4 & 1 == 1;
+                    break :blk multiply(A, S);
+                } else if (i & 0xFBF == 0x109) blk: {
+                    const B = i >> 6 & 1 == 1;
+                    break :blk singleDataSwap(B);
+                } else if (i & 0xF8F == 0x089) blk: {
+                    const U = i >> 6 & 1 == 1;
+                    const A = i >> 5 & 1 == 1;
+                    const S = i >> 4 & 1 == 1;
+                    break :blk multiplyLong(U, A, S);
+                } else if (i & 0xE49 == 0x009 or i & 0xE49 == 0x049) blk: {
+                    const P = i >> 8 & 1 == 1;
+                    const U = i >> 7 & 1 == 1;
+                    const I = i >> 6 & 1 == 1;
+                    const W = i >> 5 & 1 == 1;
+                    const L = i >> 4 & 1 == 1;
+                    break :blk halfAndSignedDataTransfer(P, U, I, W, L);
+                } else if (i & 0xD90 == 0x100) blk: {
+                    const I = i >> 9 & 1 == 1;
+                    const R = i >> 6 & 1 == 1;
+                    const kind = i >> 4 & 0x3;
+                    break :blk psrTransfer(I, R, kind);
+                } else blk: {
+                    const I = i >> 9 & 1 == 1;
+                    const S = i >> 4 & 1 == 1;
+                    const instrKind = i >> 5 & 0xF;
+                    break :blk dataProcessing(I, S, instrKind);
+                },
+                0b01 => if (i >> 9 & 1 == 1 and i & 1 == 1) armUndefined else blk: {
+                    const I = i >> 9 & 1 == 1;
+                    const P = i >> 8 & 1 == 1;
+                    const U = i >> 7 & 1 == 1;
+                    const B = i >> 6 & 1 == 1;
+                    const W = i >> 5 & 1 == 1;
+                    const L = i >> 4 & 1 == 1;
+                    break :blk singleDataTransfer(I, P, U, B, W, L);
+                },
+                else => switch (@as(u2, i >> 9 & 0x3)) {
+                    // MSB is guaranteed to be 1
+                    0b00 => blk: {
+                        const P = i >> 8 & 1 == 1;
+                        const U = i >> 7 & 1 == 1;
+                        const S = i >> 6 & 1 == 1;
+                        const W = i >> 5 & 1 == 1;
+                        const L = i >> 4 & 1 == 1;
+                        break :blk blockDataTransfer(P, U, S, W, L);
+                    },
+                    0b01 => blk: {
+                        const L = i >> 8 & 1 == 1;
+                        break :blk branch(L);
+                    },
+                    0b10 => armUndefined, // COP Data Transfer
+                    0b11 => if (i >> 8 & 1 == 1) armSoftwareInterrupt() else armUndefined, // COP Data Operation + Register Transfer
+                },
+            };
         }
 
         return lut;
