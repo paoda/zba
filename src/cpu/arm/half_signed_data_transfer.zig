@@ -45,7 +45,13 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     },
                     0b11 => {
                         // LDRSH
-                        result = util.u32SignExtend(16, bus.read16(address & 0xFFFF_FFFE));
+                        const value = if (address & 1 == 1) blk: {
+                            break :blk util.u32SignExtend(8, bus.read8(address));
+                        } else blk: {
+                            break :blk util.u32SignExtend(16, bus.read16(address));
+                        };
+
+                        result = std.math.rotr(u32, value, 8 * (address & 1));
                     },
                     0b00 => unreachable, // SWP
                 }
