@@ -281,5 +281,4 @@ fn setTestOpFlags(comptime S: bool, cpu: *Arm7tdmi, opcode: u32, result: u32) vo
 fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
     @setCold(true);
     cpu.setCpsr(cpu.spsr.raw);
-    cpu.r[15] += 4; // FIXME: This is objectively wrong I think
 }
