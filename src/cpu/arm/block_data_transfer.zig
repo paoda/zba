@@ -48,10 +48,17 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             var address = start;
 
             if (rlist == 0) {
-                if (L) {
-                    cpu.r[15] = bus.read32(address);
+                var pc_addr = cpu.r[rn];
+                if (U) {
+                    pc_addr += if (P) 4 else 0;
                 } else {
-                    bus.write32(address, cpu.r[15] + 8);
+                    pc_addr -= 0x40 - if (!P) 4 else 0;
+                }
+
+                if (L) {
+                    cpu.r[15] = bus.read32(pc_addr);
+                } else {
+                    bus.write32(pc_addr, cpu.r[15] + 8);
                 }
 
                 cpu.r[rn] = if (U) cpu.r[rn] + 0x40 else cpu.r[rn] - 0x40;
@@ -71,7 +78,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                 }
             }
 
-            if (W and L and opcode >> rn & 1 == 0) cpu.r[rn] = new_base;
+            if (W and L and rlist >> rn & 1 == 0) cpu.r[rn] = new_base;
         }
 
         fn transfer(cpu: *Arm7tdmi, bus: *Bus, r15_present: bool, i: u5, address: u32) void {
