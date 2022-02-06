@@ -54,7 +54,7 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
             const end_address = cpu.r[rb] + 4 * countRlist(opcode);
 
             if (opcode & 0xFF == 0) {
-                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 4); // TODO: Why is this r[15] + 4?
+                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 4);
                 cpu.r[rb] += 0x40;
                 return;
             }

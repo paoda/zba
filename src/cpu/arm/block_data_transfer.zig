@@ -9,11 +9,14 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
             const r15_present = opcode >> 15 & 1 == 1;
             const rn = opcode >> 16 & 0xF;
-            const base = cpu.r[rn];
+            var address: u32 = cpu.r[rn];
 
-            const in_list = opcode >> @truncate(u4, rn) & 1 == 1;
+            if (opcode & 0xFFFF == 0) {
+                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 8);
+                cpu.r[rn] += 0x40;
+                return;
+            }
 
-            var address: u32 = base;
             if (U) {
                 // Increment
                 var i: u5 = 0;
@@ -40,6 +43,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             }
 
             if (W) {
+                const in_list = opcode >> @truncate(u4, rn) & 1 == 1;
                 if (!L or (L and !in_list)) {
                     cpu.r[rn] = address;
                 }
