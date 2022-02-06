@@ -5,44 +5,42 @@ const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
-            var address: u32 = undefined;
+            const count = countRlist(opcode);
+            const start = cpu.r[13] - if (!L) 4 * (@boolToInt(R) + count) else 0;
+
+            var end = cpu.r[13];
             if (L) {
-                // POP
-                address = cpu.r[13];
-
-                var i: u4 = 0;
-                while (i < 8) : (i += 1) {
-                    if ((opcode >> i) & 1 == 1) {
-                        cpu.r[i] = bus.read32(address);
-                        address += 4;
-                    }
-                }
-
-                if (R) {
-                    const value = bus.read32(address);
-                    cpu.r[15] = value & 0xFFFF_FFFE;
-                    address += 4;
-                }
+                end += 4 * (@boolToInt(R) + count);
             } else {
-                address = cpu.r[13] - 4;
+                end -= 4;
+            }
 
-                if (R) {
-                    bus.write32(address, cpu.r[14]);
-                    address -= 4;
-                }
+            var address = start;
 
-                var i: u4 = 8;
-                while (i > 0) : (i -= 1) {
-                    const j = i - 1;
-
-                    if ((opcode >> j) & 1 == 1) {
-                        bus.write32(address, cpu.r[j]);
-                        address -= 4;
+            var i: u4 = 0;
+            while (i < 8) : (i += 1) {
+                if (opcode >> i & 1 == 1) {
+                    if (L) {
+                        cpu.r[i] = bus.read32(address & 0xFFFF_FFFC);
+                    } else {
+                        bus.write32(address & 0xFFFF_FFFC, cpu.r[i]);
                     }
+
+                    address += 4;
                 }
             }
 
-            cpu.r[13] = address + if (!L) 4 else 0;
+            if (R) {
+                if (L) {
+                    const value = bus.read32(address & 0xFFFF_FFFC);
+                    cpu.r[15] = value & 0xFFFF_FFFE;
+                } else {
+                    bus.write32(address & 0xFFFF_FFFC, cpu.r[14]);
+                }
+                address += 4;
+            }
+
+            cpu.r[13] = if (L) end else cpu.r[13] - 4 * (@boolToInt(R) + count);
         }
     }.inner;
 }
@@ -54,7 +52,7 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
             const end_address = cpu.r[rb] + 4 * countRlist(opcode);
 
             if (opcode & 0xFF == 0) {
-                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 4);
+                if (L) cpu.r[15] = bus.read32(address & 0xFFFF_FFFC) else bus.write32(address & 0xFFFF_FFFC, cpu.r[15] + 4);
                 cpu.r[rb] += 0x40;
                 return;
             }
@@ -65,9 +63,9 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
             while (i < 8) : (i += 1) {
                 if (opcode >> i & 1 == 1) {
                     if (L) {
-                        cpu.r[i] = bus.read32(address);
+                        cpu.r[i] = bus.read32(address & 0xFFFF_FFFC);
                     } else {
-                        bus.write32(address, cpu.r[i]);
+                        bus.write32(address & 0xFFFF_FFFC, cpu.r[i]);
                     }
 
                     if (!L and first_write) {
