@@ -10,9 +10,9 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
                 // POP
                 address = cpu.r[13];
 
-                var i: usize = 0;
+                var i: u4 = 0;
                 while (i < 8) : (i += 1) {
-                    if ((opcode >> @truncate(u3, i)) & 1 == 1) {
+                    if ((opcode >> i) & 1 == 1) {
                         cpu.r[i] = bus.read32(address);
                         address += 4;
                     }
@@ -31,11 +31,11 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
                     address -= 4;
                 }
 
-                var i: usize = 8;
+                var i: u4 = 8;
                 while (i > 0) : (i -= 1) {
                     const j = i - 1;
 
-                    if ((opcode >> @truncate(u3, j)) & 1 == 1) {
+                    if ((opcode >> j) & 1 == 1) {
                         bus.write32(address, cpu.r[j]);
                         address -= 4;
                     }

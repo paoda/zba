@@ -250,7 +250,7 @@ pub const Arm7tdmi = struct {
     pub fn step(self: *Self) u64 {
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
-            if (enable_logging) if (self.log_file) |file| self.log(file, @as(u32, opcode));
+            if (enable_logging) if (self.log_file) |file| self.log(file, opcode);
 
             thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {

@@ -60,14 +60,14 @@ pub fn format2(comptime I: bool, is_sub: bool, rn: u3) InstrFn {
             if (is_sub) {
                 // SUB
                 cpu.r[rd] = if (I) blk: {
-                    break :blk sub(true, cpu, cpu.r[rs], @as(u32, rn));
+                    break :blk sub(true, cpu, cpu.r[rs], rn);
                 } else blk: {
                     break :blk sub(true, cpu, cpu.r[rs], cpu.r[rn]);
                 };
             } else {
                 // ADD
                 cpu.r[rd] = if (I) blk: {
-                    break :blk add(true, cpu, cpu.r[rs], @as(u32, rn));
+                    break :blk add(true, cpu, cpu.r[rs], rn);
                 } else blk: {
                     break :blk add(true, cpu, cpu.r[rs], cpu.r[rn]);
                 };
