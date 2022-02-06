@@ -50,17 +50,18 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
 pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
-            const base = cpu.r[rb];
-            var address = base;
+            var address = cpu.r[rb];
+            const end_address = cpu.r[rb] + 4 * countRlist(opcode);
 
             if (opcode & 0xFF == 0) {
-                // List is Empty
-                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15]);
+                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 4); // TODO: Why is this r[15] + 4?
                 cpu.r[rb] += 0x40;
                 return;
             }
 
             var i: u4 = 0;
+            var first_write = true;
+
             while (i < 8) : (i += 1) {
                 if (opcode >> i & 1 == 1) {
                     if (L) {
@@ -68,11 +69,28 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
                     } else {
                         bus.write32(address, cpu.r[i]);
                     }
+
+                    if (!L and first_write) {
+                        cpu.r[rb] = end_address;
+                        first_write = false;
+                    }
+
                     address += 4;
                 }
             }
 
-            cpu.r[rb] = address;
+            if (L and opcode >> rb & 1 != 1) cpu.r[rb] = address;
         }
     }.inner;
+}
+
+inline fn countRlist(opcode: u16) u32 {
+    var count: u32 = 0;
+
+    comptime var i: u4 = 0;
+    inline while (i < 8) : (i += 1) {
+        if (opcode >> (7 - i) & 1 == 1) count += 1;
+    }
+
+    return count;
 }
