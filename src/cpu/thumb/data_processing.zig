@@ -101,7 +101,7 @@ pub fn format12(comptime isSP: bool, comptime rd: u3) InstrFn {
             // ADD
             const left = if (isSP) cpu.r[13] else (cpu.r[15] + 2) & 0xFFFF_FFFD;
             const right = (opcode & 0xFF) << 2;
-            const result = left + right; // TODO: What about overflows?
+            const result = left + right;
             cpu.r[rd] = result;
         }
     }.inner;

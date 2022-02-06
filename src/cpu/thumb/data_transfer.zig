@@ -9,8 +9,6 @@ pub fn format6(comptime rd: u3) InstrFn {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             // LDR
             const offset = (opcode & 0xFF) << 2;
-
-            // FIXME: Should this overflow?
             cpu.r[rd] = bus.read32((cpu.r[15] + 2 & 0xFFFF_FFFD) + offset);
         }
     }.inner;

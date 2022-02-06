@@ -220,7 +220,6 @@ pub const Arm7tdmi = struct {
             .User, .System => {
                 self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];
                 self.r[14] = self.banked_r[bankedIdx(next) * 2 + 1];
-                // FIXME: Should we clear out SPSR?
             },
             else => {
                 self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];

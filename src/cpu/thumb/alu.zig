@@ -1,9 +1,6 @@
-const std = @import("std");
-
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
-const shifter = @import("../barrel_shifter.zig");
 
 const adc = @import("../arm/data_processing.zig").adc;
 const sbc = @import("../arm/data_processing.zig").sbc;
@@ -12,6 +9,11 @@ const cmp = @import("../arm/data_processing.zig").cmp;
 const cmn = @import("../arm/data_processing.zig").cmn;
 const setTestOpFlags = @import("../arm/data_processing.zig").setTestOpFlags;
 const setLogicOpFlags = @import("../arm/data_processing.zig").setLogicOpFlags;
+
+const logicalLeft = @import("../barrel_shifter.zig").logicalLeft;
+const logicalRight = @import("../barrel_shifter.zig").logicalRight;
+const arithmeticRight = @import("../barrel_shifter.zig").arithmeticRight;
+const rotateRight = @import("../barrel_shifter.zig").rotateRight;
 
 pub fn format4(comptime op: u4) InstrFn {
     return struct {
@@ -35,19 +37,19 @@ pub fn format4(comptime op: u4) InstrFn {
                 },
                 0x2 => {
                     // LSL
-                    const result = shifter.logicalLeft(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
+                    const result = logicalLeft(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
                     cpu.r[rd] = result;
                     setLogicOpFlags(true, cpu, result);
                 },
                 0x3 => {
                     // LSR
-                    const result = shifter.logicalRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
+                    const result = logicalRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
                     cpu.r[rd] = result;
                     setLogicOpFlags(true, cpu, result);
                 },
                 0x4 => {
                     // ASR
-                    const result = shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
+                    const result = arithmeticRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
                     cpu.r[rd] = result;
                     setLogicOpFlags(true, cpu, result);
                 },
@@ -61,14 +63,14 @@ pub fn format4(comptime op: u4) InstrFn {
                 },
                 0x7 => {
                     // ROR
-                    const result = shifter.rotateRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
+                    const result = rotateRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
                     cpu.r[rd] = result;
                     setLogicOpFlags(true, cpu, result);
                 },
                 0x8 => {
                     // TST
                     const result = cpu.r[rd] & cpu.r[rs];
-                    setLogicOpFlags(true, cpu, result); // FIXME: Barrel Shifter?
+                    setLogicOpFlags(true, cpu, result);
                 },
                 0x9 => {
                     // NEG

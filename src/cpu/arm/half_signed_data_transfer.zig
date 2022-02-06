@@ -1,9 +1,10 @@
 const std = @import("std");
-const util = @import("../../util.zig");
 
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
+
+const u32SignExtend = @import("../../util.zig").u32SignExtend;
 
 pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
@@ -41,14 +42,14 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     },
                     0b10 => {
                         // LDRSB
-                        result = util.u32SignExtend(8, bus.read8(address));
+                        result = u32SignExtend(8, bus.read8(address));
                     },
                     0b11 => {
                         // LDRSH
                         const value = if (address & 1 == 1) blk: {
-                            break :blk util.u32SignExtend(8, bus.read8(address));
+                            break :blk u32SignExtend(8, bus.read8(address));
                         } else blk: {
-                            break :blk util.u32SignExtend(16, bus.read16(address));
+                            break :blk u32SignExtend(16, bus.read16(address));
                         };
 
                         result = std.math.rotr(u32, value, 8 * (address & 1));
