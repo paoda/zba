@@ -40,7 +40,8 @@ fn parseTitle(buf: []u8) [12]u8 {
 }
 
 fn lookupMaker(slice: *const [2]u8) ?[]const u8 {
-    return switch (std.mem.bytesToValue(u16, slice)) {
+    const id = @as(u16, slice[1]) << 8 | @as(u16, slice[0]);
+    return switch (id) {
         0x3130 => "Nintendo",
         else => null,
     };
