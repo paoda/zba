@@ -81,7 +81,7 @@ pub const Arm7tdmi = struct {
             .r = [_]u32{0x00} ** 16,
             .sched = sched,
             .bus = bus,
-            .cpsr = .{ .raw = 0x0000_00DF },
+            .cpsr = .{ .raw = 0x0000_001F },
             .spsr = .{ .raw = 0x0000_0000 },
             .banked_fiq = [_]u32{0x00} ** 10,
             .banked_r = [_]u32{0x00} ** 12,
@@ -429,7 +429,7 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
         0x6 => cpsr.v.read(), // VS - Overflow
         0x7 => !cpsr.v.read(), // VC - No overflow
         0x8 => cpsr.c.read() and !cpsr.z.read(), // HI - unsigned higher
-        0x9 => !cpsr.c.read() and cpsr.z.read(), // LS - unsigned lower or same
+        0x9 => !cpsr.c.read() or cpsr.z.read(), // LS - unsigned lower or same
         0xA => cpsr.n.read() == cpsr.v.read(), // GE - Greater or equal
         0xB => cpsr.n.read() != cpsr.v.read(), // LT - Less than
         0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.v.read()), // GT - Greater than
