@@ -7,47 +7,71 @@ const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
-            const r15_present = opcode >> 15 & 1 == 1;
-            const rn = opcode >> 16 & 0xF;
-            var address: u32 = cpu.r[rn];
+            const rn = @truncate(u4, opcode >> 16 & 0xF);
+            const rlist = opcode & 0xFFFF;
+            const r15 = rlist >> 15 & 1 == 1;
 
-            if (opcode & 0xFFFF == 0) {
-                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 8);
-                cpu.r[rn] += 0x40;
+            var count: u32 = 0;
+            var i: u5 = 0;
+            var first: u4 = 0;
+            var write_to_base = true;
+
+            while (i < 16) : (i += 1) {
+                const r = @truncate(u4, 15 - i);
+                if (rlist >> r & 1 == 1) {
+                    first = r;
+                    count += 1;
+                }
+            }
+
+            var start = cpu.r[rn];
+            if (U) {
+                start += if (P) 4 else 0;
+            } else {
+                start = start - (4 * count) + if (!P) 4 else 0;
+            }
+
+            var end = cpu.r[rn];
+            if (U) {
+                end = end + (4 * count) - if (!P) 4 else 0;
+            } else {
+                end -= if (P) 4 else 0;
+            }
+
+            var new_base = cpu.r[rn];
+            if (U) {
+                new_base += 4 * count;
+            } else {
+                new_base -= 4 * count;
+            }
+
+            var address = start;
+
+            if (rlist == 0) {
+                if (L) {
+                    cpu.r[15] = bus.read32(address);
+                } else {
+                    bus.write32(address, cpu.r[15] + 8);
+                }
+
+                cpu.r[rn] = if (U) cpu.r[rn] + 0x40 else cpu.r[rn] - 0x40;
                 return;
             }
 
-            if (U) {
-                // Increment
-                var i: u5 = 0;
-                while (i < 0x10) : (i += 1) {
-                    if (opcode >> i & 1 == 1) {
-                        if (P) address += 4;
-                        transfer(cpu, bus, r15_present, i, address);
-                        if (!P) address += 4;
-                    }
-                }
-            } else {
-                // Decrement
+            i = first;
+            while (i < 16) : (i += 1) {
+                if (rlist >> i & 1 == 1) {
+                    transfer(cpu, bus, r15, i, address);
+                    address += 4;
 
-                var i: u5 = 0x10;
-                while (i > 0) : (i -= 1) {
-                    const j = i - 1;
-
-                    if (opcode >> j & 1 == 1) {
-                        if (P) address -= 4;
-                        transfer(cpu, bus, r15_present, j, address);
-                        if (!P) address -= 4;
+                    if (W and !L and write_to_base) {
+                        cpu.r[rn] = new_base;
+                        write_to_base = false;
                     }
                 }
             }
 
-            if (W) {
-                const in_list = opcode >> @truncate(u4, rn) & 1 == 1;
-                if (!L or (L and !in_list)) {
-                    cpu.r[rn] = address;
-                }
-            }
+            if (W and L and opcode >> rn & 1 == 0) cpu.r[rn] = new_base;
         }
 
         fn transfer(cpu: *Arm7tdmi, bus: *Bus, r15_present: bool, i: u5, address: u32) void {
