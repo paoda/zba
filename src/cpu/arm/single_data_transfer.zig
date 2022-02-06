@@ -38,11 +38,12 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
             } else {
                 if (B) {
                     // STRB
-                    bus.write8(address, @truncate(u8, cpu.r[rd]));
+                    const value = if (rd == 0xF) cpu.r[rd] + 8 else cpu.r[rd];
+                    bus.write8(address, @truncate(u8, value));
                 } else {
                     // STR
-                    const force_aligned = address & 0xFFFF_FFFC;
-                    bus.write32(force_aligned, cpu.r[rd]);
+                    const value = if (rd == 0xF) cpu.r[rd] + 8 else cpu.r[rd];
+                    bus.write32(address & 0xFFFF_FFFC, value);
                 }
             }
 
