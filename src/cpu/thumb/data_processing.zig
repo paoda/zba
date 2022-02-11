@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
@@ -7,6 +9,8 @@ const add = @import("../arm/data_processing.zig").add;
 const sub = @import("../arm/data_processing.zig").sub;
 const cmp = @import("../arm/data_processing.zig").cmp;
 const setLogicOpFlags = @import("../arm/data_processing.zig").setLogicOpFlags;
+
+const log = std.log.scoped(.Thumb1);
 
 pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
     return struct {
@@ -41,7 +45,10 @@ pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
                         break :blk shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset);
                     }
                 },
-                else => cpu.panic("[CPU|THUMB|Fmt1] {} is an invalid op", .{op}),
+                else => {
+                    log.err("0b{b:0>2} is not a valid op", .{op});
+                    // TODO: Should we panic here?
+                },
             };
 
             // Equivalent to an ARM MOVS

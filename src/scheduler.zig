@@ -6,6 +6,7 @@ const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Scheduler);
 
 pub const Scheduler = struct {
     const Self = @This();
@@ -29,7 +30,7 @@ pub const Scheduler = struct {
 
         if (should_handle) {
             const event = self.queue.remove();
-            // std.log.info("[Scheduler] Handle {} at {} ticks", .{ event.kind, self.tick });
+            // log.debug("Handle {} @ tick = {}", .{ event.kind, self.tick });
 
             switch (event.kind) {
                 .HeatDeath => {

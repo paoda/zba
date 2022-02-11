@@ -5,6 +5,8 @@ const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 const PSR = @import("../../cpu.zig").PSR;
 
+const log = std.log.scoped(.PsrTransfer);
+
 pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
@@ -13,7 +15,7 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                     // MRS
                     const rd = opcode >> 12 & 0xF;
 
-                    if (R and !cpu.hasSPSR()) std.log.warn("[CPU/PSR Transfer] Tried to read SPSR from User/System Mode", .{});
+                    if (R and !cpu.hasSPSR()) log.warn("Tried to read SPSR from User/System Mode", .{});
                     cpu.r[rd] = if (R) cpu.spsr.raw else cpu.cpsr.raw;
                 },
                 0b10 => {
@@ -22,7 +24,7 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                     const rm_idx = opcode & 0xF;
                     const right = if (I) std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1) else cpu.r[rm_idx];
 
-                    if (R and !cpu.hasSPSR()) std.log.warn("[CPU/PSR Transfer] Tried to write to SPSR User/System Mode", .{});
+                    if (R and !cpu.hasSPSR()) log.warn("Tried to write to SPSR in User/System Mode", .{});
 
                     if (R) {
                         if (cpu.isPrivileged()) cpu.spsr.raw = fieldMask(&cpu.spsr, field_mask, right);
