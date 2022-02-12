@@ -97,8 +97,8 @@ pub const Arm7tdmi = struct {
         self.binary_log = is_binary;
     }
 
-    inline fn bankedIdx(mode: Mode) usize {
-        return switch (mode) {
+    inline fn bankedIdx(mode: Mode, kind: BankedKind) usize {
+        const idx: usize = switch (mode) {
             .User, .System => 0,
             .Supervisor => 1,
             .Abort => 2,
@@ -106,9 +106,11 @@ pub const Arm7tdmi = struct {
             .Irq => 4,
             .Fiq => 5,
         };
+
+        return (idx * 2) + if (kind == .R14) @as(usize, 1) else 0;
     }
 
-    inline fn spsrIdx(mode: Mode) usize {
+    inline fn bankedSpsrIndex(mode: Mode) usize {
         return switch (mode) {
             .Supervisor => 0,
             .Abort => 1,
@@ -117,6 +119,10 @@ pub const Arm7tdmi = struct {
             .Fiq => 4,
             else => std.debug.panic("{} does not have a SPSR Register", .{mode}),
         };
+    }
+
+    inline fn bankedFiqIdx(i: usize, mode: Mode) usize {
+        return (i * 2) + if (mode == .Fiq) @as(usize, 1) else 0;
     }
 
     pub inline fn hasSPSR(self: *const Self) bool {
@@ -147,84 +153,77 @@ pub const Arm7tdmi = struct {
     pub fn setUserModeRegister(self: *Self, idx: usize, value: u32) void {
         const current = getModeChecked(self, self.cpsr.mode.read());
 
-        if (idx < 8) {
-            self.r[idx] = value;
-        } else if (idx < 13) {
-            if (current == .Fiq) {
-                const user_offset: usize = 0;
-                self.banked_fiq[(idx - 8) * 2 + user_offset] = value;
-            } else self.r[idx] = value;
-        } else if (idx < 15) {
-            switch (current) {
+        switch (idx) {
+            8...12 => {
+                if (current == .Fiq) {
+                    self.banked_fiq[bankedFiqIdx(idx - 8, .User)] = value;
+                } else self.r[idx] = value;
+            },
+            13, 14 => switch (current) {
                 .User, .System => self.r[idx] = value,
                 else => {
-                    self.banked_r[bankedIdx(.User) * 2 + (idx - 13)] = value;
+                    const kind = std.meta.intToEnum(BankedKind, idx - 13) catch unreachable;
+                    self.banked_r[bankedIdx(.User, kind)] = value;
                 },
-            }
-        } else self.r[idx] = value;
+            },
+            else => self.r[idx] = value, // R0 -> R7  and R15
+        }
     }
 
     pub fn getUserModeRegister(self: *Self, idx: usize) u32 {
         const current = getModeChecked(self, self.cpsr.mode.read());
 
-        var result: u32 = undefined;
-        if (idx < 8) {
-            result = self.r[idx];
-        } else if (idx < 13) {
-            if (current == .Fiq) {
-                const user_offset: usize = 0;
-                result = self.banked_fiq[(idx - 8) * 2 + user_offset];
-            } else result = self.r[idx];
-        } else if (idx < 15) {
-            switch (current) {
-                .User, .System => result = self.r[idx],
-                else => {
-                    result = self.banked_r[bankedIdx(.User) * 2 + (idx - 13)];
+        return switch (idx) {
+            8...12 => if (current == .Fiq) self.banked_fiq[bankedFiqIdx(idx - 8, .User)] else self.r[idx],
+            13, 14 => switch (current) {
+                .User, .System => self.r[idx],
+                else => blk: {
+                    const kind = std.meta.intToEnum(BankedKind, idx - 13) catch unreachable;
+                    break :blk self.banked_r[bankedIdx(.User, kind)];
                 },
-            }
-        } else result = self.r[idx];
-
-        return result;
+            },
+            else => self.r[idx], // R0 -> R7  and R15
+        };
     }
 
     pub fn changeMode(self: *Self, next: Mode) void {
         const now = getModeChecked(self, self.cpsr.mode.read());
 
         // Bank R8 -> r12
-        var r: usize = 8;
-        while (r <= 12) : (r += 1) {
-            self.banked_fiq[(r - 8) * 2 + if (now == .Fiq) @as(usize, 1) else 0] = self.r[r];
+        var i: usize = 0;
+        while (i < 5) : (i += 1) {
+            self.banked_fiq[bankedFiqIdx(i, now)] = self.r[8 + i];
         }
 
         // Bank r13, r14, SPSR
         switch (now) {
             .User, .System => {
-                self.banked_r[bankedIdx(now) * 2 + 0] = self.r[13];
-                self.banked_r[bankedIdx(now) * 2 + 1] = self.r[14];
+                self.banked_r[bankedIdx(now, .R13)] = self.r[13];
+                self.banked_r[bankedIdx(now, .R14)] = self.r[14];
             },
             else => {
-                self.banked_r[bankedIdx(now) * 2 + 0] = self.r[13];
-                self.banked_r[bankedIdx(now) * 2 + 1] = self.r[14];
-                self.banked_spsr[spsrIdx(now)] = self.spsr;
+                self.banked_r[bankedIdx(now, .R13)] = self.r[13];
+                self.banked_r[bankedIdx(now, .R14)] = self.r[14];
+                self.banked_spsr[bankedSpsrIndex(now)] = self.spsr;
             },
         }
 
         // Grab R8 -> R12
-        r = 8;
-        while (r <= 12) : (r += 1) {
-            self.r[r] = self.banked_fiq[(r - 8) * 2 + if (next == .Fiq) @as(usize, 1) else 0];
+        i = 0;
+        while (i < 5) : (i += 1) {
+            self.r[8 + i] = self.banked_fiq[bankedFiqIdx(i, next)];
         }
 
         // Grab r13, r14, SPSR
         switch (next) {
             .User, .System => {
-                self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];
-                self.r[14] = self.banked_r[bankedIdx(next) * 2 + 1];
+                self.r[13] = self.banked_r[bankedIdx(next, .R13)];
+                self.r[14] = self.banked_r[bankedIdx(next, .R14)];
             },
             else => {
-                self.r[13] = self.banked_r[bankedIdx(next) * 2 + 0];
-                self.r[14] = self.banked_r[bankedIdx(next) * 2 + 1];
-                self.spsr = self.banked_spsr[spsrIdx(next)];
+                self.r[13] = self.banked_r[bankedIdx(next, .R13)];
+                self.r[14] = self.banked_r[bankedIdx(next, .R14)];
+                self.spsr = self.banked_spsr[bankedSpsrIndex(next)];
             },
         }
 
@@ -232,16 +231,15 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn fastBoot(self: *Self) void {
+        self.r = std.mem.zeroes([16]u32);
+
         self.r[0] = 0x08000000;
         self.r[1] = 0x000000EA;
-        // GPRs 2 -> 12 *should* already be 0 initialized
         self.r[13] = 0x0300_7F00;
-        self.r[14] = 0x0000_0000;
         self.r[15] = 0x0800_0000;
 
-        // Set r13_irq and r14_svc to their respective values
-        self.banked_r[bankedIdx(.Irq) * 2 + 0] = 0x0300_7FA0;
-        self.banked_r[bankedIdx(.Supervisor) * 2 + 0] = 0x0300_7FE0;
+        self.banked_r[bankedIdx(.Irq, .R13)] = 0x0300_7FA0;
+        self.banked_r[bankedIdx(.Supervisor, .R13)] = 0x0300_7FE0;
 
         self.cpsr.raw = 0x6000001F;
     }
@@ -630,6 +628,11 @@ const Mode = enum(u5) {
     Abort = 0b10111,
     Undefined = 0b11011,
     System = 0b11111,
+};
+
+const BankedKind = enum(u1) {
+    R13 = 0,
+    R14,
 };
 
 fn getMode(bits: u5) ?Mode {
