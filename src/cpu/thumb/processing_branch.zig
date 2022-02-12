@@ -15,7 +15,11 @@ pub fn format5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
             const dst = if (dst_idx == 0xF) (cpu.r[dst_idx] + 2) & 0xFFFF_FFFE else cpu.r[dst_idx];
 
             switch (op) {
-                0b00 => cpu.r[dst_idx] = add(false, cpu, dst, src) & if (dst_idx == 0xF) 0xFFFF_FFFC else @as(u32, 0xFFF_FFFF), // ADD
+                0b00 => {
+                    // ADD
+                    const sum = add(false, cpu, dst, src);
+                    cpu.r[dst_idx] = if (dst_idx == 0xF) sum & 0xFFFF_FFFC else sum;
+                },
                 0b01 => cmp(cpu, dst, src), // CMP
                 0b10 => {
                     // MOV
