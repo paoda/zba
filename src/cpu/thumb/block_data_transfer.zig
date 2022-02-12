@@ -5,12 +5,12 @@ const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
-            const count = countRlist(opcode);
-            const start = cpu.r[13] - if (!L) 4 * (@boolToInt(R) + count) else 0;
+            const count = @boolToInt(R) + countRlist(opcode);
+            const start = cpu.r[13] - if (!L) count * 4 else 0;
 
             var end = cpu.r[13];
             if (L) {
-                end += 4 * (@boolToInt(R) + count);
+                end += count * 4;
             } else {
                 end -= 4;
             }
@@ -40,7 +40,7 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
                 address += 4;
             }
 
-            cpu.r[13] = if (L) end else cpu.r[13] - 4 * (@boolToInt(R) + count);
+            cpu.r[13] = if (L) end else start;
         }
     }.inner;
 }

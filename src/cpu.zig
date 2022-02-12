@@ -496,7 +496,7 @@ fn thumbPopulate() [0x400]ThumbInstrFn {
                     },
                     0b001 => blk: {
                         const L = i >> 5 & 1 == 1;
-                        const rd = i >> 2 & 0x3;
+                        const rd = i >> 2 & 0x7;
                         break :blk format11(L, rd);
                     },
                     0b010 => blk: {
