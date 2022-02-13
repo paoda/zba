@@ -38,28 +38,28 @@ pub const Scheduler = struct {
                 },
                 .HBlank => {
                     // The End of a Hblank (During Draw or Vblank)
-                    const old_scanline = bus.io.vcount.scanline.read();
+                    const old_scanline = bus.ppu.vcount.scanline.read();
                     const scanline = (old_scanline + 1) % 228;
 
-                    bus.io.vcount.scanline.write(scanline);
-                    bus.io.dispstat.hblank.unset();
+                    bus.ppu.vcount.scanline.write(scanline);
+                    bus.ppu.dispstat.hblank.unset();
 
                     if (scanline < 160) {
                         // Transitioning to another Draw
                         self.push(.Draw, self.tick + (240 * 4));
                     } else {
                         // Transitioning to a Vblank
-                        if (scanline < 227) bus.io.dispstat.vblank.set() else bus.io.dispstat.vblank.unset();
+                        if (scanline < 227) bus.ppu.dispstat.vblank.set() else bus.ppu.dispstat.vblank.unset();
 
                         self.push(.VBlank, self.tick + (240 * 4));
                     }
                 },
                 .Draw => {
                     // The end of a Draw
-                    bus.ppu.drawScanline(&bus.io);
+                    bus.ppu.drawScanline();
 
                     // Transitioning to a Hblank
-                    bus.io.dispstat.hblank.set();
+                    bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));
                 },
                 .VBlank => {

@@ -1,16 +1,27 @@
 const std = @import("std");
+const io = @import("bus/io.zig");
 
 const EventKind = @import("scheduler.zig").EventKind;
-const Io = @import("bus/io.zig").Io;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const Allocator = std.mem.Allocator;
+
 pub const width = 240;
 pub const height = 160;
 pub const framebuf_pitch = width * @sizeOf(u16);
 
 pub const Ppu = struct {
     const Self = @This();
+
+    // Registers
+    bg0: Background,
+    bg1: Background,
+    bg2: Background,
+    bg3: Background,
+
+    dispcnt: io.DisplayControl,
+    dispstat: io.DisplayStatus,
+    vcount: io.VCount,
 
     vram: Vram,
     palette: Palette,
@@ -33,6 +44,15 @@ pub const Ppu = struct {
             .sched = sched,
             .framebuf = framebuf,
             .alloc = alloc,
+
+            // Registers
+            .bg0 = Background.init(),
+            .bg1 = Background.init(),
+            .bg2 = Background.init(),
+            .bg3 = Background.init(),
+            .dispcnt = .{ .raw = 0x0000 },
+            .dispstat = .{ .raw = 0x0000 },
+            .vcount = .{ .raw = 0x0000 },
         };
     }
 
@@ -42,9 +62,9 @@ pub const Ppu = struct {
         self.palette.deinit();
     }
 
-    pub fn drawScanline(self: *Self, io: *const Io) void {
-        const bg_mode = io.dispcnt.bg_mode.read();
-        const scanline = io.vcount.scanline.read();
+    pub fn drawScanline(self: *Self) void {
+        const bg_mode = self.dispcnt.bg_mode.read();
+        const scanline = self.vcount.scanline.read();
 
         switch (bg_mode) {
             0x0 => {
@@ -58,7 +78,7 @@ pub const Ppu = struct {
                 std.mem.copy(u8, self.framebuf[start..end], self.vram.buf[start..end]);
             },
             0x4 => {
-                const select = io.dispcnt.frame_select.read();
+                const select = self.dispcnt.frame_select.read();
                 const vram_start = width * @as(usize, scanline);
                 const buf_start = vram_start * @sizeOf(u16);
 
@@ -203,5 +223,24 @@ const Oam = struct {
 
     pub fn get8(self: *const Self, idx: usize) u8 {
         return self.buf[idx];
+    }
+};
+
+const Background = struct {
+    const Self = @This();
+
+    /// Read / Write
+    cnt: io.BackgroundControl,
+    /// Write Only
+    hofs: io.BackgroundOffset,
+    /// Write Only
+    vofs: io.BackgroundOffset,
+
+    fn init() Self {
+        return .{
+            .cnt = .{ .raw = 0x0000 },
+            .hofs = .{ .raw = 0x0000 },
+            .vofs = .{ .raw = 0x0000 },
+        };
     }
 };

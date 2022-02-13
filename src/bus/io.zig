@@ -7,60 +7,15 @@ const Bus = @import("../Bus.zig");
 pub const Io = struct {
     const Self = @This();
 
-    dispcnt: DisplayControl,
-    dispstat: DisplayStatus,
-    vcount: VCount,
-    /// Read / Write
-    bg0cnt: BackgroundControl,
-    /// Read / Write
-    bg1cnt: BackgroundControl,
-    /// Read / Write
-    bg2cnt: BackgroundControl,
-    /// Read / Write
-    bg3cnt: BackgroundControl,
-
-    /// Write Only
-    bg0hofs: BackgroundOffset,
-    /// Write Only
-    bg0vofs: BackgroundOffset,
-    /// Write Only
-    bg1hofs: BackgroundOffset,
-    /// Write Only
-    bg1vofs: BackgroundOffset,
-    /// Write Only
-    bg2hofs: BackgroundOffset,
-    /// Write Only
-    bg2vofs: BackgroundOffset,
-    /// Write Only
-    bg3hofs: BackgroundOffset,
-    /// Write Only
-    bg3vofs: BackgroundOffset,
-
     /// Read / Write
     ime: bool,
     ie: InterruptEnable,
-    /// Read / Write
     irq: InterruptRequest,
 
     keyinput: KeyInput,
 
     pub fn init() Self {
         return .{
-            .dispcnt = .{ .raw = 0x0000 },
-            .dispstat = .{ .raw = 0x0000 },
-            .vcount = .{ .raw = 0x0000 },
-            .bg0cnt = .{ .raw = 0x0000 },
-            .bg1cnt = .{ .raw = 0x0000 },
-            .bg2cnt = .{ .raw = 0x0000 },
-            .bg3cnt = .{ .raw = 0x0000 },
-            .bg0hofs = .{ .raw = 0x0000 },
-            .bg0vofs = .{ .raw = 0x0000 },
-            .bg1hofs = .{ .raw = 0x0000 },
-            .bg1vofs = .{ .raw = 0x0000 },
-            .bg2hofs = .{ .raw = 0x0000 },
-            .bg2vofs = .{ .raw = 0x0000 },
-            .bg3hofs = .{ .raw = 0x0000 },
-            .bg3vofs = .{ .raw = 0x0000 },
             .ime = false,
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
@@ -70,7 +25,7 @@ pub const Io = struct {
 };
 
 /// Read / Write
-const DisplayControl = extern union {
+pub const DisplayControl = extern union {
     bg_mode: Bitfield(u16, 0, 3),
     frame_select: Bit(u16, 4),
     hblank_interval_free: Bit(u16, 5),
@@ -84,7 +39,7 @@ const DisplayControl = extern union {
 };
 
 /// Read / Write
-const DisplayStatus = extern union {
+pub const DisplayStatus = extern union {
     vblank: Bit(u16, 0),
     hblank: Bit(u16, 1),
     coincidence: Bit(u16, 2),
@@ -96,7 +51,7 @@ const DisplayStatus = extern union {
 };
 
 /// Read Only
-const VCount = extern union {
+pub const VCount = extern union {
     scanline: Bitfield(u16, 0, 8),
     raw: u16,
 };
@@ -136,7 +91,8 @@ const KeyInput = extern union {
     raw: u16,
 };
 
-const BackgroundControl = extern union {
+// Read / Write
+pub const BackgroundControl = extern union {
     bg_priority: Bitfield(u16, 0, 2),
     char_base: Bitfield(u16, 2, 2),
     mosaic_enable: Bit(u16, 6),
@@ -147,11 +103,13 @@ const BackgroundControl = extern union {
     raw: u16,
 };
 
-const BackgroundOffset = extern union {
+/// Write Only
+pub const BackgroundOffset = extern union {
     offset: Bitfield(u16, 0, 9),
     raw: u16,
 };
 
+/// Read / Write
 const InterruptRequest = extern union {
     vblank: Bit(u16, 0),
     hblank: Bit(u16, 1),
@@ -172,9 +130,9 @@ const InterruptRequest = extern union {
 
 pub fn read32(bus: *const Bus, addr: u32) u32 {
     return switch (addr) {
-        0x0400_0000 => bus.io.dispcnt.raw,
-        0x0400_0004 => bus.io.dispstat.raw,
-        0x0400_0006 => bus.io.vcount.raw,
+        0x0400_0000 => bus.ppu.dispcnt.raw,
+        0x0400_0004 => bus.ppu.dispstat.raw,
+        0x0400_0006 => bus.ppu.vcount.raw,
         0x0400_0200 => bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
         else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
@@ -183,7 +141,7 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
 
 pub fn write32(bus: *Bus, addr: u32, word: u32) void {
     switch (addr) {
-        0x0400_0000 => bus.io.dispcnt.raw = @truncate(u16, word),
+        0x0400_0000 => bus.ppu.dispcnt.raw = @truncate(u16, word),
         0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
         else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
@@ -192,9 +150,9 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
 
 pub fn read16(bus: *const Bus, addr: u32) u16 {
     return switch (addr) {
-        0x0400_0000 => bus.io.dispcnt.raw,
-        0x0400_0004 => bus.io.dispstat.raw,
-        0x0400_0006 => bus.io.vcount.raw,
+        0x0400_0000 => bus.ppu.dispcnt.raw,
+        0x0400_0004 => bus.ppu.dispstat.raw,
+        0x0400_0006 => bus.ppu.vcount.raw,
         0x0400_0130 => bus.io.keyinput.raw,
         0x0400_0200 => bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
@@ -204,11 +162,11 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
 
 pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
     switch (addr) {
-        0x0400_0000 => bus.io.dispcnt.raw = halfword,
-        0x0400_0004 => bus.io.dispstat.raw = halfword,
-        0x0400_0008 => bus.io.bg0cnt.raw = halfword,
-        0x0400_0010 => bus.io.bg0hofs.raw = halfword,
-        0x0400_0012 => bus.io.bg0vofs.raw = halfword,
+        0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
+        0x0400_0004 => bus.ppu.dispstat.raw = halfword,
+        0x0400_0008 => bus.ppu.bg0.cnt.raw = halfword,
+        0x0400_0010 => bus.ppu.bg0.hofs.raw = halfword,
+        0x0400_0012 => bus.ppu.bg0.vofs.raw = halfword,
         0x0400_0200 => bus.io.ie.raw = halfword,
         0x0400_0202 => bus.io.irq.raw = halfword,
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,
@@ -218,10 +176,10 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
 
 pub fn read8(bus: *const Bus, addr: u32) u8 {
     return switch (addr) {
-        0x0400_0000 => @truncate(u8, bus.io.dispcnt.raw),
-        0x0400_0004 => @truncate(u8, bus.io.dispstat.raw),
+        0x0400_0000 => @truncate(u8, bus.ppu.dispcnt.raw),
+        0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
-        0x0400_0006 => @truncate(u8, bus.io.vcount.raw),
+        0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
         else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
     };
 }
