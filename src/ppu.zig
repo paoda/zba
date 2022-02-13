@@ -14,6 +14,7 @@ pub const Ppu = struct {
 
     vram: Vram,
     palette: Palette,
+    oam: Oam,
     sched: *Scheduler,
     framebuf: []u8,
     alloc: Allocator,
@@ -28,6 +29,7 @@ pub const Ppu = struct {
         return Self{
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
+            .oam = try Oam.init(alloc),
             .sched = sched,
             .framebuf = framebuf,
             .alloc = alloc,
@@ -143,6 +145,47 @@ const Vram = struct {
     pub fn set32(self: *Self, idx: usize, word: u32) void {
         self.set16(idx + 2, @truncate(u16, word >> 16));
         self.set16(idx, @truncate(u16, word));
+    }
+
+    pub fn get16(self: *const Self, idx: usize) u16 {
+        return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
+    }
+
+    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
+        self.buf[idx + 1] = @truncate(u8, halfword >> 8);
+        self.buf[idx] = @truncate(u8, halfword);
+    }
+
+    pub fn get8(self: *const Self, idx: usize) u8 {
+        return self.buf[idx];
+    }
+};
+
+const Oam = struct {
+    const Self = @This();
+
+    buf: []u8,
+    alloc: Allocator,
+
+    fn init(alloc: Allocator) !Self {
+        const buf = try alloc.alloc(u8, 0x400);
+        std.mem.set(u8, buf, 0);
+
+        return Self{
+            .buf = buf,
+            .alloc = alloc,
+        };
+    }
+
+    pub fn get32(self: *const Self, idx: usize) u32 {
+        return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
+    }
+
+    pub fn set32(self: *Self, idx: usize, word: u32) void {
+        self.buf[idx + 3] = @truncate(u8, word >> 24);
+        self.buf[idx + 2] = @truncate(u8, word >> 16);
+        self.buf[idx + 1] = @truncate(u8, word >> 8);
+        self.buf[idx] = @truncate(u8, word);
     }
 
     pub fn get16(self: *const Self, idx: usize) u16 {

@@ -49,7 +49,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get32(addr - 0x0500_0000),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.get32(addr - 0x0600_0000),
-        0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] read from 0x{X:} in OAM", .{addr}),
+        0x0700_0000...0x0700_03FF => self.ppu.oam.get32(addr - 0x0700_0000),
 
         // External Memory (Game Pak)
         0x0800_0000...0x09FF_FFFF => self.pak.get32(addr - 0x0800_0000),
@@ -75,7 +75,7 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.set32(addr - 0x0500_0000, word),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set32(addr - 0x0600_0000, word),
-        0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:32] wrote 0x{X:} to 0x{X:} in OAM", .{ word, addr }),
+        0x0700_0000...0x0700_03FF => self.ppu.oam.set32(addr - 0x0700_0000, word),
 
         else => log.warn("32-bit write of 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
     }
@@ -92,7 +92,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get16(addr - 0x0500_0000),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.get16(addr - 0x0600_0000),
-        0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] read from 0x{X:} in OAM", .{addr}),
+        0x0700_0000...0x0700_03FF => self.ppu.oam.get16(addr - 0x0700_0000),
 
         // External Memory (Game Pak)
         0x0800_0000...0x09FF_FFFF => self.pak.get16(addr - 0x0800_0000),
@@ -117,7 +117,7 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.set16(addr - 0x0500_0000, halfword),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(addr - 0x0600_0000, halfword),
-        0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:16] write 0x{X:} to 0x{X:} in OAM", .{ halfword, addr }),
+        0x0700_0000...0x0700_03FF => self.ppu.oam.set16(addr - 0x0700_0000, halfword),
 
         else => log.warn("16-bit write of 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }
@@ -134,7 +134,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get8(addr - 0x0500_0000),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.get8(addr - 0x0600_0000),
-        0x0700_0000...0x0700_03FF => std.debug.panic("[Bus:8] read from 0x{X:} in OAM", .{addr}),
+        0x0700_0000...0x0700_03FF => self.ppu.oam.get8(addr - 0x0700_0000),
 
         // External Memory (Game Pak)
         0x0800_0000...0x09FF_FFFF => self.pak.get8(addr - 0x0800_0000),
