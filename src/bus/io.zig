@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
+const Bus = @import("../Bus.zig");
 
 pub const Io = struct {
     const Self = @This();
@@ -65,69 +66,6 @@ pub const Io = struct {
             .irq = .{ .raw = 0x0000 },
             .keyinput = .{ .raw = 0x03FF },
         };
-    }
-
-    pub fn read32(self: *const Self, addr: u32) u32 {
-        return switch (addr) {
-            0x0400_0000 => self.dispcnt.raw,
-            0x0400_0004 => self.dispstat.raw,
-            0x0400_0006 => self.vcount.raw,
-            0x0400_0200 => self.ie.raw,
-            0x0400_0208 => @boolToInt(self.ime),
-            else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
-        };
-    }
-
-    pub fn write32(self: *Self, addr: u32, word: u32) void {
-        switch (addr) {
-            0x0400_0000 => self.dispcnt.raw = @truncate(u16, word),
-            0x0400_0200 => self.ie.raw = @truncate(u16, word),
-            0x0400_0208 => self.ime = word & 1 == 1,
-            else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
-        }
-    }
-
-    pub fn read16(self: *const Self, addr: u32) u16 {
-        return switch (addr) {
-            0x0400_0000 => self.dispcnt.raw,
-            0x0400_0004 => self.dispstat.raw,
-            0x0400_0006 => self.vcount.raw,
-            0x0400_0130 => self.keyinput.raw,
-            0x0400_0200 => self.ie.raw,
-            0x0400_0208 => @boolToInt(self.ime),
-            else => std.debug.panic("[I/O:16] tried to read from {X:}", .{addr}),
-        };
-    }
-
-    pub fn write16(self: *Self, addr: u32, halfword: u16) void {
-        switch (addr) {
-            0x0400_0000 => self.dispcnt.raw = halfword,
-            0x0400_0004 => self.dispstat.raw = halfword,
-            0x0400_0008 => self.bg0cnt.raw = halfword,
-            0x0400_0010 => self.bg0hofs.raw = halfword,
-            0x0400_0012 => self.bg0vofs.raw = halfword,
-            0x0400_0200 => self.ie.raw = halfword,
-            0x0400_0202 => self.irq.raw = halfword,
-            0x0400_0208 => self.ime = halfword & 1 == 1,
-            else => std.debug.panic("[I/O:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
-        }
-    }
-
-    pub fn read8(self: *const Self, addr: u32) u8 {
-        return switch (addr) {
-            0x0400_0000 => @truncate(u8, self.dispcnt.raw),
-            0x0400_0004 => @truncate(u8, self.dispstat.raw),
-            0x0400_0200 => @truncate(u8, self.ie.raw),
-            0x0400_0006 => @truncate(u8, self.vcount.raw),
-            else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
-        };
-    }
-
-    pub fn write8(self: *Self, addr: u32, byte: u8) void {
-        switch (addr) {
-            0x0400_0208 => self.ime = byte & 1 == 1,
-            else => std.debug.panic("[I/0:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
-        }
     }
 };
 
@@ -231,3 +169,66 @@ const InterruptRequest = extern union {
     game_pak: Bit(u16, 13),
     raw: u16,
 };
+
+pub fn read32(bus: *const Bus, addr: u32) u32 {
+    return switch (addr) {
+        0x0400_0000 => bus.io.dispcnt.raw,
+        0x0400_0004 => bus.io.dispstat.raw,
+        0x0400_0006 => bus.io.vcount.raw,
+        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0208 => @boolToInt(bus.io.ime),
+        else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
+    };
+}
+
+pub fn write32(bus: *Bus, addr: u32, word: u32) void {
+    switch (addr) {
+        0x0400_0000 => bus.io.dispcnt.raw = @truncate(u16, word),
+        0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
+        0x0400_0208 => bus.io.ime = word & 1 == 1,
+        else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
+    }
+}
+
+pub fn read16(bus: *const Bus, addr: u32) u16 {
+    return switch (addr) {
+        0x0400_0000 => bus.io.dispcnt.raw,
+        0x0400_0004 => bus.io.dispstat.raw,
+        0x0400_0006 => bus.io.vcount.raw,
+        0x0400_0130 => bus.io.keyinput.raw,
+        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0208 => @boolToInt(bus.io.ime),
+        else => std.debug.panic("[I/O:16] tried to read from {X:}", .{addr}),
+    };
+}
+
+pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
+    switch (addr) {
+        0x0400_0000 => bus.io.dispcnt.raw = halfword,
+        0x0400_0004 => bus.io.dispstat.raw = halfword,
+        0x0400_0008 => bus.io.bg0cnt.raw = halfword,
+        0x0400_0010 => bus.io.bg0hofs.raw = halfword,
+        0x0400_0012 => bus.io.bg0vofs.raw = halfword,
+        0x0400_0200 => bus.io.ie.raw = halfword,
+        0x0400_0202 => bus.io.irq.raw = halfword,
+        0x0400_0208 => bus.io.ime = halfword & 1 == 1,
+        else => std.debug.panic("[I/O:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
+    }
+}
+
+pub fn read8(bus: *const Bus, addr: u32) u8 {
+    return switch (addr) {
+        0x0400_0000 => @truncate(u8, bus.io.dispcnt.raw),
+        0x0400_0004 => @truncate(u8, bus.io.dispstat.raw),
+        0x0400_0200 => @truncate(u8, bus.io.ie.raw),
+        0x0400_0006 => @truncate(u8, bus.io.vcount.raw),
+        else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
+    };
+}
+
+pub fn write8(self: *Bus, addr: u32, byte: u8) void {
+    switch (addr) {
+        0x0400_0208 => self.io.ime = byte & 1 == 1,
+        else => std.debug.panic("[I/0:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
+    }
+}

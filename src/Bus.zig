@@ -8,6 +8,7 @@ const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
+const io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 const Self = @This();
@@ -44,7 +45,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0000_0000...0x0000_3FFF => self.bios.get32(addr),
         0x0200_0000...0x0203_FFFF => self.iwram.get32(addr - 0x0200_0000),
         0x0300_0000...0x0300_7FFF => self.ewram.get32(addr - 0x0300_0000),
-        0x0400_0000...0x0400_03FE => self.io.read32(addr),
+        0x0400_0000...0x0400_03FE => io.read32(self, addr),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get32(addr - 0x0500_0000),
@@ -70,7 +71,7 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => self.iwram.set32(addr - 0x0200_0000, word),
         0x0300_0000...0x0300_7FFF => self.ewram.set32(addr - 0x0300_0000, word),
-        0x0400_0000...0x0400_03FE => self.io.write32(addr, word),
+        0x0400_0000...0x0400_03FE => io.write32(self, addr, word),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.set32(addr - 0x0500_0000, word),
@@ -87,7 +88,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
         0x0000_0000...0x0000_3FFF => self.bios.get16(addr),
         0x0200_0000...0x0203_FFFF => self.iwram.get16(addr - 0x0200_0000),
         0x0300_0000...0x0300_7FFF => self.ewram.get16(addr - 0x0300_0000),
-        0x0400_0000...0x0400_03FE => self.io.read16(addr),
+        0x0400_0000...0x0400_03FE => io.read16(self, addr),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get16(addr - 0x0500_0000),
@@ -112,7 +113,7 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => self.iwram.set16(addr - 0x0200_0000, halfword),
         0x0300_0000...0x0300_7FFF => self.ewram.set16(addr - 0x0300_0000, halfword),
-        0x0400_0000...0x0400_03FE => self.io.write16(addr, halfword),
+        0x0400_0000...0x0400_03FE => io.write16(self, addr, halfword),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.set16(addr - 0x0500_0000, halfword),
@@ -129,7 +130,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0000_0000...0x0000_3FFF => self.bios.get8(addr),
         0x0200_0000...0x0203_FFFF => self.iwram.get8(addr - 0x0200_0000),
         0x0300_0000...0x0300_7FFF => self.ewram.get8(addr - 0x0300_0000),
-        0x0400_0000...0x0400_03FE => self.io.read8(addr),
+        0x0400_0000...0x0400_03FE => io.read8(self, addr),
 
         // Internal Display Memory
         0x0500_0000...0x0500_03FF => self.ppu.palette.get8(addr - 0x0500_0000),
@@ -154,7 +155,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         // General Internal Memory
         0x0200_0000...0x0203_FFFF => self.iwram.set8(addr - 0x0200_0000, byte),
         0x0300_0000...0x0300_7FFF => self.ewram.set8(addr - 0x0300_0000, byte),
-        0x0400_0000...0x0400_03FE => self.io.write8(addr, byte),
+        0x0400_0000...0x0400_03FE => io.write8(self, addr, byte),
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in Game Pak SRAM", .{ byte, addr }),
