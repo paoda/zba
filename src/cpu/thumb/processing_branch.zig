@@ -18,12 +18,12 @@ pub fn format5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
                 0b00 => {
                     // ADD
                     const sum = add(false, cpu, dst, src);
-                    cpu.r[dst_idx] = if (dst_idx == 0xF) sum & 0xFFFF_FFFC else sum;
+                    cpu.r[dst_idx] = if (dst_idx == 0xF) sum & 0xFFFF_FFFE else sum;
                 },
                 0b01 => cmp(cpu, dst, src), // CMP
                 0b10 => {
                     // MOV
-                    cpu.r[dst_idx] = if (dst_idx == 0xF) src & 0xFFFF_FFFC else src;
+                    cpu.r[dst_idx] = if (dst_idx == 0xF) src & 0xFFFF_FFFE else src;
                 },
                 0b11 => {
                     // BX

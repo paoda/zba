@@ -43,7 +43,7 @@ pub fn format19(comptime is_low: bool) InstrFn {
                 // Instruction 2
                 const old_pc = cpu.r[15];
 
-                cpu.r[15] = cpu.r[14] + (offset << 1);
+                cpu.r[15] = cpu.r[14] +% (offset << 1);
                 cpu.r[14] = old_pc | 1;
             } else {
                 // Instruction 1

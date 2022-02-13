@@ -116,7 +116,7 @@ pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
             const rb = opcode >> 3 & 0x7;
             const rd = opcode & 0x7;
 
-            const address = cpu.r[rb] + (offset << 1);
+            const address = cpu.r[rb] + (@as(u6, offset) << 1);
 
             if (L) {
                 // LDRH
