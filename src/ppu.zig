@@ -47,6 +47,10 @@ pub const Ppu = struct {
         const scanline = io.vcount.scanline.read();
 
         switch (bg_mode) {
+            0x0 => {
+                // Mode 0
+
+            },
             0x3 => {
                 const start = framebuf_pitch * @as(usize, scanline);
                 const end = start + framebuf_pitch;
@@ -70,7 +74,7 @@ pub const Ppu = struct {
                     self.framebuf[buf_start + j] = self.palette.buf[id];
                 }
             },
-            else => {}, // std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
+            else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
         }
     }
 };

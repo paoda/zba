@@ -17,6 +17,24 @@ pub const Io = struct {
     bg2cnt: BackgroundControl,
     /// Read / Write
     bg3cnt: BackgroundControl,
+
+    /// Write Only
+    bg0hofs: BackgroundOffset,
+    /// Write Only
+    bg0vofs: BackgroundOffset,
+    /// Write Only
+    bg1hofs: BackgroundOffset,
+    /// Write Only
+    bg1vofs: BackgroundOffset,
+    /// Write Only
+    bg2hofs: BackgroundOffset,
+    /// Write Only
+    bg2vofs: BackgroundOffset,
+    /// Write Only
+    bg3hofs: BackgroundOffset,
+    /// Write Only
+    bg3vofs: BackgroundOffset,
+
     /// Read / Write
     ime: bool,
     ie: InterruptEnable,
@@ -34,6 +52,14 @@ pub const Io = struct {
             .bg1cnt = .{ .raw = 0x0000 },
             .bg2cnt = .{ .raw = 0x0000 },
             .bg3cnt = .{ .raw = 0x0000 },
+            .bg0hofs = .{ .raw = 0x0000 },
+            .bg0vofs = .{ .raw = 0x0000 },
+            .bg1hofs = .{ .raw = 0x0000 },
+            .bg1vofs = .{ .raw = 0x0000 },
+            .bg2hofs = .{ .raw = 0x0000 },
+            .bg2vofs = .{ .raw = 0x0000 },
+            .bg3hofs = .{ .raw = 0x0000 },
+            .bg3vofs = .{ .raw = 0x0000 },
             .ime = false,
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
@@ -78,6 +104,8 @@ pub const Io = struct {
             0x0400_0000 => self.dispcnt.raw = halfword,
             0x0400_0004 => self.dispstat.raw = halfword,
             0x0400_0008 => self.bg0cnt.raw = halfword,
+            0x0400_0010 => self.bg0hofs.raw = halfword,
+            0x0400_0012 => self.bg0vofs.raw = halfword,
             0x0400_0200 => self.ie.raw = halfword,
             0x0400_0202 => self.irq.raw = halfword,
             0x0400_0208 => self.ime = halfword & 1 == 1,
@@ -178,6 +206,11 @@ const BackgroundControl = extern union {
     screen_base: Bitfield(u16, 8, 5),
     display_overflow: Bit(u16, 13),
     screen_size: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+const BackgroundOffset = extern union {
+    offset: Bitfield(u16, 0, 9),
     raw: u16,
 };
 
