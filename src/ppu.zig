@@ -73,9 +73,7 @@ pub const Ppu = struct {
             },
             0x3 => {
                 const start = framebuf_pitch * @as(usize, scanline);
-                const end = start + framebuf_pitch;
-
-                std.mem.copy(u8, self.framebuf[start..end], self.vram.buf[start..end]);
+                std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], self.vram.buf[start..][0..framebuf_pitch]);
             },
             0x4 => {
                 const select = self.dispcnt.frame_select.read();
@@ -90,8 +88,7 @@ pub const Ppu = struct {
                     const id = byte * 2;
                     const j = i * @sizeOf(u16);
 
-                    self.framebuf[buf_start + j + 1] = self.palette.buf[id + 1];
-                    self.framebuf[buf_start + j] = self.palette.buf[id];
+                    std.mem.copy(u8, self.framebuf[(buf_start + j)..][0..2], self.palette.buf[id..][0..2]);
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
