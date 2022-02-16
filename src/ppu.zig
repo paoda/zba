@@ -17,10 +17,8 @@ pub const Ppu = struct {
     const Self = @This();
 
     // Registers
-    bg0: Background,
-    bg1: Background,
-    bg2: Background,
-    bg3: Background,
+
+    bg: [4]Background,
 
     dispcnt: io.DisplayControl,
     dispstat: io.DisplayStatus,
@@ -49,10 +47,7 @@ pub const Ppu = struct {
             .alloc = alloc,
 
             // Registers
-            .bg0 = Background.init(),
-            .bg1 = Background.init(),
-            .bg2 = Background.init(),
-            .bg3 = Background.init(),
+            .bg = [_]Background{Background.init()} ** 4,
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
@@ -65,71 +60,81 @@ pub const Ppu = struct {
         self.palette.deinit();
     }
 
+    fn drawBackround(self: *Self, comptime n: u3, scanline: u32) void {
+        // TODO: Consider Scrolling
+
+        // The Current Scanline which will be copied into
+        // the Framebuffer
+        const start = framebuf_pitch * @as(usize, scanline);
+        var scanline_buf = std.mem.zeroes([framebuf_pitch]u8);
+
+        // A Tile in a charblock is a byte, while a Screen Entry is a halfword
+        const charblock_len: u32 = 0x4000;
+        const screenblock_len: u32 = 0x800;
+
+        const cbb: u2 = self.bg[n].cnt.char_base.read(); // Char Block Base
+        const sbb: u5 = self.bg[n].cnt.screen_base.read(); // Screen Block Base
+        const is_8bpp: bool = self.bg[n].cnt.colour_mode.read(); // Colour Mode
+        const size: u2 = self.bg[n].cnt.size.read(); // Background Size
+
+        // In 4bpp: 1 byte represents two pixels so the length is (8 x 8) / 2
+        // In 8bpp: 1 byte represents one pixel so the length is 8 x 8
+        const tile_len = if (is_8bpp) @as(u32, 0x40) else 0x20;
+        const tile_row_offset = if (is_8bpp) @as(u32, 0x8) else 0x4;
+
+        // 0x0600_000 is implied because we can access VRAM without the Bus
+        const char_base: u32 = charblock_len * @as(u32, cbb);
+        const screen_base: u32 = screenblock_len * @as(u32, sbb);
+
+        const y = scanline;
+
+        var x: u32 = 0;
+        while (x < width) : (x += 1) {
+            // Grab the Screen Entry from VRAM
+            const entry_addr = screen_base + tilemapOffset(size, x, y);
+            const entry = @bitCast(ScreenEntry, @as(u16, self.vram.buf[entry_addr + 1]) << 8 | @as(u16, self.vram.buf[entry_addr]));
+
+            // Calculate the Address of the Tile in the designated Charblock
+            // We also take this opportunity to flip tiles if necessary
+            const tile_id: u32 = entry.tile_id.read();
+            const row = if (entry.h_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
+            const tile_addr = char_base + (tile_len * tile_id) + (tile_row_offset * row);
+
+            // Calculate on which column in a tile we're on
+            // Similarly to when we calculated the row, if we're in 4bpp we want to account
+            // for 1 byte consisting of two pixels
+            const col = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
+            var tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
+
+            // If we're in 8bpp, then the tile value is an index into the palette,
+            // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
+            // and then we can index the palette
+            const colour = if (!is_8bpp) blk: {
+                tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+                const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
+                break :blk pal_bank | tile;
+            } else tile;
+
+            std.mem.copy(u8, scanline_buf[x * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
+        }
+
+        std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], &scanline_buf);
+    }
+
     pub fn drawScanline(self: *Self) void {
         const bg_mode = self.dispcnt.bg_mode.read();
+        const bg_enable = self.dispcnt.bg_enable.read();
         const scanline = self.vcount.scanline.read();
 
         switch (bg_mode) {
             0x0 => {
-                // TODO: Consider more than BG0
-                // TODO: Consider Scrolling
-
-                // The Current Scanline which will be copied into
-                // the Framebuffer
-                const start = framebuf_pitch * @as(usize, scanline);
-                var scanline_buf = std.mem.zeroes([framebuf_pitch]u8);
-
-                // A Tile in a charblock is a byte, while a Screen Entry is a halfword
-                const charblock_len: u32 = 0x4000;
-                const screenblock_len: u32 = 0x800;
-
-                const cbb: u2 = self.bg0.cnt.char_base.read(); // Char Block Base
-                const sbb: u5 = self.bg0.cnt.screen_base.read(); // Screen Block Base
-                const is_8bpp: bool = self.bg0.cnt.colour_mode.read(); // Colour Mode
-                const size: u2 = self.bg0.cnt.size.read(); // Background Size
-
-                // In 4bpp: 1 byte represents two pixels so the length is (8 x 8) / 2
-                // In 8bpp: 1 byte represents one pixel so the length is 8 x 8
-                const tile_len = if (is_8bpp) @as(u32, 0x40) else 0x20;
-                const tile_row_offset = if (is_8bpp) @as(u32, 0x8) else 0x4;
-
-                // 0x0600_000 is implied because we can access VRAM without the Bus
-                const char_base: u32 = charblock_len * @as(u32, cbb);
-                const screen_base: u32 = screenblock_len * @as(u32, sbb);
-
-                const y = @as(u32, scanline);
-
-                var x: u32 = 0;
-                while (x < width) : (x += 1) {
-                    // Grab the Screen Entry from VRAM
-                    const entry_addr = screen_base + tilemapOffset(size, x, y);
-                    const entry = @bitCast(ScreenEntry, @as(u16, self.vram.buf[entry_addr + 1]) << 8 | @as(u16, self.vram.buf[entry_addr]));
-
-                    // Calculate the Address of the Tile in the designated Charblock
-                    // We also take this opportunity to flip tiles if necessary
-                    const tile_id: u32 = entry.tile_id.read();
-                    const row = if (entry.h_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
-                    const tile_addr = char_base + (tile_len * tile_id) + (tile_row_offset * row);
-
-                    // Calculate on which column in a tile we're on
-                    // Similarly to when we calculated the row, if we're in 4bpp we want to account
-                    // for 1 byte consisting of two pixels
-                    const col = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
-                    var tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
-
-                    // If we're in 8bpp, then the tile value is an index into the palette,
-                    // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
-                    // and then we can index the palette
-                    const colour = if (!is_8bpp) blk: {
-                        tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                        const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
-                        break :blk pal_bank | tile;
-                    } else tile;
-
-                    std.mem.copy(u8, scanline_buf[x * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
+                var i: usize = 0;
+                while (i < 4) : (i += 1) {
+                    if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0, scanline);
+                    if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1, scanline);
+                    if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2, scanline);
+                    if (i == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3, scanline);
                 }
-
-                std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], &scanline_buf);
             },
             0x3 => {
                 const start = framebuf_pitch * @as(usize, scanline);

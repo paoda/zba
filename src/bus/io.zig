@@ -164,9 +164,9 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
     switch (addr) {
         0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
         0x0400_0004 => bus.ppu.dispstat.raw = halfword,
-        0x0400_0008 => bus.ppu.bg0.cnt.raw = halfword,
-        0x0400_0010 => bus.ppu.bg0.hofs.raw = halfword,
-        0x0400_0012 => bus.ppu.bg0.vofs.raw = halfword,
+        0x0400_0008 => bus.ppu.bg[0].cnt.raw = halfword,
+        0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword,
+        0x0400_0012 => bus.ppu.bg[0].vofs.raw = halfword,
         0x0400_0200 => bus.io.ie.raw = halfword,
         0x0400_0202 => bus.io.irq.raw = halfword,
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,
