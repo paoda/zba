@@ -86,10 +86,15 @@ pub const Ppu = struct {
         const char_base: u32 = charblock_len * @as(u32, cbb);
         const screen_base: u32 = screenblock_len * @as(u32, sbb);
 
-        const y = scanline;
+        const vofs = self.bg[n].vofs.offset.read();
+        const hofs = self.bg[n].hofs.offset.read();
 
-        var x: u32 = 0;
-        while (x < width) : (x += 1) {
+        const y = scanline + vofs;
+
+        var i: u32 = 0;
+        while (i < width) : (i += 1) {
+            const x = i + hofs;
+
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
             const entry = @bitCast(ScreenEntry, @as(u16, self.vram.buf[entry_addr + 1]) << 8 | @as(u16, self.vram.buf[entry_addr]));
@@ -115,7 +120,7 @@ pub const Ppu = struct {
                 break :blk pal_bank | tile;
             } else tile;
 
-            std.mem.copy(u8, scanline_buf[x * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
+            std.mem.copy(u8, scanline_buf[i * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
         }
 
         std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], &scanline_buf);
