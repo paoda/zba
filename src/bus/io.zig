@@ -142,6 +142,14 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
 pub fn write32(bus: *Bus, addr: u32, word: u32) void {
     switch (addr) {
         0x0400_0000 => bus.ppu.dispcnt.raw = @truncate(u16, word),
+        0x0400_0010 => bus.ppu.bg[0].hofs.raw = @truncate(u16, word), // TODO: Don't write out every HOFS / VOFS?
+        0x0400_0012 => bus.ppu.bg[0].vofs.raw = @truncate(u16, word),
+        0x0400_0014 => bus.ppu.bg[1].hofs.raw = @truncate(u16, word),
+        0x0400_0016 => bus.ppu.bg[1].vofs.raw = @truncate(u16, word),
+        0x0400_0018 => bus.ppu.bg[2].hofs.raw = @truncate(u16, word),
+        0x0400_001A => bus.ppu.bg[2].vofs.raw = @truncate(u16, word),
+        0x0400_001C => bus.ppu.bg[3].hofs.raw = @truncate(u16, word),
+        0x0400_001E => bus.ppu.bg[3].vofs.raw = @truncate(u16, word),
         0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
         else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
@@ -164,9 +172,15 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
     switch (addr) {
         0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
         0x0400_0004 => bus.ppu.dispstat.raw = halfword,
-        0x0400_0008 => bus.ppu.bg[0].cnt.raw = halfword,
-        0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword,
+        0x0400_0008...0x0400_000F => bus.ppu.bg[addr & 0x7].cnt.raw = halfword,
+        0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword, // TODO: Don't write out every HOFS / VOFS?
         0x0400_0012 => bus.ppu.bg[0].vofs.raw = halfword,
+        0x0400_0014 => bus.ppu.bg[1].hofs.raw = halfword,
+        0x0400_0016 => bus.ppu.bg[1].vofs.raw = halfword,
+        0x0400_0018 => bus.ppu.bg[2].hofs.raw = halfword,
+        0x0400_001A => bus.ppu.bg[2].vofs.raw = halfword,
+        0x0400_001C => bus.ppu.bg[3].hofs.raw = halfword,
+        0x0400_001E => bus.ppu.bg[3].vofs.raw = halfword,
         0x0400_0200 => bus.io.ie.raw = halfword,
         0x0400_0202 => bus.io.irq.raw = halfword,
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,

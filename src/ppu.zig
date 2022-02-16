@@ -61,8 +61,6 @@ pub const Ppu = struct {
     }
 
     fn drawBackround(self: *Self, comptime n: u3, scanline: u32) void {
-        // TODO: Consider Scrolling
-
         // The Current Scanline which will be copied into
         // the Framebuffer
         const start = framebuf_pitch * @as(usize, scanline);
@@ -97,7 +95,7 @@ pub const Ppu = struct {
 
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
-            const entry = @bitCast(ScreenEntry, @as(u16, self.vram.buf[entry_addr + 1]) << 8 | @as(u16, self.vram.buf[entry_addr]));
+            const entry = @bitCast(ScreenEntry, @as(u16, self.vram.get16(entry_addr)));
 
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
