@@ -93,13 +93,13 @@ const KeyInput = extern union {
 
 // Read / Write
 pub const BackgroundControl = extern union {
-    bg_priority: Bitfield(u16, 0, 2),
+    priority: Bitfield(u16, 0, 2),
     char_base: Bitfield(u16, 2, 2),
     mosaic_enable: Bit(u16, 6),
-    palette_type: Bit(u16, 7),
+    colour_mode: Bit(u16, 7),
     screen_base: Bitfield(u16, 8, 5),
     display_overflow: Bit(u16, 13),
-    screen_size: Bitfield(u16, 14, 2),
+    size: Bitfield(u16, 14, 2),
     raw: u16,
 };
 

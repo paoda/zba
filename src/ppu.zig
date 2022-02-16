@@ -71,45 +71,60 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x0 => {
-                // A Tile is always 8x8 pixels
+                // TODO: Consider more than BG0
+                // TODO: Consider Scrolling
 
-                // Mode 0 Implementation Assuming:
-                // - Scrolling isn't a thing
-                // - Bill Gates said we'll never need more than BG0
-
-                // Write to this Scanline once we're done
+                // The Current Scanline which will be copied into
+                // the Framebuffer
                 const start = framebuf_pitch * @as(usize, scanline);
                 var scanline_buf = std.mem.zeroes([framebuf_pitch]u8);
 
-                // These we can probably move to top level?
+                // A Tile in a charblock is a byte, while a Screen Entry is a halfword
                 const charblock_len: u32 = 0x4000;
                 const screenblock_len: u32 = 0x800;
 
                 const cbb: u2 = self.bg0.cnt.char_base.read(); // Char Block Base
                 const sbb: u5 = self.bg0.cnt.screen_base.read(); // Screen Block Base
-                const is_8bpp: bool = self.bg0.cnt.palette_type.read(); // Colour Mode
-                const size: u2 = self.bg0.cnt.screen_size.read(); // Background Size
+                const is_8bpp: bool = self.bg0.cnt.colour_mode.read(); // Colour Mode
+                const size: u2 = self.bg0.cnt.size.read(); // Background Size
+
+                // In 4bpp: 1 byte represents two pixels so the length is (8 x 8) / 2
+                // In 8bpp: 1 byte represents one pixel so the length is 8 x 8
+                const tile_len = if (is_8bpp) @as(u32, 0x40) else 0x20;
+                const tile_row_offset = if (is_8bpp) @as(u32, 0x8) else 0x4;
 
                 // 0x0600_000 is implied because we can access VRAM without the Bus
                 const char_base: u32 = charblock_len * @as(u32, cbb);
                 const screen_base: u32 = screenblock_len * @as(u32, sbb);
 
                 const y = @as(u32, scanline);
+
                 var x: u32 = 0;
                 while (x < width) : (x += 1) {
-                    const entry_addr = screen_base + tilemapIndex(size, x, y);
+                    // Grab the Screen Entry from VRAM
+                    const entry_addr = screen_base + tilemapOffset(size, x, y);
                     const entry = @bitCast(ScreenEntry, @as(u16, self.vram.buf[entry_addr + 1]) << 8 | @as(u16, self.vram.buf[entry_addr]));
 
+                    // Calculate the Address of the Tile in the designated Charblock
+                    // We also take this opportunity to flip tiles if necessary
                     const tile_id: u32 = entry.tile_id.read();
-                    const px_y = if (entry.h_flip.read()) 7 - (y % 8) else y % 8;
-                    const px_x = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
-                    const tile_addr = char_base + if (is_8bpp) 0x40 * tile_id + 0x8 * px_y else 0x20 * tile_id + 0x4 * px_y;
+                    const row = if (entry.h_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
+                    const tile_addr = char_base + (tile_len * tile_id) + (tile_row_offset * row);
 
-                    var tile = self.vram.buf[tile_addr + if (is_8bpp) px_x else px_x >> 1];
-                    tile = if (px_x & 1 == 1) tile >> 4 else tile & 0xF;
+                    // Calculate on which column in a tile we're on
+                    // Similarly to when we calculated the row, if we're in 4bpp we want to account
+                    // for 1 byte consisting of two pixels
+                    const col = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
+                    var tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
 
-                    const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
-                    const colour = pal_bank | tile;
+                    // If we're in 8bpp, then the tile value is an index into the palette,
+                    // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
+                    // and then we can index the palette
+                    const colour = if (!is_8bpp) blk: {
+                        tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+                        const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
+                        break :blk pal_bank | tile;
+                    } else tile;
 
                     std.mem.copy(u8, scanline_buf[x * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
                 }
@@ -140,11 +155,16 @@ pub const Ppu = struct {
         }
     }
 
-    fn tilemapIndex(size: u2, x: u32, y: u32) u32 {
+    fn tilemapOffset(size: u2, x: u32, y: u32) u32 {
+        // Current Row: (y % PIXEL_COUNT) / 8
+        // Current COlumn: (x % PIXEL_COUNT) / 8
+        // Length of 1 row of Screen Entries: 0x40
+        // Length of 1 Screen Entry: 0x2 is the size of a screen entry
         return switch (size) {
-            0 => (((y % 256) / 8) * 64) + (((x % 256) / 8) * 2),
-            1 => (((y % 256) / 8) * 64) + (((x % 256) / 8) * 2),
-            else => std.debug.panic("tile size {}", .{size}),
+            0 => (y % 256 / 8) * 0x40 + (x % 256 / 8) * 2, // 256 x 256
+            1 => (y % 512 / 8) * 0x40 + (x % 256 / 8) * 2, // 512 x 256
+            2 => (y % 256 / 8) * 0x40 + (x % 512 / 8) * 2, // 256 x 512
+            3 => (y % 512 / 8) * 0x40 + (x % 512 / 8) * 2, // 512 x 512
         };
     }
 };
