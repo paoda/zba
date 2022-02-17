@@ -87,15 +87,15 @@ pub const Ppu = struct {
         const vofs = self.bg[n].vofs.offset.read();
         const hofs = self.bg[n].hofs.offset.read();
 
-        const y = scanline + vofs;
+        const y = vofs + scanline;
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
-            const x = i + hofs;
+            const x = hofs + i;
 
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
-            const entry = @bitCast(ScreenEntry, @as(u16, self.vram.get16(entry_addr)));
+            const entry = @bitCast(ScreenEntry, self.vram.get16(entry_addr));
 
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
@@ -112,13 +112,13 @@ pub const Ppu = struct {
             // If we're in 8bpp, then the tile value is an index into the palette,
             // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
             // and then we can index the palette
-            const colour = if (!is_8bpp) blk: {
+            const pal_id = if (!is_8bpp) blk: {
                 tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
                 const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
                 break :blk pal_bank | tile;
             } else tile;
 
-            std.mem.copy(u8, scanline_buf[i * 2 ..][0..2], self.palette.buf[colour * 2 ..][0..2]);
+            std.mem.copy(u8, scanline_buf[i * 2 ..][0..2], self.palette.buf[pal_id * 2 ..][0..2]);
         }
 
         std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], &scanline_buf);
@@ -168,11 +168,26 @@ pub const Ppu = struct {
         // Current COlumn: (x % PIXEL_COUNT) / 8
         // Length of 1 row of Screen Entries: 0x40
         // Length of 1 Screen Entry: 0x2 is the size of a screen entry
+        @setRuntimeSafety(false);
+
         return switch (size) {
-            0 => (y % 256 / 8) * 0x40 + (x % 256 / 8) * 2, // 256 x 256
-            1 => (y % 512 / 8) * 0x40 + (x % 256 / 8) * 2, // 512 x 256
-            2 => (y % 256 / 8) * 0x40 + (x % 512 / 8) * 2, // 256 x 512
-            3 => (y % 512 / 8) * 0x40 + (x % 512 / 8) * 2, // 512 x 512
+            0 => (x % 256 / 8) * 2 + (y % 256 / 8) * 0x40, // 256 x 256
+            1 => blk: {
+                // 512 x 256
+                const offset: u32 = if (x & 0x1FF > 0xFF) 0x800 else 0;
+                break :blk offset + (x % 256 / 8) * 2 + (y % 256 / 8) * 0x40;
+            },
+            2 => blk: {
+                // 256 x 512
+                const offset: u32 = if (y & 0x1FF > 0xFF) 0x800 else 0;
+                break :blk offset + (x % 256 / 8) * 2 + (y % 256 / 8) * 0x40;
+            },
+            3 => blk: {
+                // 512 x 512
+                const offset: u32 = if (x & 0x1FF > 0xFF) 0x800 else 0;
+                const offset_2: u32 = if (y & 0x1FF > 0xFF) 0x800 else 0;
+                break :blk offset + offset_2 + (x % 256 / 8) * 2 + (y % 512 / 8) * 0x40;
+            },
         };
     }
 };
