@@ -52,6 +52,7 @@ const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
 const enable_logging = @import("main.zig").enable_logging;
+const log = std.log.scoped(.Arm7Tdmi);
 
 pub const Arm7tdmi = struct {
     const Self = @This();
@@ -245,14 +246,23 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) u64 {
+        if (self.bus.io.is_halted) {
+            // const ie = self.bus.io.ie.raw;
+            // const irq = self.bus.io.irq.raw;
+
+            // if (ie & irq != 0) self.bus.io.is_halted = false;
+
+            // log.warn("FIXME: Enable GBA HALTing", .{});
+        }
+
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
-            if (enable_logging) if (self.log_file) |file| self.log(file, opcode);
+            if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             thumb_lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch();
-            if (enable_logging) if (self.log_file) |file| self.log(file, opcode);
+            if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm_lut[armIdx(opcode)](self, self.bus, opcode);
@@ -278,7 +288,7 @@ pub const Arm7tdmi = struct {
         return self.r[15] + 4;
     }
 
-    fn log(self: *const Self, file: *const File, opcode: u32) void {
+    fn debug_log(self: *const Self, file: *const File, opcode: u32) void {
         if (self.binary_log) {
             self.skyLog(file) catch unreachable;
         } else {

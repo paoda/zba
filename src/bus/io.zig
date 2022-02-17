@@ -11,6 +11,7 @@ pub const Io = struct {
     ime: bool,
     ie: InterruptEnable,
     irq: InterruptRequest,
+    is_halted: bool,
 
     keyinput: KeyInput,
 
@@ -20,6 +21,7 @@ pub const Io = struct {
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
             .keyinput = .{ .raw = 0x03FF },
+            .is_halted = false,
         };
     }
 };
@@ -209,6 +211,7 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
 pub fn write8(self: *Bus, addr: u32, byte: u8) void {
     switch (addr) {
         0x0400_0208 => self.io.ime = byte & 1 == 1,
+        0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
         else => std.debug.panic("[I/0:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
     }
 }
