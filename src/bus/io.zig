@@ -137,7 +137,7 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
         0x0400_0006 => bus.ppu.vcount.raw,
         0x0400_0200 => bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
-        else => std.debug.panic("[I/O:32] tried to read from {X:}", .{addr}),
+        else => std.debug.panic("[Io:32] tried to read from {X:}", .{addr}),
     };
 }
 
@@ -162,7 +162,7 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         },
         0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
-        else => std.debug.panic("[I/O:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
+        else => std.debug.panic("[Io:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
     }
 }
 
@@ -174,7 +174,7 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_0130 => bus.io.keyinput.raw,
         0x0400_0200 => bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
-        else => std.debug.panic("[I/O:16] tried to read from {X:}", .{addr}),
+        else => std.debug.panic("[Io:16] tried to read from {X:}", .{addr}),
     };
 }
 
@@ -194,7 +194,7 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0200 => bus.io.ie.raw = halfword,
         0x0400_0202 => bus.io.irq.raw = halfword,
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,
-        else => std.debug.panic("[I/O:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
+        else => std.debug.panic("[Io:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
     }
 }
 
@@ -204,7 +204,7 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
-        else => std.debug.panic("[I/O:8] tried to read from {X:}", .{addr}),
+        else => std.debug.panic("[Io:8] tried to read from {X:}", .{addr}),
     };
 }
 
@@ -212,6 +212,6 @@ pub fn write8(self: *Bus, addr: u32, byte: u8) void {
     switch (addr) {
         0x0400_0208 => self.io.ime = byte & 1 == 1,
         0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
-        else => std.debug.panic("[I/0:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
+        else => std.debug.panic("[Io:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
     }
 }

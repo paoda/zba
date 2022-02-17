@@ -12,7 +12,7 @@ pub fn format16(comptime cond: u4) InstrFn {
             const offset = u32SignExtend(8, opcode & 0xFF) << 1;
 
             const should_execute = switch (cond) {
-                0xE, 0xF => cpu.panic("[CPU/THUMB] Undefined conditional branch with condition {}", .{cond}),
+                0xE, 0xF => cpu.panic("[CPU/THUMB.16] Undefined conditional branch with condition {}", .{cond}),
                 else => checkCond(cpu.cpsr, cond),
             };
 

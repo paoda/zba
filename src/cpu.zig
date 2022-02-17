@@ -118,7 +118,7 @@ pub const Arm7tdmi = struct {
             .Undefined => 2,
             .Irq => 3,
             .Fiq => 4,
-            else => std.debug.panic("{} does not have a SPSR Register", .{mode}),
+            else => std.debug.panic("[CPU/Mode] {} does not have a SPSR Register", .{mode}),
         };
     }
 
@@ -442,7 +442,7 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
         0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.v.read()), // GT - Greater than
         0xD => cpsr.z.read() or (cpsr.n.read() != cpsr.v.read()), // LE - Less than or equal
         0xE => true, // AL - Always
-        0xF => std.debug.panic("[CPU] 0xF is a reserved condition field", .{}),
+        0xF => std.debug.panic("[CPU/Cond] 0xF is a reserved condition field", .{}),
     };
 }
 
@@ -650,15 +650,15 @@ fn getMode(bits: u5) ?Mode {
 }
 
 fn getModeChecked(cpu: *const Arm7tdmi, bits: u5) Mode {
-    return getMode(bits) orelse cpu.panic("[CPU|CPSR] 0b{b:0>5} is an invalid CPU mode", .{bits});
+    return getMode(bits) orelse cpu.panic("[CPU/CPSR] 0b{b:0>5} is an invalid CPU mode", .{bits});
 }
 
 fn armUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
-    cpu.panic("[CPU:ARM] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
+    cpu.panic("[CPU/Decode] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
 }
 
 fn thumbUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
     const id = thumbIdx(opcode);
-    cpu.panic("[CPU:THUMB] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
+    cpu.panic("[CPU/Decode] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
 }

@@ -45,10 +45,7 @@ pub fn format1(comptime op: u2, comptime offset: u5) InstrFn {
                         break :blk shifter.arithmeticRight(true, &cpu.cpsr, cpu.r[rs], offset);
                     }
                 },
-                else => {
-                    log.err("0b{b:0>2} is not a valid op", .{op});
-                    // TODO: Should we panic here?
-                },
+                else => cpu.panic("[CPU/THUMB.1] 0b{b:0>2} is not a valid op", .{op}),
             };
 
             // Equivalent to an ARM MOVS

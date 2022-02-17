@@ -57,9 +57,9 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0A00_0000...0x0BFF_FFFF => self.pak.get32(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get32(addr - 0x0C00_0000),
 
-        else => {
+        else => blk: {
             log.warn("32-bit read from 0x{X:0>8}", .{addr});
-            return 0x0000_0000;
+            break :blk 0x0000_0000;
         },
     };
 }
@@ -100,10 +100,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
         0x0A00_0000...0x0BFF_FFFF => self.pak.get16(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get16(addr - 0x0C00_0000),
 
-        else => {
-            log.warn("16-bit read from 0x{X:0>8}", .{addr});
-            return 0x0000;
-        },
+        else => std.debug.panic("16-bit read from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -120,7 +117,7 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(addr - 0x0600_0000, halfword),
         0x0700_0000...0x0700_03FF => self.ppu.oam.set16(addr - 0x0700_0000, halfword),
 
-        else => log.warn("16-bit write of 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
+        else => std.debug.panic("16-bit write of 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }
 }
 
@@ -143,10 +140,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0C00_0000...0x0DFF_FFFF => self.pak.get8(addr - 0x0C00_0000),
         0x0E00_0000...0x0E00_FFFF => std.debug.panic("[Bus:8] read from 0x{X:} in Game Pak SRAM", .{addr}),
 
-        else => {
-            log.warn("8-bit read from 0x{X:0>8}", .{addr});
-            return 0x00;
-        },
+        else => std.debug.panic("8-bit read from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -159,6 +153,6 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => std.debug.panic("[Bus:8] write 0x{X:} to 0x{X:} in Game Pak SRAM", .{ byte, addr }),
-        else => log.warn("8-bit write of 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
+        else => std.debug.panic("8-bit write of 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
