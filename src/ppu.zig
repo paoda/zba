@@ -114,7 +114,7 @@ pub const Ppu = struct {
             // and then we can index the palette
             const pal_id = if (!is_8bpp) blk: {
                 tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                const pal_bank: u8 = @as(u8, entry.palette_bank.read()) << 4;
+                const pal_bank: u16 = @as(u8, entry.palette_bank.read()) << 4;
                 break :blk pal_bank | tile;
             } else tile;
 
