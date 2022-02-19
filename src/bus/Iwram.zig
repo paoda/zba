@@ -7,7 +7,7 @@ buf: []u8,
 alloc: Allocator,
 
 pub fn init(alloc: Allocator) !Self {
-    const buf = try alloc.alloc(u8, 0x40000);
+    const buf = try alloc.alloc(u8, 0x8000);
     std.mem.set(u8, buf, 0);
 
     return Self{
@@ -21,12 +21,14 @@ pub fn deinit(self: Self) void {
 }
 
 pub fn get32(self: *const Self, idx: usize) u32 {
-    return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
+    return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
 }
 
 pub fn set32(self: *Self, idx: usize, word: u32) void {
-    self.set16(idx + 2, @truncate(u16, word >> 16));
-    self.set16(idx, @truncate(u16, word));
+    self.buf[idx + 3] = @truncate(u8, word >> 24);
+    self.buf[idx + 2] = @truncate(u8, word >> 16);
+    self.buf[idx + 1] = @truncate(u8, word >> 8);
+    self.buf[idx] = @truncate(u8, word);
 }
 
 pub fn get16(self: *const Self, idx: usize) u16 {
