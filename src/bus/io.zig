@@ -4,6 +4,8 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
 
+const log = std.log.scoped(.@"I/O");
+
 pub const Io = struct {
     const Self = @This();
 
@@ -11,6 +13,7 @@ pub const Io = struct {
     ime: bool,
     ie: InterruptEnable,
     irq: InterruptRequest,
+    postflg: PostFlag,
     is_halted: bool,
 
     keyinput: KeyInput,
@@ -20,10 +23,118 @@ pub const Io = struct {
             .ime = false,
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
+            .postflg = .{ .raw = 0x00 },
             .keyinput = .{ .raw = 0x03FF },
             .is_halted = false,
         };
     }
+};
+
+pub fn read32(bus: *const Bus, addr: u32) u32 {
+    return switch (addr) {
+        0x0400_0000 => bus.ppu.dispcnt.raw,
+        0x0400_0004 => bus.ppu.dispstat.raw,
+        0x0400_0006 => bus.ppu.vcount.raw,
+        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0208 => @boolToInt(bus.io.ime),
+        else => std.debug.panic("Tried to read from {X:0>8}", .{addr}),
+    };
+}
+
+pub fn write32(bus: *Bus, addr: u32, word: u32) void {
+    switch (addr) {
+        0x0400_0000 => bus.ppu.dispcnt.raw = @truncate(u16, word),
+        0x0400_0004 => {
+            bus.ppu.dispstat.raw = @truncate(u16, word);
+            bus.ppu.vcount.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_0008 => {
+            bus.ppu.bg[0].cnt.raw = @truncate(u16, word);
+            bus.ppu.bg[1].cnt.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_000C => {
+            bus.ppu.bg[2].cnt.raw = @truncate(u16, word);
+            bus.ppu.bg[3].cnt.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_0010 => {
+            bus.ppu.bg[0].hofs.raw = @truncate(u16, word);
+            bus.ppu.bg[0].vofs.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_0014 => {
+            bus.ppu.bg[1].hofs.raw = @truncate(u16, word);
+            bus.ppu.bg[1].vofs.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_0018 => {
+            bus.ppu.bg[2].hofs.raw = @truncate(u16, word);
+            bus.ppu.bg[2].vofs.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_001C => {
+            bus.ppu.bg[3].hofs.raw = @truncate(u16, word);
+            bus.ppu.bg[3].vofs.raw = @truncate(u16, word >> 16);
+        },
+        0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
+        0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{word}),
+        0x0400_0208 => bus.io.ime = word & 1 == 1,
+        else => std.debug.panic("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
+    }
+}
+
+pub fn read16(bus: *const Bus, addr: u32) u16 {
+    return switch (addr) {
+        0x0400_0000 => bus.ppu.dispcnt.raw,
+        0x0400_0004 => bus.ppu.dispstat.raw,
+        0x0400_0006 => bus.ppu.vcount.raw,
+        0x0400_0130 => bus.io.keyinput.raw,
+        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0208 => @boolToInt(bus.io.ime),
+        else => std.debug.panic("Tried to read from {X:0>4}", .{addr}),
+    };
+}
+
+pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
+    switch (addr) {
+        0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
+        0x0400_0004 => bus.ppu.dispstat.raw = halfword,
+        0x0400_0008...0x0400_000F => bus.ppu.bg[addr & 0x7].cnt.raw = halfword,
+        0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword, // TODO: Don't write out every HOFS / VOFS?
+        0x0400_0012 => bus.ppu.bg[0].vofs.raw = halfword,
+        0x0400_0014 => bus.ppu.bg[1].hofs.raw = halfword,
+        0x0400_0016 => bus.ppu.bg[1].vofs.raw = halfword,
+        0x0400_0018 => bus.ppu.bg[2].hofs.raw = halfword,
+        0x0400_001A => bus.ppu.bg[2].vofs.raw = halfword,
+        0x0400_001C => bus.ppu.bg[3].hofs.raw = halfword,
+        0x0400_001E => bus.ppu.bg[3].vofs.raw = halfword,
+        0x0400_0200 => bus.io.ie.raw = halfword,
+        0x0400_0202 => bus.io.irq.raw = halfword,
+        0x0400_0208 => bus.io.ime = halfword & 1 == 1,
+        else => std.debug.panic("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
+    }
+}
+
+pub fn read8(bus: *const Bus, addr: u32) u8 {
+    return switch (addr) {
+        0x0400_0000 => @truncate(u8, bus.ppu.dispcnt.raw),
+        0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
+        0x0400_0200 => @truncate(u8, bus.io.ie.raw),
+        0x0400_0300 => bus.io.postflg.raw,
+        0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
+        else => std.debug.panic("Tried to read from 0x{X:0>8}", .{addr}),
+    };
+}
+
+pub fn write8(self: *Bus, addr: u32, byte: u8) void {
+    switch (addr) {
+        0x0400_0208 => self.io.ime = byte & 1 == 1,
+        0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
+        else => std.debug.panic("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
+    }
+}
+
+/// Read / Write 
+pub const PostFlag = extern union {
+    /// 0 if First Boot, 1 if a Reset has been done
+    not_first_boot: Bit(u8, 0),
+    raw: u8,
 };
 
 /// Read / Write
@@ -129,89 +240,3 @@ const InterruptRequest = extern union {
     game_pak: Bit(u16, 13),
     raw: u16,
 };
-
-pub fn read32(bus: *const Bus, addr: u32) u32 {
-    return switch (addr) {
-        0x0400_0000 => bus.ppu.dispcnt.raw,
-        0x0400_0004 => bus.ppu.dispstat.raw,
-        0x0400_0006 => bus.ppu.vcount.raw,
-        0x0400_0200 => bus.io.ie.raw,
-        0x0400_0208 => @boolToInt(bus.io.ime),
-        else => std.debug.panic("[Io:32] tried to read from {X:}", .{addr}),
-    };
-}
-
-pub fn write32(bus: *Bus, addr: u32, word: u32) void {
-    switch (addr) {
-        0x0400_0000 => bus.ppu.dispcnt.raw = @truncate(u16, word),
-        0x0400_0010 => {
-            bus.ppu.bg[0].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[0].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0014 => {
-            bus.ppu.bg[1].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[1].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0018 => {
-            bus.ppu.bg[2].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[2].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_001C => {
-            bus.ppu.bg[3].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[3].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
-        0x0400_0208 => bus.io.ime = word & 1 == 1,
-        else => std.debug.panic("[Io:32] tried to write 0x{X:} to 0x{X:}", .{ word, addr }),
-    }
-}
-
-pub fn read16(bus: *const Bus, addr: u32) u16 {
-    return switch (addr) {
-        0x0400_0000 => bus.ppu.dispcnt.raw,
-        0x0400_0004 => bus.ppu.dispstat.raw,
-        0x0400_0006 => bus.ppu.vcount.raw,
-        0x0400_0130 => bus.io.keyinput.raw,
-        0x0400_0200 => bus.io.ie.raw,
-        0x0400_0208 => @boolToInt(bus.io.ime),
-        else => std.debug.panic("[Io:16] tried to read from {X:}", .{addr}),
-    };
-}
-
-pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
-    switch (addr) {
-        0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
-        0x0400_0004 => bus.ppu.dispstat.raw = halfword,
-        0x0400_0008...0x0400_000F => bus.ppu.bg[addr & 0x7].cnt.raw = halfword,
-        0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword, // TODO: Don't write out every HOFS / VOFS?
-        0x0400_0012 => bus.ppu.bg[0].vofs.raw = halfword,
-        0x0400_0014 => bus.ppu.bg[1].hofs.raw = halfword,
-        0x0400_0016 => bus.ppu.bg[1].vofs.raw = halfword,
-        0x0400_0018 => bus.ppu.bg[2].hofs.raw = halfword,
-        0x0400_001A => bus.ppu.bg[2].vofs.raw = halfword,
-        0x0400_001C => bus.ppu.bg[3].hofs.raw = halfword,
-        0x0400_001E => bus.ppu.bg[3].vofs.raw = halfword,
-        0x0400_0200 => bus.io.ie.raw = halfword,
-        0x0400_0202 => bus.io.irq.raw = halfword,
-        0x0400_0208 => bus.io.ime = halfword & 1 == 1,
-        else => std.debug.panic("[Io:16] tried to write 0x{X:} to 0x{X:}", .{ halfword, addr }),
-    }
-}
-
-pub fn read8(bus: *const Bus, addr: u32) u8 {
-    return switch (addr) {
-        0x0400_0000 => @truncate(u8, bus.ppu.dispcnt.raw),
-        0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
-        0x0400_0200 => @truncate(u8, bus.io.ie.raw),
-        0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
-        else => std.debug.panic("[Io:8] tried to read from {X:}", .{addr}),
-    };
-}
-
-pub fn write8(self: *Bus, addr: u32, byte: u8) void {
-    switch (addr) {
-        0x0400_0208 => self.io.ime = byte & 1 == 1,
-        0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
-        else => std.debug.panic("[Io:8] tried to write 0x{X:} to 0x{X:}", .{ byte, addr }),
-    }
-}
