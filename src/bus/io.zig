@@ -105,7 +105,7 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_001C => bus.ppu.bg[3].hofs.raw = halfword,
         0x0400_001E => bus.ppu.bg[3].vofs.raw = halfword,
         0x0400_0200 => bus.io.ie.raw = halfword,
-        0x0400_0202 => bus.io.irq.raw = halfword,
+        0x0400_0202 => bus.io.irq.raw &= ~halfword,
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,
         else => std.debug.panic("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }

@@ -25,8 +25,11 @@ pub const Scheduler = struct {
         self.queue.deinit();
     }
 
-    pub fn handleEvent(self: *Self, _: *Arm7tdmi, bus: *Bus) void {
+    pub fn handleEvent(self: *Self, cpu: *Arm7tdmi, bus: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
+        const stat = &bus.ppu.dispstat;
+        const vcount = &bus.ppu.vcount;
+        const irq = &bus.io.irq;
 
         if (should_handle) {
             const event = self.queue.remove();
@@ -38,19 +41,36 @@ pub const Scheduler = struct {
                 },
                 .HBlank => {
                     // The End of a Hblank (During Draw or Vblank)
-                    const old_scanline = bus.ppu.vcount.scanline.read();
+                    const old_scanline = vcount.scanline.read();
                     const scanline = (old_scanline + 1) % 228;
 
-                    bus.ppu.vcount.scanline.write(scanline);
-                    bus.ppu.dispstat.hblank.unset();
+                    vcount.scanline.write(scanline);
+                    stat.hblank.unset();
+
+                    // Perform Vc == VcT check
+                    const coincidence = scanline == stat.vcount_trigger.read();
+                    stat.coincidence.write(coincidence);
+
+                    if (coincidence and stat.vcount_irq.read()) {
+                        irq.coincidence.set();
+                        cpu.handleInterrupt();
+                    }
 
                     if (scanline < 160) {
                         // Transitioning to another Draw
                         self.push(.Draw, self.tick + (240 * 4));
                     } else {
                         // Transitioning to a Vblank
-                        if (scanline < 227) bus.ppu.dispstat.vblank.set() else bus.ppu.dispstat.vblank.unset();
+                        if (scanline == 160) {
+                            stat.vblank.set();
 
+                            if (stat.vblank_irq.read()) {
+                                irq.vblank.set();
+                                cpu.handleInterrupt();
+                            }
+                        }
+
+                        if (scanline == 227) stat.vblank.unset();
                         self.push(.VBlank, self.tick + (240 * 4));
                     }
                 },
@@ -59,11 +79,24 @@ pub const Scheduler = struct {
                     bus.ppu.drawScanline();
 
                     // Transitioning to a Hblank
+                    if (bus.ppu.dispstat.hblank_irq.read()) {
+                        bus.io.irq.hblank.set();
+                        cpu.handleInterrupt();
+                    }
+
                     bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));
                 },
                 .VBlank => {
                     // The end of a Vblank
+
+                    // Transitioning to a Hblank
+                    if (bus.ppu.dispstat.hblank_irq.read()) {
+                        bus.io.irq.hblank.set();
+                        cpu.handleInterrupt();
+                    }
+
+                    bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));
                 },
             }

@@ -246,14 +246,8 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) u64 {
-        if (self.bus.io.is_halted) {
-            // const ie = self.bus.io.ie.raw;
-            // const irq = self.bus.io.irq.raw;
-
-            // if (ie & irq != 0) self.bus.io.is_halted = false;
-
-            // log.warn("FIXME: Enable GBA HALTing", .{});
-        }
+        // If we're halted, the cpu is disabled
+        if (self.bus.io.is_halted) return 1;
 
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
@@ -270,6 +264,32 @@ pub const Arm7tdmi = struct {
         }
 
         return 1;
+    }
+
+    pub fn handleInterrupt(self: *Self) void {
+        const should_handle = self.bus.io.ie.raw & self.bus.io.irq.raw;
+
+        if (should_handle != 0) {
+            self.bus.io.is_halted = false;
+            // log.info("An Interrupt was Fired!", .{});
+
+            // Either IME is not true or I in CPSR is true
+            // Don't handle interrupts
+            if (!self.bus.io.ime or self.cpsr.i.read()) return;
+            // log.info("An interrupt was Handled!", .{});
+
+            // TODO: Should this behave like Software Interrupts?
+            const r15 = self.r[15] + if (self.cpsr.t.read()) @as(u32, 2) else 4;
+            const cpsr = self.cpsr.raw;
+
+            self.changeMode(.Irq);
+            self.cpsr.t.write(false);
+            self.cpsr.i.write(true);
+
+            self.r[14] = r15;
+            self.spsr.raw = cpsr;
+            self.r[15] = 0x000_0018;
+        }
     }
 
     fn thumbFetch(self: *Self) u16 {
