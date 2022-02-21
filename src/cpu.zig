@@ -278,8 +278,8 @@ pub const Arm7tdmi = struct {
             if (!self.bus.io.ime or self.cpsr.i.read()) return;
             // log.info("An interrupt was Handled!", .{});
 
-            // TODO: Should this behave like Software Interrupts?
-            const r15 = self.r[15] + if (self.cpsr.t.read()) @as(u32, 2) else 4;
+            // retAddr.gba says r15 on it's own is off by -04h in both ARM and THUMB mode
+            const r15 = self.r[15] + 4;
             const cpsr = self.cpsr.raw;
 
             self.changeMode(.Irq);
