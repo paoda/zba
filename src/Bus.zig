@@ -138,7 +138,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0800_0000...0x09FF_FFFF => self.pak.get8(addr - 0x0800_0000),
         0x0A00_0000...0x0BFF_FFFF => self.pak.get8(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get8(addr - 0x0C00_0000),
-        0x0E00_0000...0x0E00_FFFF => std.debug.panic("Read from 0x{X:0>2} in Game Pak SRAM", .{addr}),
+        0x0E00_0000...0x0E00_FFFF => self.pak.sram.get8(addr - 0x0E00_0000),
 
         else => std.debug.panic("Tried to read from 0x{X:0>2}", .{addr}),
     };
@@ -153,7 +153,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         0x0400_0410 => log.info("Wrote 0x{X:0>2} to 0x{X:0>8}. Ignored", .{ byte, addr }),
 
         // External Memory (Game Pak)
-        0x0E00_0000...0x0E00_FFFF => log.err("Wrote 0x{X:0>2} to 0x{X:0>8} in Game Pak SRAM", .{ byte, addr }),
+        0x0E00_0000...0x0E00_FFFF => self.pak.sram.set8(addr - 0x0E00_0000, byte),
         else => std.debug.panic("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }

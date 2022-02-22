@@ -1,13 +1,14 @@
 const std = @import("std");
 
+const Sram = @import("Sram.zig");
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.GamePak);
 const Self = @This();
 
 title: [12]u8,
 buf: []u8,
 alloc: Allocator,
-
-const log = std.log.scoped(.GamePak);
+sram: Sram,
 
 pub fn init(alloc: Allocator, path: []const u8) !Self {
     const file = try std.fs.cwd().openFile(path, .{});
@@ -17,7 +18,12 @@ pub fn init(alloc: Allocator, path: []const u8) !Self {
     const buf = try file.readToEndAlloc(alloc, len);
     const title = parseTitle(buf);
 
-    const pak = Self{ .buf = buf, .alloc = alloc, .title = title };
+    const pak = Self{
+        .buf = buf,
+        .alloc = alloc,
+        .title = title,
+        .sram = try Sram.init(alloc),
+    };
     pak.parseHeader();
 
     return pak;
@@ -49,6 +55,7 @@ fn lookupMaker(slice: *const [2]u8) ?[]const u8 {
 
 pub fn deinit(self: Self) void {
     self.alloc.free(self.buf);
+    self.sram.deinit();
 }
 
 pub fn get32(self: *const Self, idx: usize) u32 {
