@@ -33,9 +33,9 @@ pub const Io = struct {
 pub fn read32(bus: *const Bus, addr: u32) u32 {
     return switch (addr) {
         0x0400_0000 => bus.ppu.dispcnt.raw,
-        0x0400_0004 => bus.ppu.dispstat.raw,
-        0x0400_0006 => bus.ppu.vcount.raw,
-        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0004 => @as(u32, bus.ppu.vcount.raw) << 16 | bus.ppu.dispstat.raw,
+        0x0400_0006 => @as(u32, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
+        0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
         0x0400_00C4 => failed_read("Tried to read word from DMA1CNT", .{}),
         0x0400_00D0 => failed_read("Tried to read word from DMA2CNT", .{}),
@@ -78,7 +78,10 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_00C0 => log.warn("Wrote 0x{X:0>8} to DMA1DAD", .{word}),
         0x0400_00C8 => log.warn("Wrote 0x{X:0>8} to DMA2SAD", .{word}),
         0x0400_00CC => log.warn("Wrote 0x{X:0>8} to DMA2DAD", .{word}),
-        0x0400_0200 => bus.io.ie.raw = @truncate(u16, word),
+        0x0400_0200 => {
+            bus.io.ie.raw = @truncate(u16, word);
+            bus.io.irq.raw &= ~@truncate(u16, word >> 16);
+        },
         0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{word}),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
         else => std.debug.panic("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
@@ -92,6 +95,7 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_0006 => bus.ppu.vcount.raw,
         0x0400_0130 => bus.io.keyinput.raw,
         0x0400_0200 => bus.io.ie.raw,
+        0x0400_0202 => bus.io.irq.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
         0x0400_0102 => failed_read("Tried to read halfword from TM0CNT_H", .{}),
         0x0400_0106 => failed_read("Tried to read halfword from TM1CNT_H", .{}),
@@ -106,7 +110,10 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
     switch (addr) {
         0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
         0x0400_0004 => bus.ppu.dispstat.raw = halfword,
-        0x0400_0008...0x0400_000F => bus.ppu.bg[addr & 0x3].cnt.raw = halfword,
+        0x0400_0008 => bus.ppu.bg[0].cnt.raw = halfword,
+        0x0400_000A => bus.ppu.bg[1].cnt.raw = halfword,
+        0x0400_000C => bus.ppu.bg[2].cnt.raw = halfword,
+        0x0400_000E => bus.ppu.bg[3].cnt.raw = halfword,
         0x0400_0010 => bus.ppu.bg[0].hofs.raw = halfword, // TODO: Don't write out every HOFS / VOFS?
         0x0400_0012 => bus.ppu.bg[0].vofs.raw = halfword,
         0x0400_0014 => bus.ppu.bg[1].hofs.raw = halfword,
@@ -171,6 +178,8 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
 
 pub fn write8(self: *Bus, addr: u32, byte: u8) void {
     switch (addr) {
+        0x0400_0004 => self.ppu.dispstat.raw = (self.ppu.dispstat.raw & 0xFF00) | byte,
+        0x0400_0005 => self.ppu.dispstat.raw = (@as(u16, byte) << 8) | (self.ppu.dispstat.raw & 0xFF),
         0x0400_0208 => self.io.ime = byte & 1 == 1,
         0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
         0x0400_0063 => log.warn("Tried to write 0x{X:0>2} to SOUND1CNT_H (high)", .{byte}),
