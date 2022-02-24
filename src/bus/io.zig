@@ -14,7 +14,7 @@ pub const Io = struct {
     ie: InterruptEnable,
     irq: InterruptRequest,
     postflg: PostFlag,
-    is_halted: bool,
+    haltcnt: HaltControl,
 
     keyinput: KeyInput,
 
@@ -23,9 +23,9 @@ pub const Io = struct {
             .ime = false,
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
-            .postflg = .{ .raw = 0x00 },
             .keyinput = .{ .raw = 0x03FF },
-            .is_halted = false,
+            .postflg = .FirstBoot,
+            .haltcnt = .Execute,
         };
     }
 };
@@ -169,7 +169,7 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0000 => @truncate(u8, bus.ppu.dispcnt.raw),
         0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
-        0x0400_0300 => bus.io.postflg.raw,
+        0x0400_0300 => @enumToInt(bus.io.postflg),
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
         0x0400_0089 => failed_read("Tried to read (high) byte from SOUNDBIAS", .{}),
         else => std.debug.panic("Tried to read byte from 0x{X:0>8}", .{addr}),
@@ -181,7 +181,7 @@ pub fn write8(self: *Bus, addr: u32, byte: u8) void {
         0x0400_0004 => self.ppu.dispstat.raw = (self.ppu.dispstat.raw & 0xFF00) | byte,
         0x0400_0005 => self.ppu.dispstat.raw = (@as(u16, byte) << 8) | (self.ppu.dispstat.raw & 0xFF),
         0x0400_0208 => self.io.ime = byte & 1 == 1,
-        0x0400_0301 => self.io.is_halted = byte >> 7 & 1 == 0, // TODO: Implement Stop?
+        0x0400_0301 => self.io.haltcnt = if (byte >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
         0x0400_0063 => log.warn("Tried to write 0x{X:0>2} to SOUND1CNT_H (high)", .{byte}),
         0x0400_0065 => log.warn("Tried to write 0x{X:0>2} to SOUND1CNT_X (high)", .{byte}),
         0x0400_0069 => log.warn("Tried to write 0x{X:0>2} to SOUND2CNT_L (high)", .{byte}),
@@ -200,11 +200,17 @@ fn failed_read(comptime format: []const u8, args: anytype) u8 {
     return 0;
 }
 
-/// Read / Write 
-pub const PostFlag = extern union {
-    /// 0 if First Boot, 1 if a Reset has been done
-    not_first_boot: Bit(u8, 0),
-    raw: u8,
+/// Read / Write
+pub const PostFlag = enum(u1) {
+    FirstBoot = 0,
+    FurtherBoots = 1,
+};
+
+/// Write Only
+pub const HaltControl = enum {
+    Halt,
+    Stop,
+    Execute,
 };
 
 /// Read / Write

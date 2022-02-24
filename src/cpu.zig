@@ -247,7 +247,7 @@ pub const Arm7tdmi = struct {
 
     pub fn step(self: *Self) u64 {
         // If we're halted, the cpu is disabled
-        if (self.bus.io.is_halted) return 1;
+        if (self.bus.io.haltcnt == .Halt) return 1;
 
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
@@ -270,7 +270,7 @@ pub const Arm7tdmi = struct {
         const should_handle = self.bus.io.ie.raw & self.bus.io.irq.raw;
 
         if (should_handle != 0) {
-            self.bus.io.is_halted = false;
+            self.bus.io.haltcnt = .Execute;
             // log.info("An Interrupt was Fired!", .{});
 
             // Either IME is not true or I in CPSR is true
