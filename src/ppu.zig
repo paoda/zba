@@ -115,7 +115,11 @@ pub const Ppu = struct {
             const pal_id = if (!is_8bpp) blk: {
                 tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
                 const pal_bank: u16 = @as(u8, entry.palette_bank.read()) << 4;
-                break :blk pal_bank | tile;
+
+                // If Tile is 0 then we need to access the Backdrop
+                // The backdrop is the first colour in Palette RAM
+                // AFAIK there is no special logic needed for doing this in 8bpp
+                break :blk if (tile == 0) 0 else pal_bank | tile;
             } else tile;
 
             std.mem.copy(u8, scanline_buf[i * 2 ..][0..2], self.palette.buf[pal_id * 2 ..][0..2]);
