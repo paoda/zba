@@ -157,7 +157,7 @@ pub const Ppu = struct {
 
                 // Render Current Scanline
                 for (self.vram.buf[start..end]) |byte, i| {
-                    const id = byte * 2;
+                    const id = @as(u16, byte) * 2;
                     const j = i * @sizeOf(u16);
 
                     std.mem.copy(u8, self.framebuf[(buf_start + j)..][0..2], self.palette.buf[id..][0..2]);
