@@ -3,6 +3,7 @@ const std = @import("std");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
+const DmaController = @import("dma.zig").DmaController;
 
 const log = std.log.scoped(.@"I/O");
 
@@ -16,6 +17,13 @@ pub const Io = struct {
     postflg: PostFlag,
     haltcnt: HaltControl,
 
+    // DMA Controllers
+    // TODO: Figure out how to turn this into an array
+    dma0: DmaController(0),
+    dma1: DmaController(1),
+    dma2: DmaController(2),
+    dma3: DmaController(3),
+
     keyinput: KeyInput,
 
     pub fn init() Self {
@@ -26,6 +34,12 @@ pub const Io = struct {
             .keyinput = .{ .raw = 0x03FF },
             .postflg = .FirstBoot,
             .haltcnt = .Execute,
+
+            // Dma Transfers
+            .dma0 = DmaController(0).init(),
+            .dma1 = DmaController(1).init(),
+            .dma2 = DmaController(2).init(),
+            .dma3 = DmaController(3).init(),
         };
     }
 };
@@ -37,8 +51,10 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
         0x0400_0006 => @as(u32, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
         0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
-        0x0400_00C4 => failed_read("Tried to read word from DMA1CNT", .{}),
-        0x0400_00D0 => failed_read("Tried to read word from DMA2CNT", .{}),
+        0x0400_00B8 => @as(u32, bus.io.dma0.cnt.raw) << 16,
+        0x0400_00C4 => @as(u32, bus.io.dma1.cnt.raw) << 16,
+        0x0400_00D0 => @as(u32, bus.io.dma1.cnt.raw) << 16,
+        0x0400_00DC => @as(u32, bus.io.dma3.cnt.raw) << 16,
         else => std.debug.panic("Tried to read word from 0x{X:0>8}", .{addr}),
     };
 }
@@ -74,10 +90,20 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
             bus.ppu.bg[3].hofs.raw = @truncate(u16, word);
             bus.ppu.bg[3].vofs.raw = @truncate(u16, word >> 16);
         },
-        0x0400_00BC => log.warn("Wrote 0x{X:0>8} to DMA1SAD", .{word}),
-        0x0400_00C0 => log.warn("Wrote 0x{X:0>8} to DMA1DAD", .{word}),
-        0x0400_00C8 => log.warn("Wrote 0x{X:0>8} to DMA2SAD", .{word}),
-        0x0400_00CC => log.warn("Wrote 0x{X:0>8} to DMA2DAD", .{word}),
+        0x0400_00A0 => log.warn("Wrote 0x{X:0>8} to FIFO_A", .{word}),
+        0x0400_00A4 => log.warn("Wrote 0x{X:0>8} to FIFO_B", .{word}),
+        0x0400_00B0 => bus.io.dma0.writeSad(word),
+        0x0400_00B4 => bus.io.dma0.writeDad(word),
+        0x0400_00B8 => bus.io.dma0.writeCnt(word),
+        0x0400_00BC => bus.io.dma1.writeSad(word),
+        0x0400_00C0 => bus.io.dma1.writeDad(word),
+        0x0400_00C4 => bus.io.dma1.writeCnt(word),
+        0x0400_00C8 => bus.io.dma2.writeSad(word),
+        0x0400_00CC => bus.io.dma2.writeDad(word),
+        0x0400_00D0 => bus.io.dma2.writeCnt(word),
+        0x0400_00D4 => bus.io.dma3.writeSad(word),
+        0x0400_00D8 => bus.io.dma3.writeDad(word),
+        0x0400_00DC => bus.io.dma3.writeCnt(word),
         0x0400_0200 => {
             bus.io.ie.raw = @truncate(u16, word);
             bus.io.irq.raw &= ~@truncate(u16, word >> 16);
@@ -135,10 +161,10 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0080 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_L", .{halfword}),
         0x0400_0082 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_H", .{halfword}),
         0x0400_0084 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_X", .{halfword}),
-        0x0400_00BA => log.warn("Wrote 0x{X:0>4} to DMA0CNT_H", .{halfword}),
-        0x0400_00C6 => log.warn("Wrote 0x{X:0>4} to DMA1CNT_H", .{halfword}),
-        0x0400_00D2 => log.warn("Wrote 0x{X:0>4} to DMA2CNT_H", .{halfword}),
-        0x0400_00DE => log.warn("Wrote 0x{X:0>4} to DMA3CNT_H", .{halfword}),
+        0x0400_00BA => bus.io.dma0.writeCntHigh(halfword),
+        0x0400_00C6 => bus.io.dma1.writeCntHigh(halfword),
+        0x0400_00D2 => bus.io.dma2.writeCntHigh(halfword),
+        0x0400_00DE => bus.io.dma3.writeCntHigh(halfword),
         0x0400_0100 => log.warn("Wrote 0x{X:0>4} to TM0CNT_L", .{halfword}),
         0x0400_0102 => log.warn("Wrote 0x{X:0>4} to TM0CNT_H", .{halfword}),
         0x0400_0104 => log.warn("Wrote 0x{X:0>4} to TM1CNT_L", .{halfword}),
@@ -314,5 +340,18 @@ const InterruptRequest = extern union {
     dma3: Bit(u16, 11),
     keypad: Bit(u16, 12),
     game_pak: Bit(u16, 13),
+    raw: u16,
+};
+
+/// Read / Write
+pub const DmaControl = extern union {
+    dad_adj: Bitfield(u16, 5, 2),
+    sad_adj: Bitfield(u16, 7, 2),
+    repeat: Bit(u16, 9),
+    transfer_type: Bit(u16, 10),
+    pak_drq: Bit(u16, 11),
+    start_timing: Bitfield(u16, 12, 2),
+    irq: Bit(u16, 14),
+    enabled: Bit(u16, 15),
     raw: u16,
 };
