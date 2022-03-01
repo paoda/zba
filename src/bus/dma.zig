@@ -85,7 +85,6 @@ pub fn DmaController(comptime id: u2) type {
             const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
 
             var offset: u32 = 0;
-
             if (self.cnt.transfer_type.read()) {
                 offset = @sizeOf(u32); // 32-bit Transfer
                 const word = bus.read32(self._sad);
