@@ -31,6 +31,8 @@ pub const Ppu = struct {
     framebuf: []u8,
     alloc: Allocator,
 
+    scanline_buf: [width]?u16,
+
     pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
         sched.push(.Draw, sched.tick + (240 * 4));
@@ -51,6 +53,8 @@ pub const Ppu = struct {
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
+
+            .scanline_buf = [_]?u16{null} ** width,
         };
     }
 
@@ -60,12 +64,7 @@ pub const Ppu = struct {
         self.palette.deinit();
     }
 
-    fn drawBackround(self: *Self, comptime n: u3, scanline: u32) void {
-        // The Current Scanline which will be copied into
-        // the Framebuffer
-        const start = framebuf_pitch * @as(usize, scanline);
-        var scanline_buf = std.mem.zeroes([framebuf_pitch]u8);
-
+    fn drawBackround(self: *Self, comptime n: u3) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
         const charblock_len: u32 = 0x4000;
         const screenblock_len: u32 = 0x800;
@@ -87,10 +86,13 @@ pub const Ppu = struct {
         const vofs = self.bg[n].vofs.offset.read();
         const hofs = self.bg[n].hofs.offset.read();
 
-        const y = vofs + scanline;
+        const y = vofs + self.vcount.scanline.read();
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
+            // Exit early if a pixel is already here
+            if (self.scanline_buf[i] != null) continue;
+
             const x = hofs + i;
 
             // Grab the Screen Entry from VRAM
@@ -107,25 +109,21 @@ pub const Ppu = struct {
             // Similarly to when we calculated the row, if we're in 4bpp we want to account
             // for 1 byte consisting of two pixels
             const col = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
-            var tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
+            const tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
 
             // If we're in 8bpp, then the tile value is an index into the palette,
             // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
             // and then we can index the palette
             const pal_id = if (!is_8bpp) blk: {
-                tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                const pal_bank: u16 = @as(u8, entry.palette_bank.read()) << 4;
+                const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+                if (nybble_tile == 0) break :blk 0;
 
-                // If Tile is 0 then we need to access the Backdrop
-                // The backdrop is the first colour in Palette RAM
-                // AFAIK there is no special logic needed for doing this in 8bpp
-                break :blk if (tile == 0) 0 else pal_bank | tile;
+                const pal_bank: u16 = @as(u8, entry.palette_bank.read()) << 4;
+                break :blk pal_bank | nybble_tile;
             } else tile;
 
-            std.mem.copy(u8, scanline_buf[i * 2 ..][0..2], self.palette.buf[pal_id * 2 ..][0..2]);
+            if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(pal_id * 2);
         }
-
-        std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], &scanline_buf);
     }
 
     pub fn drawScanline(self: *Self) void {
@@ -135,13 +133,28 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x0 => {
+                const start = framebuf_pitch * @as(usize, scanline);
+
                 var i: usize = 0;
                 while (i < 4) : (i += 1) {
-                    if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0, scanline);
-                    if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1, scanline);
-                    if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2, scanline);
-                    if (i == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3, scanline);
+                    // Draw Sprites Here
+                    if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
+                    if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
+                    if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
+                    if (i == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3);
                 }
+
+                // Copy Drawn Scanline to Frame Buffer
+                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline_buf) |maybe_px, j| {
+                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+
+                    self.framebuf[(start + j * 2 + 1)] = @truncate(u8, bgr555 >> 8);
+                    self.framebuf[(start + j * 2 + 0)] = @truncate(u8, bgr555);
+                }
+
+                // Reset Scanline Buffer
+                std.mem.set(?u16, &self.scanline_buf, null);
             },
             0x3 => {
                 const start = framebuf_pitch * @as(usize, scanline);
@@ -236,6 +249,10 @@ const Palette = struct {
 
     pub fn get8(self: *const Self, idx: usize) u8 {
         return self.buf[idx];
+    }
+
+    fn getBackdrop(self: *const Self) u16 {
+        return self.get16(0);
     }
 };
 
