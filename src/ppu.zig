@@ -83,8 +83,8 @@ pub const Ppu = struct {
         const char_base: u32 = charblock_len * @as(u32, cbb);
         const screen_base: u32 = screenblock_len * @as(u32, sbb);
 
-        const vofs = self.bg[n].vofs.offset.read();
-        const hofs = self.bg[n].hofs.offset.read();
+        const vofs: u32 = self.bg[n].vofs.offset.read();
+        const hofs: u32 = self.bg[n].hofs.offset.read();
 
         const y = vofs + self.vcount.scanline.read();
 
