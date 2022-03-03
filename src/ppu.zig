@@ -102,13 +102,13 @@ pub const Ppu = struct {
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
             const tile_id: u32 = entry.tile_id.read();
-            const row = if (entry.h_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
+            const row = if (entry.v_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
             const tile_addr = char_base + (tile_len * tile_id) + (tile_row_offset * row);
 
             // Calculate on which column in a tile we're on
             // Similarly to when we calculated the row, if we're in 4bpp we want to account
             // for 1 byte consisting of two pixels
-            const col = if (entry.v_flip.read()) 7 - (x % 8) else x % 8;
+            const col = if (entry.h_flip.read()) 7 - (x % 8) else x % 8;
             const tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
 
             // If we're in 8bpp, then the tile value is an index into the palette,
