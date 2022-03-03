@@ -35,6 +35,11 @@ pub fn DmaController(comptime id: u2) type {
         /// Internal. Word Count
         _word_count: if (id == 3) u16 else u14,
 
+        /// Some DMA Transfers are enabled during Hblank / VBlank and / or
+        /// have delays. Thefore bit 15 of DMACNT isn't actually something
+        /// we can use to control when we do or do not execute a step in a DMA Transfer
+        enabled: bool,
+
         pub fn init() Self {
             return .{
                 .id = id,
@@ -47,6 +52,7 @@ pub fn DmaController(comptime id: u2) type {
                 ._sad = 0,
                 ._dad = 0,
                 ._word_count = 0,
+                .enabled = false,
             };
         }
 
@@ -70,6 +76,9 @@ pub fn DmaController(comptime id: u2) type {
                 self._sad = self.sad;
                 self._dad = self.dad;
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
+
+                // Only a Start Timing of 00 has a DMA Transfer immediately begin
+                self.enabled = new.start_timing.read() == 0b00;
             }
 
             self.cnt.raw = halfword;
@@ -80,7 +89,9 @@ pub fn DmaController(comptime id: u2) type {
             self.writeCntHigh(@truncate(u16, word >> 16));
         }
 
-        pub fn step(self: *Self, bus: *Bus) void {
+        pub fn step(self: *Self, bus: *Bus) bool {
+            if (!self.enabled or !self.cnt.enabled.read()) return false;
+
             const sad_adj = std.meta.intToEnum(Adjustment, self.cnt.sad_adj.read()) catch unreachable;
             const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
 
@@ -96,8 +107,8 @@ pub fn DmaController(comptime id: u2) type {
             }
 
             switch (sad_adj) {
-                .Increment => self._sad += offset,
-                .Decrement => self._sad -= offset,
+                .Increment => self._sad +%= offset,
+                .Decrement => self._sad -%= offset,
                 .Fixed => {},
 
                 // TODO: Figure out correct behaviour on Illegal Source Addr Control Type
@@ -105,27 +116,65 @@ pub fn DmaController(comptime id: u2) type {
             }
 
             switch (dad_adj) {
-                .Increment, .IncrementReload => self._dad += offset,
-                .Decrement => self._dad -= offset,
+                .Increment, .IncrementReload => self._dad +%= offset,
+                .Decrement => self._dad -%= offset,
                 .Fixed => {},
             }
 
             self._word_count -= 1;
 
             if (self._word_count == 0) {
-                if (self.cnt.irq.read()) {
-                    switch (id) {
-                        0 => bus.io.irq.dma0.set(),
-                        1 => bus.io.irq.dma0.set(),
-                        2 => bus.io.irq.dma0.set(),
-                        3 => bus.io.irq.dma0.set(),
+                if (!self.cnt.repeat.read()) {
+                    // If we're not repeating, Fire the IRQs and disable the DMA
+                    if (self.cnt.irq.read()) {
+                        switch (id) {
+                            0 => bus.io.irq.dma0.set(),
+                            1 => bus.io.irq.dma0.set(),
+                            2 => bus.io.irq.dma0.set(),
+                            3 => bus.io.irq.dma0.set(),
+                        }
                     }
+                    self.cnt.enabled.unset();
                 }
 
-                self.cnt.enabled.unset();
+                // We want to disable our internal enabled flag regardless of repeat
+                // because we only want to step A DMA that repeats during it's specific
+                // timing window
+                self.enabled = false;
+            }
+
+            return true;
+        }
+
+        pub fn isBlocking(self: *const Self) bool {
+            // A DMA Transfer is Blocking if it is Immediate
+            return self.cnt.start_timing.read() == 0b00;
+        }
+
+        pub fn pollBlankingDma(self: *Self, comptime kind: DmaKind) void {
+            if (self.enabled) return;
+
+            switch (kind) {
+                .HBlank => self.enabled = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
+                .VBlank => self.enabled = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
+                .Immediate, .Special => {},
+            }
+
+            if (self.cnt.repeat.read() and self.enabled) {
+                self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
+
+                const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
+                if (dad_adj == .IncrementReload) self._dad = self.dad;
             }
         }
     };
+}
+
+pub fn pollBlankingDma(bus: *Bus, comptime kind: DmaKind) void {
+    bus.io.dma0.pollBlankingDma(kind);
+    bus.io.dma1.pollBlankingDma(kind);
+    bus.io.dma2.pollBlankingDma(kind);
+    bus.io.dma3.pollBlankingDma(kind);
 }
 
 const Adjustment = enum(u2) {
@@ -133,4 +182,11 @@ const Adjustment = enum(u2) {
     Decrement = 1,
     Fixed = 2,
     IncrementReload = 3,
+};
+
+const DmaKind = enum(u2) {
+    Immediate = 0,
+    HBlank,
+    VBlank,
+    Special,
 };

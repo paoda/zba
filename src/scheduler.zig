@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
+
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
@@ -68,6 +70,9 @@ pub const Scheduler = struct {
                                 irq.vblank.set();
                                 cpu.handleInterrupt();
                             }
+
+                            // See if Vblank DMA is present and not enabled
+                            pollBlankingDma(bus, .VBlank);
                         }
 
                         if (scanline == 227) stat.vblank.unset();
@@ -84,6 +89,9 @@ pub const Scheduler = struct {
                         cpu.handleInterrupt();
                     }
 
+                    // See if Hblank DMA is present and not enabled
+                    pollBlankingDma(bus, .HBlank);
+
                     bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));
                 },
@@ -95,6 +103,9 @@ pub const Scheduler = struct {
                         bus.io.irq.hblank.set();
                         cpu.handleInterrupt();
                     }
+
+                    // See if Hblank DMA is present and not enabled
+                    pollBlankingDma(bus, .HBlank);
 
                     bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));

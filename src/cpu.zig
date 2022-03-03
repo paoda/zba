@@ -296,30 +296,10 @@ pub const Arm7tdmi = struct {
     }
 
     fn handleDMATransfers(self: *Self) bool {
-        const dma0 = &self.bus.io.dma0;
-        const dma1 = &self.bus.io.dma1;
-        const dma2 = &self.bus.io.dma2;
-        const dma3 = &self.bus.io.dma3;
-
-        if (dma0.cnt.enabled.read() and dma0.cnt.start_timing.read() == 0) {
-            dma0.step(self.bus);
-            return true;
-        }
-
-        if (dma1.cnt.enabled.read() and dma1.cnt.start_timing.read() == 0) {
-            dma1.step(self.bus);
-            return true;
-        }
-
-        if (dma2.cnt.enabled.read() and dma2.cnt.start_timing.read() == 0) {
-            dma2.step(self.bus);
-            return true;
-        }
-
-        if (dma3.cnt.enabled.read() and dma3.cnt.start_timing.read() == 0) {
-            dma3.step(self.bus);
-            return true;
-        }
+        if (self.bus.io.dma0.step(self.bus)) return self.bus.io.dma0.isBlocking();
+        if (self.bus.io.dma1.step(self.bus)) return self.bus.io.dma1.isBlocking();
+        if (self.bus.io.dma2.step(self.bus)) return self.bus.io.dma2.isBlocking();
+        if (self.bus.io.dma3.step(self.bus)) return self.bus.io.dma3.isBlocking();
 
         return false;
     }
