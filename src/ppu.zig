@@ -366,3 +366,28 @@ const ScreenEntry = extern union {
     palette_bank: Bitfield(u16, 12, 4),
     raw: u16,
 };
+
+const Attr0 = extern union {
+    y: Bitfield(u16, 0, 8),
+    rot_scaling: Bit(u16, 8), // This SBZ
+    disabled: Bit(u16, 9),
+    mode: Bitfield(u16, 10, 2),
+    mosaic: Bit(u16, 12),
+    is_8bpp: Bit(u16, 13),
+    shape: Bit(u16, 14, 2),
+    raw: u16,
+};
+
+const Attr1 = extern union {
+    x: Bitfield(u16, 0, 9),
+    h_flip: Bit(u16, 12),
+    v_flip: Bit(u16, 13),
+    size: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+const Attr2 = extern union {
+    tile_id: Bitfield(u16, 0, 10),
+    rel_prio: Bitfield(u16, 10, 2),
+    pal_id: Bitfield(u16, 12, 3),
+};
