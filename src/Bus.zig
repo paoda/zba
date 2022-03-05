@@ -57,10 +57,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0A00_0000...0x0BFF_FFFF => self.pak.get32(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get32(addr - 0x0C00_0000),
 
-        else => blk: {
-            log.warn("Tried to read from 0x{X:0>8}", .{addr});
-            break :blk 0x0000_0000;
-        },
+        else => failedRead("Tried to read from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -156,4 +153,9 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         0x0E00_0000...0x0E00_FFFF => self.pak.sram.set8(addr - 0x0E00_0000, byte),
         else => std.debug.panic("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
+}
+
+fn failedRead(comptime format: []const u8, args: anytype) u8 {
+    log.warn(format, args);
+    return 0;
 }

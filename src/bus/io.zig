@@ -42,6 +42,11 @@ pub const Io = struct {
             .dma3 = DmaController(3).init(),
         };
     }
+
+    fn setIrqs(self: *Io, word: u32) void {
+        self.ie.raw = @truncate(u16, word);
+        self.irq.raw &= ~@truncate(u16, word >> 16);
+    }
 };
 
 pub fn read32(bus: *const Bus, addr: u32) u32 {
@@ -66,30 +71,12 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
             bus.ppu.dispstat.raw = @truncate(u16, word);
             bus.ppu.vcount.raw = @truncate(u16, word >> 16);
         },
-        0x0400_0008 => {
-            bus.ppu.bg[0].cnt.raw = @truncate(u16, word);
-            bus.ppu.bg[1].cnt.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_000C => {
-            bus.ppu.bg[2].cnt.raw = @truncate(u16, word);
-            bus.ppu.bg[3].cnt.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0010 => {
-            bus.ppu.bg[0].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[0].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0014 => {
-            bus.ppu.bg[1].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[1].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_0018 => {
-            bus.ppu.bg[2].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[2].vofs.raw = @truncate(u16, word >> 16);
-        },
-        0x0400_001C => {
-            bus.ppu.bg[3].hofs.raw = @truncate(u16, word);
-            bus.ppu.bg[3].vofs.raw = @truncate(u16, word >> 16);
-        },
+        0x0400_0008 => bus.ppu.setAdjCnts(0, word),
+        0x0400_000C => bus.ppu.setAdjCnts(2, word),
+        0x0400_0010 => bus.ppu.setBgOffsets(0, word),
+        0x0400_0014 => bus.ppu.setBgOffsets(1, word),
+        0x0400_0018 => bus.ppu.setBgOffsets(2, word),
+        0x0400_001C => bus.ppu.setBgOffsets(3, word),
         0x0400_00A0 => log.warn("Wrote 0x{X:0>8} to FIFO_A", .{word}),
         0x0400_00A4 => log.warn("Wrote 0x{X:0>8} to FIFO_B", .{word}),
         0x0400_00B0 => bus.io.dma0.writeSad(word),
@@ -104,10 +91,7 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_00D4 => bus.io.dma3.writeSad(word),
         0x0400_00D8 => bus.io.dma3.writeDad(word),
         0x0400_00DC => bus.io.dma3.writeCnt(word),
-        0x0400_0200 => {
-            bus.io.ie.raw = @truncate(u16, word);
-            bus.io.irq.raw &= ~@truncate(u16, word >> 16);
-        },
+        0x0400_0200 => bus.io.setIrqs(word),
         0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{word}),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
         else => std.debug.panic("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
@@ -123,11 +107,11 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_0200 => bus.io.ie.raw,
         0x0400_0202 => bus.io.irq.raw,
         0x0400_0208 => @boolToInt(bus.io.ime),
-        0x0400_0102 => failed_read("Tried to read halfword from TM0CNT_H", .{}),
-        0x0400_0106 => failed_read("Tried to read halfword from TM1CNT_H", .{}),
-        0x0400_010A => failed_read("Tried to read halfword from TM2CNT_H", .{}),
-        0x0400_010E => failed_read("Tried to read halfword from TM3CNT_H", .{}),
-        0x0400_0204 => failed_read("Tried to read halfword from WAITCNT", .{}),
+        0x0400_0102 => failedRead("Tried to read halfword from TM0CNT_H", .{}),
+        0x0400_0106 => failedRead("Tried to read halfword from TM1CNT_H", .{}),
+        0x0400_010A => failedRead("Tried to read halfword from TM2CNT_H", .{}),
+        0x0400_010E => failedRead("Tried to read halfword from TM3CNT_H", .{}),
+        0x0400_0204 => failedRead("Tried to read halfword from WAITCNT", .{}),
         else => std.debug.panic("Tried to read halfword from 0x{X:0>8}", .{addr}),
     };
 }
@@ -201,7 +185,7 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
         0x0400_0300 => @enumToInt(bus.io.postflg),
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
-        0x0400_0089 => failed_read("Tried to read (high) byte from SOUNDBIAS", .{}),
+        0x0400_0089 => failedRead("Tried to read (high) byte from SOUNDBIAS", .{}),
         else => std.debug.panic("Tried to read byte from 0x{X:0>8}", .{addr}),
     };
 }
@@ -225,7 +209,7 @@ pub fn write8(self: *Bus, addr: u32, byte: u8) void {
     }
 }
 
-fn failed_read(comptime format: []const u8, args: anytype) u8 {
+fn failedRead(comptime format: []const u8, args: anytype) u8 {
     log.warn(format, args);
     return 0;
 }

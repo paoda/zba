@@ -64,6 +64,16 @@ pub const Ppu = struct {
         self.palette.deinit();
     }
 
+    pub fn setBgOffsets(self: *Self, comptime n: u3, word: u32) void {
+        self.bg[n].hofs.raw = @truncate(u16, word);
+        self.bg[n].vofs.raw = @truncate(u16, word >> 16);
+    }
+
+    pub fn setAdjCnts(self: *Self, comptime n: u3, word: u32) void {
+        self.bg[n].cnt.raw = @truncate(u16, word);
+        self.bg[n + 1].cnt.raw = @truncate(u16, word >> 16);
+    }
+
     fn drawBackround(self: *Self, comptime n: u3) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
         const charblock_len: u32 = 0x4000;
