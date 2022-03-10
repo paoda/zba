@@ -8,6 +8,7 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.PPU);
 
 pub const width = 240;
 pub const height = 160;
@@ -31,6 +32,7 @@ pub const Ppu = struct {
     framebuf: []u8,
     alloc: Allocator,
 
+    scanline_sprites: [128]?Sprite,
     scanline_buf: [width]?u16,
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
@@ -55,6 +57,7 @@ pub const Ppu = struct {
             .vcount = .{ .raw = 0x0000 },
 
             .scanline_buf = [_]?u16{null} ** width,
+            .scanline_sprites = [_]?Sprite{null} ** 128,
         };
     }
 
@@ -72,6 +75,139 @@ pub const Ppu = struct {
     pub fn setAdjCnts(self: *Self, comptime n: u3, word: u32) void {
         self.bg[n].cnt.raw = @truncate(u16, word);
         self.bg[n + 1].cnt.raw = @truncate(u16, word >> 16);
+    }
+
+    /// Search OAM for Sprites that might be rendered on this scanline
+    fn fetchSprites(self: *Self) void {
+        const y = self.vcount.scanline.read();
+
+        var i: usize = 0;
+        search: while (i < self.oam.buf.len) : (i += 8) {
+            // Attributes in OAM are 6 bytes long, with 2 bytes of padding
+            // Grab Attributes from OAM
+            const attr0 = @bitCast(Attr0, self.oam.get16(i));
+            const attr1 = @bitCast(Attr1, self.oam.get16(i + 2));
+            const attr2 = @bitCast(Attr2, self.oam.get16(i + 4));
+            const sprite = Sprite.init(attr0, attr1, attr2);
+
+            // Only consider enabled sprites
+            if (sprite.isDisabled()) continue;
+
+            // Determine sprite bounds
+            // We only care about the Y axis since that value remains constant
+            const sy = sprite.y();
+            const sy_end = sy + sprite.height;
+
+            if ((sy <= y and sy_end > y) or (sy_end < sy and y < sy_end)) {
+                for (self.scanline_sprites) |*maybe_sprite| {
+                    if (maybe_sprite.* == null) {
+                        maybe_sprite.* = sprite;
+                        continue :search;
+                    }
+                }
+
+                log.err("Found more than 128 sprites in OAM Search", .{});
+                unreachable;
+            }
+        }
+    }
+
+    fn drawSprite(self: *Self, prio: u2) void {
+        // Object VRAM 3rd and 4th (0-indexed) charblocks
+        const char_base = 0x4000 * 4;
+        const scanline = self.vcount.scanline.read();
+
+        var i: u32 = 0;
+        while (i < width) : (i += 1) {
+            // Exit early if a pixel is already here
+            if (self.scanline_buf[i] != null) continue;
+
+            const x = i;
+            const y = scanline;
+
+            // Find Relevant Tile
+            var maybe_sprite: ?Sprite = null;
+
+            for (self.scanline_sprites) |sprite_opt| {
+                if (sprite_opt) |sprite| {
+                    if (sprite.priority() != prio) continue;
+
+                    const sx = sprite.x();
+                    const sx_end = sx + sprite.width;
+
+                    if (sx <= x and sx_end > x) {
+                        maybe_sprite = sprite;
+                        break;
+                    }
+                } else break;
+            }
+
+            // // TODO: Scanning OAM for every single pixel is insanely expensive
+            // // This should be done once per scanline (and then check for X bounds every pixel)
+            // var j: u32 = 0;
+            // while (j < self.oam.buf.len) : (j += 8) {
+            //     // Attributes in OAM are 6 bytes long, with 2 bytes of padding
+            //     // Grab Attributes from OAM
+            //     const attr0 = @bitCast(Attr0, self.oam.get16(j));
+            //     const attr1 = @bitCast(Attr1, self.oam.get16(j + 2));
+            //     const attr2 = @bitCast(Attr2, self.oam.get16(j + 4));
+
+            //     // Only consider enabled sprites on the current priority
+            //     if (attr0.disabled.read() or attr2.rel_prio.read() != prio) continue;
+
+            //     // Determine sprite bounds
+            //     const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
+            //     const sy = attr0.y.read();
+            //     const sx = attr1.x.read();
+            //     const sx_end = sx + d[0];
+            //     const sy_end = sy + d[1];
+
+            //     // If sprite is in range
+            //     if (sy < y and sy_end > y and sx < x and sx_end > x) {
+            //         maybe_sprite = Sprite.init(attr0, attr1, attr2);
+            //         break;
+            //     }
+            // }
+
+            // If we didn't find a sprite, progress to the next pixel
+            const sprite: Sprite = if (maybe_sprite) |s| s else continue;
+            const is_8bpp = sprite.is_8bpp();
+
+            // Y and X coordinates within the context of a singular 8x8 tile
+            const tile_y = y - sprite.y();
+            const tile_x = x - sprite.x();
+
+            const tile_id: u32 = sprite.tile_id();
+            const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
+            const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
+
+            const row = if (sprite.v_flip()) 7 - (tile_y % 8) else tile_y % 8;
+            const col = if (sprite.h_flip()) 7 - (tile_x % 8) else tile_x % 8;
+
+            const tile_base: u32 = char_base + (0x20 * tile_id) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
+
+            var tile_offset = (tile_x >> 3) * tile_len;
+            if (self.dispcnt.obj_mapping.read()) {
+                // One Dimensional
+                tile_offset += (tile_y / 8) * tile_len * (sprite.width >> 3);
+            } else {
+                // Two Dimensional
+                tile_offset += (@as(u32, tile_y) >> 3) * tile_len * 0x20;
+            }
+
+            const tile = self.vram.buf[tile_base + tile_offset];
+
+            const pal_id = if (!is_8bpp) blk: {
+                const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+                if (nybble_tile == 0) break :blk 0;
+
+                const pal_bank: u16 = @as(u8, sprite.pal_bank()) << 4;
+                break :blk pal_bank | nybble_tile;
+            } else tile;
+
+            // Sprite Palette starts at 0x0500_0200
+            if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(0x200 + pal_id * 2);
+        }
     }
 
     fn drawBackround(self: *Self, comptime n: u3) void {
@@ -139,15 +275,19 @@ pub const Ppu = struct {
     pub fn drawScanline(self: *Self) void {
         const bg_mode = self.dispcnt.bg_mode.read();
         const bg_enable = self.dispcnt.bg_enable.read();
+        const obj_enable = self.dispcnt.obj_enable.read();
         const scanline = self.vcount.scanline.read();
 
         switch (bg_mode) {
             0x0 => {
                 const start = framebuf_pitch * @as(usize, scanline);
 
+                self.fetchSprites();
+
                 var i: usize = 0;
                 while (i < 4) : (i += 1) {
                     // Draw Sprites Here
+                    if (obj_enable) self.drawSprite(@truncate(u2, i));
                     if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
                     if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
                     if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
@@ -165,6 +305,8 @@ pub const Ppu = struct {
 
                 // Reset Scanline Buffer
                 std.mem.set(?u16, &self.scanline_buf, null);
+                // Reset List of Sprites
+                std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x3 => {
                 const start = framebuf_pitch * @as(usize, scanline);
@@ -377,6 +519,73 @@ const ScreenEntry = extern union {
     raw: u16,
 };
 
+const Sprite = struct {
+    const Self = @This();
+
+    attr0: Attr0,
+    attr1: Attr1,
+    attr2: Attr2,
+
+    width: u16,
+    height: u16,
+
+    fn init(attr0: Attr0, attr1: Attr1, attr2: Attr2) Self {
+        const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
+
+        return .{
+            .attr0 = attr0,
+            .attr1 = attr1,
+            .attr2 = attr2,
+            .width = d[0],
+            .height = d[1],
+        };
+    }
+
+    fn x(self: *const Self) u16 {
+        return self.attr1.x.read();
+    }
+
+    fn y(self: *const Self) u8 {
+        return self.attr0.y.read();
+    }
+
+    fn is_8bpp(self: *const Self) bool {
+        return self.attr0.is_8bpp.read();
+    }
+
+    fn shape(self: *const Self) u2 {
+        return self.attr0.shape.read();
+    }
+
+    fn size(self: *const Self) u2 {
+        return self.attr1.size.read();
+    }
+
+    fn tile_id(self: *const Self) u10 {
+        return self.attr2.tile_id.read();
+    }
+
+    fn pal_bank(self: *const Self) u4 {
+        return self.attr2.pal_bank.read();
+    }
+
+    fn h_flip(self: *const Self) bool {
+        return self.attr1.h_flip.read();
+    }
+
+    fn v_flip(self: *const Self) bool {
+        return self.attr1.v_flip.read();
+    }
+
+    fn priority(self: *const Self) u2 {
+        return self.attr2.rel_prio.read();
+    }
+
+    fn isDisabled(self: *const Self) bool {
+        return self.attr0.disabled.read();
+    }
+};
+
 const Attr0 = extern union {
     y: Bitfield(u16, 0, 8),
     rot_scaling: Bit(u16, 8), // This SBZ
@@ -384,7 +593,7 @@ const Attr0 = extern union {
     mode: Bitfield(u16, 10, 2),
     mosaic: Bit(u16, 12),
     is_8bpp: Bit(u16, 13),
-    shape: Bit(u16, 14, 2),
+    shape: Bitfield(u16, 14, 2),
     raw: u16,
 };
 
@@ -399,5 +608,32 @@ const Attr1 = extern union {
 const Attr2 = extern union {
     tile_id: Bitfield(u16, 0, 10),
     rel_prio: Bitfield(u16, 10, 2),
-    pal_id: Bitfield(u16, 12, 3),
+    pal_bank: Bitfield(u16, 12, 4),
 };
+
+fn spriteDimensions(shape: u2, size: u2) [2]u16 {
+    @setRuntimeSafety(false);
+
+    return switch (shape) {
+        0b00 => switch (size) {
+            // Square
+            0b00 => [_]u16{ 8, 8 },
+            0b01 => [_]u16{ 16, 16 },
+            0b10 => [_]u16{ 32, 32 },
+            0b11 => [_]u16{ 64, 64 },
+        },
+        0b01 => switch (size) {
+            0b00 => [_]u16{ 16, 8 },
+            0b01 => [_]u16{ 32, 8 },
+            0b10 => [_]u16{ 32, 16 },
+            0b11 => [_]u16{ 64, 32 },
+        },
+        0b10 => switch (size) {
+            0b00 => [_]u16{ 8, 16 },
+            0b01 => [_]u16{ 8, 32 },
+            0b10 => [_]u16{ 16, 32 },
+            0b11 => [_]u16{ 32, 64 },
+        },
+        else => std.debug.panic("{} is an invalid sprite shape", .{shape}),
+    };
+}
