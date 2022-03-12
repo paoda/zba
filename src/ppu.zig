@@ -93,12 +93,19 @@ pub const Ppu = struct {
             // Only consider enabled sprites
             if (sprite.isDisabled()) continue;
 
-            // Determine sprite bounds
-            // We only care about the Y axis since that value remains constant
-            const start = sprite.y();
-            const end = start + sprite.height;
+            // When fetching sprites we only care about ones that could be rendered
+            // on this scanline
+            const iy = @bitCast(i8, y);
 
-            if (start <= y and y < end) {
+            const start = sprite.y();
+            const istart = @bitCast(i8, start);
+
+            const end = start +% sprite.height;
+            const iend = @bitCast(i8, end);
+
+            // Sprites are expected to be able to wraparound, we perform the same check
+            // for unsigned and signed values so that we handle all valid sprite positions
+            if ((start <= y and y < end) or (istart <= iy and iy < iend)) {
                 for (self.scanline_sprites) |*maybe_sprite| {
                     if (maybe_sprite.* == null) {
                         maybe_sprite.* = sprite;
@@ -112,70 +119,88 @@ pub const Ppu = struct {
         }
     }
 
+    /// Draw all relevant sprites on a scanline
     fn drawSprites(self: *Self, prio: u2) void {
         // Object VRAM 3rd and 4th (0-indexed) charblocks
         const char_base = 0x4000 * 4;
-        const scanline = self.vcount.scanline.read();
+        const y = @bitCast(i8, self.vcount.scanline.read());
 
-        var i: u32 = 0;
+        var i: u9 = 0;
         while (i < width) : (i += 1) {
             // Exit early if a pixel is already here
             if (self.scanline_buf[i] != null) continue;
 
             const x = i;
-            const y = scanline;
 
             for (self.scanline_sprites) |maybe_sprite| {
                 if (maybe_sprite) |sprite| {
                     if (sprite.priority() != prio) continue;
 
+                    const ix = @bitCast(i9, x);
+
                     const start = sprite.x();
-                    const end = start + sprite.width;
+                    const istart = @bitCast(i9, start);
 
-                    if (start <= x and x < end) {
+                    const end = start +% sprite.width;
+                    const iend = @bitCast(i9, end);
 
-                        // FIXME: We branch on this condition quite a lot
-                        const is_8bpp = sprite.is_8bpp();
-
-                        // Y and X coordinates within the context of a singular 8x8 tile
-                        const tile_y: u16 = (y - sprite.y()) ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
-                        const tile_x = (x - sprite.x()) ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
-
-                        const tile_id: u32 = sprite.tile_id();
-                        const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
-                        const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
-
-                        const row = tile_y % 8;
-                        const col = tile_x % 8;
-
-                        const tile_base: u32 = char_base + (0x20 * tile_id) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
-
-                        var tile_offset = (tile_x / 8) * tile_len;
-                        if (self.dispcnt.obj_mapping.read()) {
-                            // One Dimensional
-                            tile_offset += (tile_y / 8) * tile_len * (sprite.width / 8);
-                        } else {
-                            // Two Dimensional
-                            // TODO: This doesn't work
-                            tile_offset += (tile_y / 8) * tile_len * 0x20;
-                        }
-
-                        const tile = self.vram.buf[tile_base + tile_offset];
-
-                        const pal_id: u16 = if (!is_8bpp) blk: {
-                            const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                            if (nybble_tile == 0) break :blk 0;
-
-                            const pal_bank = @as(u8, sprite.pal_bank()) << 4;
-                            break :blk pal_bank | nybble_tile;
-                        } else tile;
-
-                        // Sprite Palette starts at 0x0500_0200
-                        if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(0x200 + pal_id * 2);
+                    // Sprites are expected to wrap, by performing the same check on both
+                    // signed and unsigned values we ensure that sprites are properly displayed
+                    // in all valid scenarios
+                    if ((start <= x and x < end) or (istart <= ix and ix < iend)) {
+                        self.drawSpritePixel(char_base, sprite, ix, y);
                     }
                 } else break;
             }
         }
+    }
+
+    /// Draw a Pixel of a Sprite Tile
+    fn drawSpritePixel(self: *Self, char_base: u32, sprite: Sprite, x: i9, y: i8) void {
+        // FIXME: We branch on this condition quite a lot
+        const is_8bpp = sprite.is_8bpp();
+
+        // std.math.absInt is branchless
+        const x_diff = @bitCast(u9, std.math.absInt(x - @bitCast(i9, sprite.x())) catch unreachable);
+        const y_diff = @bitCast(u8, std.math.absInt(y -% @bitCast(i8, sprite.y())) catch unreachable);
+
+        // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
+        // Background Tiles. By doing this we mirror the entire sprite instead of
+        // just a specific tile (see how sprite.width and sprite.height are involved)
+        const tile_y = y_diff ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
+        const tile_x = x_diff ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
+
+        // Like in the background Tiles are 8x8 groups of pixels in 8bpp or 4bpp formats
+        const tile_id = sprite.tile_id();
+        const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
+        const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
+
+        const row = tile_y % 8;
+        const col = tile_x % 8;
+
+        // When calcualting the inital address, the first entry is always 0x20 * tile_id, even if it is 8bpp
+        const tile_base = char_base + (0x20 * @as(u32, tile_id)) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
+
+        // TODO: Understand more
+        var tile_offset = (tile_x / 8) * tile_len;
+        if (self.dispcnt.obj_mapping.read()) {
+            tile_offset += (tile_y / 8) * tile_len * (sprite.width / 8); // 1D Mapping
+        } else {
+            tile_offset += (tile_y / 8) * tile_len * 0x20; // 2D Mapping
+        }
+
+        const tile = self.vram.buf[tile_base + tile_offset];
+
+        const pal_id: u16 = if (!is_8bpp) blk: {
+            const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+            if (nybble_tile == 0) break :blk 0;
+
+            const pal_bank = @as(u8, sprite.pal_bank()) << 4;
+            break :blk pal_bank | nybble_tile;
+        } else tile;
+
+        // Sprite Palette starts at 0x0500_0200
+        if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.get16(0x200 + pal_id * 2);
     }
 
     fn drawBackround(self: *Self, comptime n: u3) void {
@@ -228,11 +253,11 @@ pub const Ppu = struct {
             // If we're in 8bpp, then the tile value is an index into the palette,
             // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
             // and then we can index the palette
-            const pal_id = if (!is_8bpp) blk: {
+            const pal_id: u16 = if (!is_8bpp) blk: {
                 const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
                 if (nybble_tile == 0) break :blk 0;
 
-                const pal_bank: u16 = @as(u8, entry.palette_bank.read()) << 4;
+                const pal_bank = @as(u8, entry.pal_bank.read()) << 4;
                 break :blk pal_bank | nybble_tile;
             } else tile;
 
@@ -483,7 +508,7 @@ const ScreenEntry = extern union {
     tile_id: Bitfield(u16, 0, 10),
     h_flip: Bit(u16, 10),
     v_flip: Bit(u16, 11),
-    palette_bank: Bitfield(u16, 12, 4),
+    pal_bank: Bitfield(u16, 12, 4),
     raw: u16,
 };
 
@@ -494,8 +519,8 @@ const Sprite = struct {
     attr1: Attr1,
     attr2: Attr2,
 
-    width: u16,
-    height: u16,
+    width: u8,
+    height: u8,
 
     fn init(attr0: Attr0, attr1: Attr1, attr2: Attr2) Self {
         const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
@@ -509,7 +534,7 @@ const Sprite = struct {
         };
     }
 
-    inline fn x(self: *const Self) u16 {
+    inline fn x(self: *const Self) u9 {
         return self.attr1.x.read();
     }
 
@@ -579,28 +604,28 @@ const Attr2 = extern union {
     pal_bank: Bitfield(u16, 12, 4),
 };
 
-fn spriteDimensions(shape: u2, size: u2) [2]u16 {
+fn spriteDimensions(shape: u2, size: u2) [2]u8 {
     @setRuntimeSafety(false);
 
     return switch (shape) {
         0b00 => switch (size) {
             // Square
-            0b00 => [_]u16{ 8, 8 },
-            0b01 => [_]u16{ 16, 16 },
-            0b10 => [_]u16{ 32, 32 },
-            0b11 => [_]u16{ 64, 64 },
+            0b00 => [_]u8{ 8, 8 },
+            0b01 => [_]u8{ 16, 16 },
+            0b10 => [_]u8{ 32, 32 },
+            0b11 => [_]u8{ 64, 64 },
         },
         0b01 => switch (size) {
-            0b00 => [_]u16{ 16, 8 },
-            0b01 => [_]u16{ 32, 8 },
-            0b10 => [_]u16{ 32, 16 },
-            0b11 => [_]u16{ 64, 32 },
+            0b00 => [_]u8{ 16, 8 },
+            0b01 => [_]u8{ 32, 8 },
+            0b10 => [_]u8{ 32, 16 },
+            0b11 => [_]u8{ 64, 32 },
         },
         0b10 => switch (size) {
-            0b00 => [_]u16{ 8, 16 },
-            0b01 => [_]u16{ 8, 32 },
-            0b10 => [_]u16{ 16, 32 },
-            0b11 => [_]u16{ 32, 64 },
+            0b00 => [_]u8{ 8, 16 },
+            0b01 => [_]u8{ 8, 32 },
+            0b10 => [_]u8{ 16, 32 },
+            0b11 => [_]u8{ 32, 64 },
         },
         else => std.debug.panic("{} is an invalid sprite shape", .{shape}),
     };
