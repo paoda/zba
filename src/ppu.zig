@@ -95,10 +95,10 @@ pub const Ppu = struct {
 
             // Determine sprite bounds
             // We only care about the Y axis since that value remains constant
-            const sy = sprite.y();
-            const sy_end = sy + sprite.height;
+            const start = sprite.y();
+            const end = start + sprite.height;
 
-            if ((sy <= y and sy_end > y) or (sy_end < sy and y < sy_end)) {
+            if (start <= y and y < end) {
                 for (self.scanline_sprites) |*maybe_sprite| {
                     if (maybe_sprite.* == null) {
                         maybe_sprite.* = sprite;
@@ -107,12 +107,12 @@ pub const Ppu = struct {
                 }
 
                 log.err("Found more than 128 sprites in OAM Search", .{});
-                unreachable;
+                unreachable; // TODO: Is this truly unreachable?
             }
         }
     }
 
-    fn drawSprite(self: *Self, prio: u2) void {
+    fn drawSprites(self: *Self, prio: u2) void {
         // Object VRAM 3rd and 4th (0-indexed) charblocks
         const char_base = 0x4000 * 4;
         const scanline = self.vcount.scanline.read();
@@ -125,88 +125,56 @@ pub const Ppu = struct {
             const x = i;
             const y = scanline;
 
-            // Find Relevant Tile
-            var maybe_sprite: ?Sprite = null;
-
-            for (self.scanline_sprites) |sprite_opt| {
-                if (sprite_opt) |sprite| {
+            for (self.scanline_sprites) |maybe_sprite| {
+                if (maybe_sprite) |sprite| {
                     if (sprite.priority() != prio) continue;
 
-                    const sx = sprite.x();
-                    const sx_end = sx + sprite.width;
+                    const start = sprite.x();
+                    const end = start + sprite.width;
 
-                    if (sx <= x and sx_end > x) {
-                        maybe_sprite = sprite;
-                        break;
+                    if (start <= x and x < end) {
+
+                        // FIXME: We branch on this condition quite a lot
+                        const is_8bpp = sprite.is_8bpp();
+
+                        // Y and X coordinates within the context of a singular 8x8 tile
+                        const tile_y: u16 = (y - sprite.y()) ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
+                        const tile_x = (x - sprite.x()) ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
+
+                        const tile_id: u32 = sprite.tile_id();
+                        const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
+                        const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
+
+                        const row = tile_y % 8;
+                        const col = tile_x % 8;
+
+                        const tile_base: u32 = char_base + (0x20 * tile_id) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
+
+                        var tile_offset = (tile_x / 8) * tile_len;
+                        if (self.dispcnt.obj_mapping.read()) {
+                            // One Dimensional
+                            tile_offset += (tile_y / 8) * tile_len * (sprite.width / 8);
+                        } else {
+                            // Two Dimensional
+                            // TODO: This doesn't work
+                            tile_offset += (tile_y / 8) * tile_len * 0x20;
+                        }
+
+                        const tile = self.vram.buf[tile_base + tile_offset];
+
+                        const pal_id: u16 = if (!is_8bpp) blk: {
+                            const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
+                            if (nybble_tile == 0) break :blk 0;
+
+                            const pal_bank = @as(u8, sprite.pal_bank()) << 4;
+                            break :blk pal_bank | nybble_tile;
+                        } else tile;
+
+                        // Sprite Palette starts at 0x0500_0200
+                        if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(0x200 + pal_id * 2);
                     }
                 } else break;
             }
-
-            // // TODO: Scanning OAM for every single pixel is insanely expensive
-            // // This should be done once per scanline (and then check for X bounds every pixel)
-            // var j: u32 = 0;
-            // while (j < self.oam.buf.len) : (j += 8) {
-            //     // Attributes in OAM are 6 bytes long, with 2 bytes of padding
-            //     // Grab Attributes from OAM
-            //     const attr0 = @bitCast(Attr0, self.oam.get16(j));
-            //     const attr1 = @bitCast(Attr1, self.oam.get16(j + 2));
-            //     const attr2 = @bitCast(Attr2, self.oam.get16(j + 4));
-
-            //     // Only consider enabled sprites on the current priority
-            //     if (attr0.disabled.read() or attr2.rel_prio.read() != prio) continue;
-
-            //     // Determine sprite bounds
-            //     const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
-            //     const sy = attr0.y.read();
-            //     const sx = attr1.x.read();
-            //     const sx_end = sx + d[0];
-            //     const sy_end = sy + d[1];
-
-            //     // If sprite is in range
-            //     if (sy < y and sy_end > y and sx < x and sx_end > x) {
-            //         maybe_sprite = Sprite.init(attr0, attr1, attr2);
-            //         break;
-            //     }
-            // }
-
-            // If we didn't find a sprite, progress to the next pixel
-            const sprite: Sprite = if (maybe_sprite) |s| s else continue;
-            const is_8bpp = sprite.is_8bpp();
-
-            // Y and X coordinates within the context of a singular 8x8 tile
-            const tile_y = y - sprite.y();
-            const tile_x = x - sprite.x();
-
-            const tile_id: u32 = sprite.tile_id();
-            const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
-            const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
-
-            const row = if (sprite.v_flip()) 7 - (tile_y % 8) else tile_y % 8;
-            const col = if (sprite.h_flip()) 7 - (tile_x % 8) else tile_x % 8;
-
-            const tile_base: u32 = char_base + (0x20 * tile_id) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
-
-            var tile_offset = (tile_x >> 3) * tile_len;
-            if (self.dispcnt.obj_mapping.read()) {
-                // One Dimensional
-                tile_offset += (tile_y / 8) * tile_len * (sprite.width >> 3);
-            } else {
-                // Two Dimensional
-                tile_offset += (@as(u32, tile_y) >> 3) * tile_len * 0x20;
-            }
-
-            const tile = self.vram.buf[tile_base + tile_offset];
-
-            const pal_id = if (!is_8bpp) blk: {
-                const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                if (nybble_tile == 0) break :blk 0;
-
-                const pal_bank: u16 = @as(u8, sprite.pal_bank()) << 4;
-                break :blk pal_bank | nybble_tile;
-            } else tile;
-
-            // Sprite Palette starts at 0x0500_0200
-            if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(0x200 + pal_id * 2);
         }
     }
 
@@ -287,7 +255,7 @@ pub const Ppu = struct {
                 var i: usize = 0;
                 while (i < 4) : (i += 1) {
                     // Draw Sprites Here
-                    if (obj_enable) self.drawSprite(@truncate(u2, i));
+                    if (obj_enable) self.drawSprites(@truncate(u2, i));
                     if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
                     if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
                     if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
@@ -541,47 +509,47 @@ const Sprite = struct {
         };
     }
 
-    fn x(self: *const Self) u16 {
+    inline fn x(self: *const Self) u16 {
         return self.attr1.x.read();
     }
 
-    fn y(self: *const Self) u8 {
+    inline fn y(self: *const Self) u8 {
         return self.attr0.y.read();
     }
 
-    fn is_8bpp(self: *const Self) bool {
+    inline fn is_8bpp(self: *const Self) bool {
         return self.attr0.is_8bpp.read();
     }
 
-    fn shape(self: *const Self) u2 {
+    inline fn shape(self: *const Self) u2 {
         return self.attr0.shape.read();
     }
 
-    fn size(self: *const Self) u2 {
+    inline fn size(self: *const Self) u2 {
         return self.attr1.size.read();
     }
 
-    fn tile_id(self: *const Self) u10 {
+    inline fn tile_id(self: *const Self) u10 {
         return self.attr2.tile_id.read();
     }
 
-    fn pal_bank(self: *const Self) u4 {
+    inline fn pal_bank(self: *const Self) u4 {
         return self.attr2.pal_bank.read();
     }
 
-    fn h_flip(self: *const Self) bool {
+    inline fn h_flip(self: *const Self) bool {
         return self.attr1.h_flip.read();
     }
 
-    fn v_flip(self: *const Self) bool {
+    inline fn v_flip(self: *const Self) bool {
         return self.attr1.v_flip.read();
     }
 
-    fn priority(self: *const Self) u2 {
+    inline fn priority(self: *const Self) u2 {
         return self.attr2.rel_prio.read();
     }
 
-    fn isDisabled(self: *const Self) bool {
+    inline fn isDisabled(self: *const Self) bool {
         return self.attr0.disabled.read();
     }
 };
