@@ -7,6 +7,8 @@ const DmaController = @import("dma.zig").DmaController;
 const Timer = @import("timer.zig").Timer;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
+const panic_on_und_io: bool = false;
+
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -79,7 +81,7 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
         0x0400_0104 => @as(u32, bus.io.tim1.cnt.raw) << 16 | bus.io.tim1.counter(),
         0x0400_0108 => @as(u32, bus.io.tim2.cnt.raw) << 16 | bus.io.tim2.counter(),
         0x0400_010C => @as(u32, bus.io.tim3.cnt.raw) << 16 | bus.io.tim3.counter(),
-        else => std.debug.panic("Tried to read word from 0x{X:0>8}", .{addr}),
+        else => undRead("Tried to read word from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -117,7 +119,7 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_0200 => bus.io.setIrqs(word),
         0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{word}),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
-        else => std.debug.panic("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
+        else => undWrite("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
     }
 }
 
@@ -138,8 +140,8 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_010A => bus.io.tim2.cnt.raw,
         0x0400_010C => bus.io.tim3.counter(),
         0x0400_010E => bus.io.tim3.cnt.raw,
-        0x0400_0204 => failedRead("Tried to read halfword from WAITCNT", .{}),
-        else => std.debug.panic("Tried to read halfword from 0x{X:0>8}", .{addr}),
+        0x0400_0204 => undRead("Tried to read halfword from WAITCNT", .{}),
+        else => undRead("Tried to read halfword from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -201,7 +203,7 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0202 => bus.io.irq.raw &= ~halfword,
         0x0400_0204 => log.warn("Wrote 0x{X:0>4} to WAITCNT", .{halfword}),
         0x0400_0208 => bus.io.ime = halfword & 1 == 1,
-        else => std.debug.panic("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
+        else => undWrite("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }
 }
 
@@ -212,8 +214,8 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
         0x0400_0300 => @enumToInt(bus.io.postflg),
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
-        0x0400_0089 => failedRead("Tried to read (high) byte from SOUNDBIAS", .{}),
-        else => std.debug.panic("Tried to read byte from 0x{X:0>8}", .{addr}),
+        0x0400_0089 => undRead("Tried to read (high) byte from SOUNDBIAS", .{}),
+        else => undRead("Tried to read byte from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -232,13 +234,17 @@ pub fn write8(self: *Bus, addr: u32, byte: u8) void {
         0x0400_007D => log.warn("Tried to write 0x{X:0>2} to SOUND4CNT_H (high)", .{byte}),
         0x0400_0080 => log.warn("Tried to write 0x{X:0>2} to SOUNDCNT_L (low)", .{byte}),
         0x0400_0089 => log.warn("Tried to write 0x{X:0>2} to SOUNDBIAS (high)", .{byte}),
-        else => std.debug.panic("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
+        else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
 
-fn failedRead(comptime format: []const u8, args: anytype) u8 {
-    log.warn(format, args);
+fn undRead(comptime format: []const u8, args: anytype) u8 {
+    if (panic_on_und_io) std.debug.panic(format, args) else log.warn(format, args);
     return 0;
+}
+
+fn undWrite(comptime format: []const u8, args: anytype) void {
+    if (panic_on_und_io) std.debug.panic(format, args) else log.warn(format, args);
 }
 
 /// Read / Write

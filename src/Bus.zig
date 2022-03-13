@@ -13,6 +13,8 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 const Self = @This();
 
+const panic_on_und_bus: bool = false;
+
 pak: GamePak,
 bios: Bios,
 ppu: Ppu,
@@ -57,7 +59,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0A00_0000...0x0BFF_FFFF => self.pak.get32(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get32(addr - 0x0C00_0000),
 
-        else => failedRead("Tried to read from 0x{X:0>8}", .{addr}),
+        else => undRead("Tried to read from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -75,7 +77,7 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set32(addr - 0x0600_0000, word),
         0x0700_0000...0x07FF_FFFF => self.ppu.oam.set32(addr & 0x3FF, word),
 
-        else => log.warn("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
+        else => undWrite("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
     }
 }
 
@@ -97,7 +99,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
         0x0A00_0000...0x0BFF_FFFF => self.pak.get16(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get16(addr - 0x0C00_0000),
 
-        else => std.debug.panic("Tried to read from 0x{X:0>8}", .{addr}),
+        else => undRead("Tried to read from 0x{X:0>8}", .{addr}),
     };
 }
 
@@ -114,7 +116,7 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(addr - 0x0600_0000, halfword),
         0x0700_0000...0x07FF_FFFF => self.ppu.oam.set16(addr & 0x3FF, halfword),
 
-        else => std.debug.panic("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
+        else => undWrite("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }
 }
 
@@ -137,7 +139,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0C00_0000...0x0DFF_FFFF => self.pak.get8(addr - 0x0C00_0000),
         0x0E00_0000...0x0E00_FFFF => self.pak.sram.get8(addr - 0x0E00_0000),
 
-        else => std.debug.panic("Tried to read from 0x{X:0>2}", .{addr}),
+        else => undRead("Tried to read from 0x{X:0>2}", .{addr}),
     };
 }
 
@@ -151,11 +153,15 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => self.pak.sram.set8(addr - 0x0E00_0000, byte),
-        else => std.debug.panic("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
+        else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
 
-fn failedRead(comptime format: []const u8, args: anytype) u8 {
-    log.warn(format, args);
+fn undRead(comptime format: []const u8, args: anytype) u8 {
+    if (panic_on_und_bus) std.debug.panic(format, args) else log.warn(format, args);
     return 0;
+}
+
+fn undWrite(comptime format: []const u8, args: anytype) void {
+    if (panic_on_und_bus) std.debug.panic(format, args) else log.warn(format, args);
 }
