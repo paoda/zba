@@ -27,6 +27,10 @@ pub const Scheduler = struct {
         self.queue.deinit();
     }
 
+    pub inline fn now(self: *const Self) u64 {
+        return self.tick;
+    }
+
     pub fn handleEvent(self: *Self, cpu: *Arm7tdmi, bus: *Bus) void {
         const should_handle = if (self.queue.peek()) |e| self.tick >= e.tick else false;
         const stat = &bus.ppu.dispstat;
@@ -39,7 +43,8 @@ pub const Scheduler = struct {
 
             switch (event.kind) {
                 .HeatDeath => {
-                    std.debug.panic("[Scheduler] Somehow, a u64 overflowed", .{});
+                    log.err("A u64 overflowered. This *actually* should never happen.", .{});
+                    unreachable;
                 },
                 .HBlank => {
                     // The End of a Hblank (During Draw or Vblank)
@@ -110,6 +115,35 @@ pub const Scheduler = struct {
                     bus.ppu.dispstat.hblank.set();
                     self.push(.HBlank, self.tick + (68 * 4));
                 },
+                .TimerOverflow => |id| {
+                    // log.warn("TIM{} Overflowed", .{id});
+
+                    switch (id) {
+                        0 => bus.io.tim0.handleOverflow(cpu, &bus.io),
+                        1 => bus.io.tim1.handleOverflow(cpu, &bus.io),
+                        2 => bus.io.tim2.handleOverflow(cpu, &bus.io),
+                        3 => bus.io.tim3.handleOverflow(cpu, &bus.io),
+                    }
+                },
+            }
+        }
+    }
+
+    /// Removes the **first** scheduled event of type `needle` 
+    pub fn removeScheduledEvent(self: *Self, needle: EventKind) void {
+        var it = self.queue.iterator();
+
+        var i: usize = 0;
+        while (it.next()) |event| : (i += 1) {
+            if (std.meta.eql(event.kind, needle)) {
+
+                // This invalidates the iterator
+                _ = self.queue.removeIndex(i);
+
+                // Since removing something from the PQ invalidates the iterator,
+                // this implementation can safely only remove the first instance of
+                // a Scheduled Event. Exit Early
+                break;
             }
         }
     }
@@ -134,9 +168,10 @@ fn lessThan(_: void, a: Event, b: Event) Order {
     return std.math.order(a.tick, b.tick);
 }
 
-pub const EventKind = enum {
+pub const EventKind = union(enum) {
     HeatDeath,
     HBlank,
     VBlank,
     Draw,
+    TimerOverflow: u2,
 };

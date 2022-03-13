@@ -27,7 +27,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bio
         .ppu = try Ppu.init(alloc, sched),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
-        .io = Io.init(),
+        .io = Io.init(sched),
     };
 }
 
