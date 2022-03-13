@@ -68,25 +68,33 @@ pub const Io = struct {
 
 pub fn read32(bus: *const Bus, addr: u32) u32 {
     return switch (addr) {
+        // Display
         0x0400_0000 => bus.ppu.dispcnt.raw,
         0x0400_0004 => @as(u32, bus.ppu.vcount.raw) << 16 | bus.ppu.dispstat.raw,
         0x0400_0006 => @as(u32, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
-        0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
-        0x0400_0208 => @boolToInt(bus.io.ime),
+
+        // DMA Transfers
         0x0400_00B8 => @as(u32, bus.io.dma0.cnt.raw) << 16,
         0x0400_00C4 => @as(u32, bus.io.dma1.cnt.raw) << 16,
         0x0400_00D0 => @as(u32, bus.io.dma1.cnt.raw) << 16,
         0x0400_00DC => @as(u32, bus.io.dma3.cnt.raw) << 16,
+
+        // Timers
         0x0400_0100 => @as(u32, bus.io.tim0.cnt.raw) << 16 | bus.io.tim0.counter(),
         0x0400_0104 => @as(u32, bus.io.tim1.cnt.raw) << 16 | bus.io.tim1.counter(),
         0x0400_0108 => @as(u32, bus.io.tim2.cnt.raw) << 16 | bus.io.tim2.counter(),
         0x0400_010C => @as(u32, bus.io.tim3.cnt.raw) << 16 | bus.io.tim3.counter(),
+
+        // Interrupts
+        0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
+        0x0400_0208 => @boolToInt(bus.io.ime),
         else => undRead("Tried to read word from 0x{X:0>8}", .{addr}),
     };
 }
 
 pub fn write32(bus: *Bus, addr: u32, word: u32) void {
     switch (addr) {
+        // Display
         0x0400_0000 => bus.ppu.dispcnt.raw = @truncate(u16, word),
         0x0400_0004 => {
             bus.ppu.dispstat.raw = @truncate(u16, word);
@@ -98,8 +106,12 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_0014 => bus.ppu.setBgOffsets(1, word),
         0x0400_0018 => bus.ppu.setBgOffsets(2, word),
         0x0400_001C => bus.ppu.setBgOffsets(3, word),
+
+        // Sound
         0x0400_00A0 => log.warn("Wrote 0x{X:0>8} to FIFO_A", .{word}),
         0x0400_00A4 => log.warn("Wrote 0x{X:0>8} to FIFO_B", .{word}),
+
+        // DMA Transfers
         0x0400_00B0 => bus.io.dma0.writeSad(word),
         0x0400_00B4 => bus.io.dma0.writeDad(word),
         0x0400_00B8 => bus.io.dma0.writeCnt(word),
@@ -112,10 +124,17 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_00D4 => bus.io.dma3.writeSad(word),
         0x0400_00D8 => bus.io.dma3.writeDad(word),
         0x0400_00DC => bus.io.dma3.writeCnt(word),
+
+        // Timers
         0x0400_0100 => bus.io.tim0.writeCnt(word),
         0x0400_0104 => bus.io.tim1.writeCnt(word),
         0x0400_0108 => bus.io.tim2.writeCnt(word),
         0x0400_010C => bus.io.tim3.writeCnt(word),
+
+        // Serial Communication 1
+        0x0400_0120 => log.warn("Wrote 0x{X:0>8} to SIODATA32", .{word}),
+
+        // Interrupts
         0x0400_0200 => bus.io.setIrqs(word),
         0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{word}),
         0x0400_0208 => bus.io.ime = word & 1 == 1,
@@ -125,13 +144,15 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
 
 pub fn read16(bus: *const Bus, addr: u32) u16 {
     return switch (addr) {
+        // Display
         0x0400_0000 => bus.ppu.dispcnt.raw,
         0x0400_0004 => bus.ppu.dispstat.raw,
         0x0400_0006 => bus.ppu.vcount.raw,
-        0x0400_0130 => bus.io.keyinput.raw,
-        0x0400_0200 => bus.io.ie.raw,
-        0x0400_0202 => bus.io.irq.raw,
-        0x0400_0208 => @boolToInt(bus.io.ime),
+
+        // Sound
+        0x0400_0088 => unimplementedRead("Read halfword from SOUNDBIAS", .{}),
+
+        // Timers
         0x0400_0100 => bus.io.tim0.counter(),
         0x0400_0102 => bus.io.tim0.cnt.raw,
         0x0400_0104 => bus.io.tim1.counter(),
@@ -140,13 +161,25 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_010A => bus.io.tim2.cnt.raw,
         0x0400_010C => bus.io.tim3.counter(),
         0x0400_010E => bus.io.tim3.cnt.raw,
-        0x0400_0204 => undRead("Tried to read halfword from WAITCNT", .{}),
+
+        // Serial Communication 1
+        0x0400_0128 => unimplementedRead("Read halfword from SIOCNT", .{}),
+
+        // Keypad Input
+        0x0400_0130 => bus.io.keyinput.raw,
+
+        // Interrupts
+        0x0400_0200 => bus.io.ie.raw,
+        0x0400_0202 => bus.io.irq.raw,
+        0x0400_0204 => unimplementedRead("Read halfword from WAITCNT", .{}),
+        0x0400_0208 => @boolToInt(bus.io.ime),
         else => undRead("Tried to read halfword from 0x{X:0>8}", .{addr}),
     };
 }
 
 pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
     switch (addr) {
+        // Display
         0x0400_0000 => bus.ppu.dispcnt.raw = halfword,
         0x0400_0004 => bus.ppu.dispstat.raw = halfword,
         0x0400_0008 => bus.ppu.bg[0].cnt.raw = halfword,
@@ -161,6 +194,10 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_001A => bus.ppu.bg[2].vofs.raw = halfword,
         0x0400_001C => bus.ppu.bg[3].hofs.raw = halfword,
         0x0400_001E => bus.ppu.bg[3].vofs.raw = halfword,
+        0x0400_0020 => log.warn("Wrote 0x{X:0>4} to BG2PA", .{halfword}),
+        0x0400_0026 => log.warn("Wrote 0x{X:0>4} to BG2PD", .{halfword}),
+        0x0400_0030 => log.warn("Wrote 0x{X:0>4} to BG3PA", .{halfword}),
+        0x0400_0036 => log.warn("Wrote 0x{X:0>4} to BG3PD", .{halfword}),
         0x0400_0040 => log.warn("Wrote 0x{X:0>4} to WIN0H", .{halfword}),
         0x0400_0042 => log.warn("Wrote 0x{X:0>4} to WIN1H", .{halfword}),
         0x0400_0044 => log.warn("Wrote 0x{X:0>4} to WIN0V", .{halfword}),
@@ -171,9 +208,14 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0050 => log.warn("Wrote 0x{X:0>4} to BLDCNT", .{halfword}),
         0x0400_0052 => log.warn("Wrote 0x{X:0>4} to BLDALPHA", .{halfword}),
         0x0400_0054 => log.warn("Wrote 0x{X:0>4} to BLDY", .{halfword}),
+
+        // Sound
         0x0400_0080 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_L", .{halfword}),
         0x0400_0082 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_H", .{halfword}),
         0x0400_0084 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_X", .{halfword}),
+        0x0400_0088 => log.warn("Wrote 0x{X:0>4} to SOUNDBIAS", .{halfword}),
+
+        // Dma Transfers
         0x0400_00B8 => bus.io.dma0.writeWordCount(halfword),
         0x0400_00BA => bus.io.dma0.writeCntHigh(halfword),
         0x0400_00C4 => bus.io.dma1.writeWordCount(halfword),
@@ -182,6 +224,8 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_00D2 => bus.io.dma2.writeCntHigh(halfword),
         0x0400_00DC => bus.io.dma3.writeWordCount(halfword),
         0x0400_00DE => bus.io.dma3.writeCntHigh(halfword),
+
+        // Timers
         0x0400_0100 => bus.io.tim0.writeCntLow(halfword),
         0x0400_0102 => bus.io.tim0.writeCntHigh(halfword),
         0x0400_0104 => bus.io.tim1.writeCntLow(halfword),
@@ -190,15 +234,23 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_010A => bus.io.tim2.writeCntHigh(halfword),
         0x0400_010C => bus.io.tim3.writeCntLow(halfword),
         0x0400_010E => bus.io.tim3.writeCntHigh(halfword),
+
+        // Serial Communication 1
         0x0400_0120 => log.warn("Wrote 0x{X:0>4} to SIOMULTI0", .{halfword}),
         0x0400_0122 => log.warn("Wrote 0x{X:0>4} to SIOMULTI1", .{halfword}),
         0x0400_0124 => log.warn("Wrote 0x{X:0>4} to SIOMULTI2", .{halfword}),
         0x0400_0126 => log.warn("Wrote 0x{X:0>4} to SIOMULTI3", .{halfword}),
         0x0400_0128 => log.warn("Wrote 0x{X:0>4} to SIOCNT", .{halfword}),
         0x0400_012A => log.warn("Wrote 0x{X:0>4} to SIOMLT_SEND", .{halfword}),
+
+        // Keypad Input
         0x0400_0130 => log.warn("Wrote 0x{X:0>4} to KEYINPUT. Ignored", .{halfword}),
         0x0400_0132 => log.warn("Wrote 0x{X:0>4} to KEYCNT", .{halfword}),
+
+        // Serial Communication 2
         0x0400_0134 => log.warn("Wrote 0x{X:0>4} to RCNT", .{halfword}),
+
+        // Interrupts
         0x0400_0200 => bus.io.ie.raw = halfword,
         0x0400_0202 => bus.io.irq.raw &= ~halfword,
         0x0400_0204 => log.warn("Wrote 0x{X:0>4} to WAITCNT", .{halfword}),
@@ -209,37 +261,62 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
 
 pub fn read8(bus: *const Bus, addr: u32) u8 {
     return switch (addr) {
+        // Display
         0x0400_0000 => @truncate(u8, bus.ppu.dispcnt.raw),
         0x0400_0004 => @truncate(u8, bus.ppu.dispstat.raw),
+        0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
+
+        // Sound
+        0x0400_0089 => unimplementedRead("Read (high) byte from SOUNDBIAS", .{}),
+
+        // Serial Communication 1
+        0x0400_0128 => unimplementedRead("Read (low) byte from SIOCNT", .{}),
+
+        // Interrupts
         0x0400_0200 => @truncate(u8, bus.io.ie.raw),
         0x0400_0300 => @enumToInt(bus.io.postflg),
-        0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
-        0x0400_0089 => undRead("Tried to read (high) byte from SOUNDBIAS", .{}),
         else => undRead("Tried to read byte from 0x{X:0>8}", .{addr}),
     };
 }
 
 pub fn write8(self: *Bus, addr: u32, byte: u8) void {
     switch (addr) {
+        // Display
         0x0400_0004 => self.ppu.dispstat.raw = (self.ppu.dispstat.raw & 0xFF00) | byte,
         0x0400_0005 => self.ppu.dispstat.raw = (@as(u16, byte) << 8) | (self.ppu.dispstat.raw & 0xFF),
+
+        // Sound
+        0x0400_0063 => log.warn("Wrote 0x{X:0>2} to SOUND1CNT_H (high)", .{byte}),
+        0x0400_0065 => log.warn("Wrote 0x{X:0>2} to SOUND1CNT_X (high)", .{byte}),
+        0x0400_0069 => log.warn("Wrote 0x{X:0>2} to SOUND2CNT_L (high)", .{byte}),
+        0x0400_006D => log.warn("Wrote 0x{X:0>2} to SOUND2CNT_H (high)", .{byte}),
+        0x0400_0070 => log.warn("Wrote 0x{X:0>2} to SOUND3CNT_L (low)", .{byte}),
+        0x0400_0079 => log.warn("Wrote 0x{X:0>2} to SOUND4CNT_L (high)", .{byte}),
+        0x0400_007D => log.warn("Wrote 0x{X:0>2} to SOUND4CNT_H (high)", .{byte}),
+        0x0400_0080 => log.warn("Wrote 0x{X:0>2} to SOUNDCNT_L (low)", .{byte}),
+        0x0400_0084 => log.warn("Wrote 0x{X:0>2} to SOUNDCNT_X (low)", .{byte}),
+        0x0400_0089 => log.warn("Wrote 0x{X:0>2} to SOUNDBIAS (high)", .{byte}),
+
+        // Serial Communication 1
+        0x0400_0128 => log.warn("Wrote 0x{X:0>2} to SIOCNT (low)", .{byte}),
+
+        // Serial Communication 2
+        0x0400_0140 => log.warn("Wrote 0x{X:0>2} to JOYCNT (low)", .{byte}),
+
+        // Interrupts
         0x0400_0208 => self.io.ime = byte & 1 == 1,
         0x0400_0301 => self.io.haltcnt = if (byte >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
-        0x0400_0063 => log.warn("Tried to write 0x{X:0>2} to SOUND1CNT_H (high)", .{byte}),
-        0x0400_0065 => log.warn("Tried to write 0x{X:0>2} to SOUND1CNT_X (high)", .{byte}),
-        0x0400_0069 => log.warn("Tried to write 0x{X:0>2} to SOUND2CNT_L (high)", .{byte}),
-        0x0400_006D => log.warn("Tried to write 0x{X:0>2} to SOUND2CNT_H (high)", .{byte}),
-        0x0400_0070 => log.warn("Tried to write 0x{X:0>2} to SOUND3CNT_L (low)", .{byte}),
-        0x0400_0079 => log.warn("Tried to write 0x{X:0>2} to SOUND4CNT_L (high)", .{byte}),
-        0x0400_007D => log.warn("Tried to write 0x{X:0>2} to SOUND4CNT_H (high)", .{byte}),
-        0x0400_0080 => log.warn("Tried to write 0x{X:0>2} to SOUNDCNT_L (low)", .{byte}),
-        0x0400_0089 => log.warn("Tried to write 0x{X:0>2} to SOUNDBIAS (high)", .{byte}),
         else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
 
 fn undRead(comptime format: []const u8, args: anytype) u8 {
     if (panic_on_und_io) std.debug.panic(format, args) else log.warn(format, args);
+    return 0;
+}
+
+fn unimplementedRead(comptime format: []const u8, args: anytype) u8 {
+    log.warn(format, args);
     return 0;
 }
 

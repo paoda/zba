@@ -149,7 +149,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         0x0200_0000...0x02FF_FFFF => self.ewram.set8(addr & 0x3FFFF, byte),
         0x0300_0000...0x03FF_FFFF => self.iwram.set8(addr & 0x7FFF, byte),
         0x0400_0000...0x0400_03FE => io.write8(self, addr, byte),
-        0x0400_0410 => log.info("Wrote 0x{X:0>2} to 0x{X:0>8}. Ignored", .{ byte, addr }),
+        0x0400_0410 => log.info("Ignored write of 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
 
         // External Memory (Game Pak)
         0x0E00_0000...0x0E00_FFFF => self.pak.sram.set8(addr & 0xFFFF, byte),
