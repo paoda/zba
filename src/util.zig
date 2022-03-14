@@ -18,7 +18,7 @@ pub const FpsAverage = struct {
     }
 
     pub fn add(self: *Self, sample: u64) void {
-        if (self.sample_count == 1000) return self.reset(sample);
+        if (self.sample_count == 600) return self.reset(sample);
 
         self.total += sample;
         self.sample_count += 1;

@@ -49,28 +49,42 @@ pub fn runEmuThread(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64)
             // ns_late is non zero if we are late.
             var ns_late = timestamp -| wake_time;
 
-            // Calculate the new Thread wake time
-            wake_time += frame_period;
+            // log.info("timestamp: {} | late: {}", .{ timestamp, ns_late });
 
             // If we're more than a frame late, skip the rest of this loop
-            if (ns_late > frame_period) continue;
+            // Recalculate what our new wake time should be so that we can
+            // get "back on track"
+            if (ns_late > frame_period) {
+                wake_time = timestamp + frame_period;
+                continue;
+            }
 
-            if (sync_to_video) std.time.sleep(frame_period - ns_late);
+            if (sync_to_video) {
+                // Employ several sleep calls in periods of 10ms
+                // By doing this the behaviour should average out to be
+                // more consistent
 
-            // Backup Busy Loop Routine
-            // if (sync_to_video) spinLoop(&timer, wake_time);
+                const sleep_for = frame_period - ns_late;
+                const loop_count = sleep_for / (std.time.ns_per_ms * 10); // How many groups of 10ms
+
+                var i: usize = 0;
+                while (i < loop_count) : (i += 1) {
+                    std.time.sleep(std.time.ns_per_ms * 10);
+                }
+
+                // Spin to make up the difference if there is a need
+                // Make sure that we're using the old wake time and not the onne we recalcualted
+                spinLoop(&timer, wake_time);
+            }
+
+            // Update to the new wake time
+            wake_time += frame_period;
         }
     }
 }
 
 fn spinLoop(timer: *Timer, wake_time: u64) void {
-    while (true) {
-        const timestamp = timer.read();
-
-        if (timestamp >= wake_time) {
-            break;
-        }
-    }
+    while (true) if (timer.read() > wake_time) break;
 }
 
 fn emuFps(left: u64) u64 {

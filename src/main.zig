@@ -177,7 +177,7 @@ pub fn main() anyerror!void {
         fps_avg.add(emu_fps.load(.Unordered));
         const avg = fps_avg.calc();
 
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 59) }) catch unreachable;
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 60) }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
