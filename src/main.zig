@@ -84,9 +84,10 @@ pub fn main() anyerror!void {
     // Init Atomics
     var quit = Atomic(bool).init(false);
     var pause = Atomic(bool).init(false);
+    var emu_fps = Atomic(u64).init(0);
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &pause, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &pause, &emu_fps, &scheduler, &cpu, &bus });
     defer emu_thread.join();
 
     // Initialize SDL
@@ -94,8 +95,9 @@ pub fn main() anyerror!void {
     if (status < 0) sdlPanic();
     defer SDL.SDL_Quit();
 
-    var title_buf: [0x20]u8 = [_]u8{0x00} ** 0x20;
-    const title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{bus.pak.title});
+    var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
+    var title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{bus.pak.title});
+    correctTitleSlice(&title);
 
     var window = SDL.SDL_CreateWindow(
         title.ptr,
@@ -107,15 +109,14 @@ pub fn main() anyerror!void {
     ) orelse sdlPanic();
     defer SDL.SDL_DestroyWindow(window);
 
-    var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED) orelse sdlPanic();
+    var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
     defer SDL.SDL_DestroyRenderer(renderer);
 
     const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_BGR555, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
     defer SDL.SDL_DestroyTexture(texture);
 
     // Init FPS Timer
-    // var fps_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
-    // var timer = Timer.start() catch unreachable;
+    var dyn_title_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
@@ -169,9 +170,8 @@ pub fn main() anyerror!void {
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
 
-        // const fps = std.time.ns_per_s / timer.lap();
-        // const fps_title = std.fmt.bufPrint(&fps_buf, "{s} [FPS: {d}]", .{ title, fps }) catch unreachable;
-        // SDL.SDL_SetWindowTitle(window, fps_title.ptr);
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu FPS: {d}] ", .{ title, emu_fps.load(.Unordered) }) catch unreachable;
+        SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
 
         pause.store(false, .Unordered);
     }
@@ -188,3 +188,15 @@ const CliError = error{
     InsufficientOptions,
     UnneededOptions,
 };
+
+/// The slice considers some null values to be a part of the string
+/// so change the length of the slice so that isn't the case
+// FIXME: This is awful and bad
+fn correctTitleSlice(title: *[]u8) void {
+    for (title.*) |char, i| {
+        if (char == 0) {
+            title.len = i;
+            break;
+        }
+    }
+}
