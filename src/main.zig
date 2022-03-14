@@ -6,6 +6,7 @@ const emu = @import("emu.zig");
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
+const FpsAverage = @import("util.zig").FpsAverage;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
@@ -118,11 +119,12 @@ pub fn main() anyerror!void {
     // Init FPS Timer
     var dyn_title_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
 
+    var fps_avg = FpsAverage.init();
+
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
         if (SDL.SDL_PollEvent(&event) != 0) {
             // Pause Emulation Thread during Input Writing
-            pause.store(true, .Unordered);
 
             switch (event.type) {
                 SDL.SDL_QUIT => break :emu_loop,
@@ -165,15 +167,18 @@ pub fn main() anyerror!void {
         }
 
         // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
+        pause.store(true, .Unordered);
         const buf_ptr = bus.ppu.framebuf.ptr;
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
-
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu FPS: {d}] ", .{ title, emu_fps.load(.Unordered) }) catch unreachable;
-        SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
-
         pause.store(false, .Unordered);
+
+        fps_avg.add(emu_fps.load(.Unordered));
+        const avg = fps_avg.calc();
+
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 59) }) catch unreachable;
+        SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
     quit.store(true, .Unordered); // Terminate Emulator Thread

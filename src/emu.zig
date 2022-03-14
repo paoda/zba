@@ -8,12 +8,14 @@ const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
 
-const cycles_per_frame: u64 = 160 * (308 * 4);
+const cycles_per_frame: u64 = 228 * (308 * 4);
 const clock_rate: u64 = 1 << 24;
 const clock_period: u64 = std.time.ns_per_s / clock_rate;
 const frame_period = (clock_period * cycles_per_frame);
 
 const sync_to_video: bool = true;
+
+// One frame operates at 59.7275005696Hz
 
 const log = std.log.scoped(.Emulation);
 
@@ -31,6 +33,9 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
 
 pub fn runEmuThread(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     var timer = Timer.start() catch unreachable;
+    var fps_timer = Timer.start() catch unreachable;
+
+    var wake_time: u64 = frame_period;
 
     log.info("EmuThread has begun execution", .{});
 
@@ -38,19 +43,32 @@ pub fn runEmuThread(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64)
         if (!pause.load(.Unordered)) {
             runFrame(sched, cpu, bus);
 
-            const diff = timer.lap();
+            const timestamp = timer.read();
+            fps.store(emuFps(fps_timer.lap()), .Unordered);
 
-            var ns_late: u64 = undefined;
-            const didUnderflow = @subWithOverflow(u64, diff, frame_period, &ns_late);
+            // ns_late is non zero if we are late.
+            var ns_late = timestamp -| wake_time;
 
-            // We were more than an entire frame late....
-            if (!didUnderflow and ns_late > frame_period) continue;
+            // Calculate the new Thread wake time
+            wake_time += frame_period;
 
-            // Negate the u64 so that we add to the amount of time sleeping
-            if (didUnderflow) ns_late = ~ns_late +% 1;
+            // If we're more than a frame late, skip the rest of this loop
+            if (ns_late > frame_period) continue;
 
-            if (sync_to_video) std.time.sleep(frame_period -% ns_late);
-            fps.store(emuFps(diff), .Unordered);
+            if (sync_to_video) std.time.sleep(frame_period - ns_late);
+
+            // Backup Busy Loop Routine
+            // if (sync_to_video) spinLoop(&timer, wake_time);
+        }
+    }
+}
+
+fn spinLoop(timer: *Timer, wake_time: u64) void {
+    while (true) {
+        const timestamp = timer.read();
+
+        if (timestamp >= wake_time) {
+            break;
         }
     }
 }
