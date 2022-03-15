@@ -121,22 +121,22 @@ pub const Ppu = struct {
 
     /// Draw all relevant sprites on a scanline
     fn drawSprites(self: *Self, prio: u2) void {
-        // Object VRAM 3rd and 4th (0-indexed) charblocks
         const char_base = 0x4000 * 4;
         const y = @bitCast(i8, self.vcount.scanline.read());
 
-        var i: u9 = 0;
-        while (i < width) : (i += 1) {
-            // Exit early if a pixel is already here
-            if (self.scanline_buf[i] != null) continue;
+        // Loop over every fetched sprite
+        sprite_loop: for (self.scanline_sprites) |maybe_sprites| {
+            if (maybe_sprites) |sprite| {
+                // Move on to the next sprite If its of a different priority
+                if (sprite.priority() != prio) continue :sprite_loop;
 
-            const x = i;
-
-            for (self.scanline_sprites) |maybe_sprite| {
-                if (maybe_sprite) |sprite| {
-                    if (sprite.priority() != prio) continue;
-
+                var i: u9 = 0;
+                px_loop: while (i < sprite.width) : (i += 1) {
+                    const x = (sprite.x() +% i) % 240;
                     const ix = @bitCast(i9, x);
+
+                    // If We've already rendered a pixel here don't overwrite it
+                    if (self.scanline_buf[x] != null) continue :px_loop;
 
                     const start = sprite.x();
                     const istart = @bitCast(i9, start);
@@ -144,14 +144,13 @@ pub const Ppu = struct {
                     const end = start +% sprite.width;
                     const iend = @bitCast(i9, end);
 
-                    // Sprites are expected to wrap, by performing the same check on both
-                    // signed and unsigned values we ensure that sprites are properly displayed
-                    // in all valid scenarios
+                    // By comparing with both signed and unsigned values we ensure that sprites
+                    // are displayed in all valid (AFAIK) configuration
                     if ((start <= x and x < end) or (istart <= ix and ix < iend)) {
                         self.drawSpritePixel(char_base, sprite, ix, y);
                     }
-                } else break;
-            }
+                }
+            } else break;
         }
     }
 
@@ -275,12 +274,12 @@ pub const Ppu = struct {
             0x0 => {
                 const start = framebuf_pitch * @as(usize, scanline);
 
-                self.fetchSprites();
+                if (obj_enable) self.fetchSprites();
 
                 var i: usize = 0;
                 while (i < 4) : (i += 1) {
                     // Draw Sprites Here
-                    if (obj_enable) self.drawSprites(@truncate(u2, i));
+                    self.drawSprites(@truncate(u2, i));
                     if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
                     if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
                     if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
