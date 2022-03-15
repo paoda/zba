@@ -150,7 +150,7 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_0006 => bus.ppu.vcount.raw,
 
         // Sound
-        0x0400_0088 => unimplementedRead("Read halfword from SOUNDBIAS", .{}),
+        0x0400_0088 => bus.apu.bias.raw,
 
         // Timers
         0x0400_0100 => bus.io.tim0.counter(),
@@ -210,10 +210,10 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0054 => log.warn("Wrote 0x{X:0>4} to BLDY", .{halfword}),
 
         // Sound
-        0x0400_0080 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_L", .{halfword}),
-        0x0400_0082 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_H", .{halfword}),
-        0x0400_0084 => log.warn("Wrote 0x{X:0>4} to SOUNDCNT_X", .{halfword}),
-        0x0400_0088 => log.warn("Wrote 0x{X:0>4} to SOUNDBIAS", .{halfword}),
+        0x0400_0080 => bus.apu.ch_vol_cnt.raw = halfword,
+        0x0400_0082 => bus.apu.dma_cnt.raw = halfword,
+        0x0400_0084 => bus.apu.setSoundCntX(halfword >> 7 & 1 == 1),
+        0x0400_0088 => bus.apu.bias.raw = halfword,
 
         // Dma Transfers
         0x0400_00B8 => bus.io.dma0.writeWordCount(halfword),
@@ -267,7 +267,7 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
 
         // Sound
-        0x0400_0089 => unimplementedRead("Read (high) byte from SOUNDBIAS", .{}),
+        0x0400_0089 => @truncate(u8, bus.apu.bias.raw >> 8),
 
         // Serial Communication 1
         0x0400_0128 => unimplementedRead("Read (low) byte from SIOCNT", .{}),
@@ -279,23 +279,23 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
     };
 }
 
-pub fn write8(self: *Bus, addr: u32, byte: u8) void {
+pub fn write8(bus: *Bus, addr: u32, byte: u8) void {
     switch (addr) {
         // Display
-        0x0400_0004 => self.ppu.dispstat.raw = (self.ppu.dispstat.raw & 0xFF00) | byte,
-        0x0400_0005 => self.ppu.dispstat.raw = (@as(u16, byte) << 8) | (self.ppu.dispstat.raw & 0xFF),
+        0x0400_0004 => bus.ppu.dispstat.raw = (bus.ppu.dispstat.raw & 0xFF00) | byte,
+        0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, byte) << 8) | (bus.ppu.dispstat.raw & 0xFF),
 
         // Sound
-        0x0400_0063 => log.warn("Wrote 0x{X:0>2} to SOUND1CNT_H (high)", .{byte}),
-        0x0400_0065 => log.warn("Wrote 0x{X:0>2} to SOUND1CNT_X (high)", .{byte}),
-        0x0400_0069 => log.warn("Wrote 0x{X:0>2} to SOUND2CNT_L (high)", .{byte}),
-        0x0400_006D => log.warn("Wrote 0x{X:0>2} to SOUND2CNT_H (high)", .{byte}),
-        0x0400_0070 => log.warn("Wrote 0x{X:0>2} to SOUND3CNT_L (low)", .{byte}),
-        0x0400_0079 => log.warn("Wrote 0x{X:0>2} to SOUND4CNT_L (high)", .{byte}),
-        0x0400_007D => log.warn("Wrote 0x{X:0>2} to SOUND4CNT_H (high)", .{byte}),
-        0x0400_0080 => log.warn("Wrote 0x{X:0>2} to SOUNDCNT_L (low)", .{byte}),
-        0x0400_0084 => log.warn("Wrote 0x{X:0>2} to SOUNDCNT_X (low)", .{byte}),
-        0x0400_0089 => log.warn("Wrote 0x{X:0>2} to SOUNDBIAS (high)", .{byte}),
+        0x0400_0063 => bus.apu.ch1.envelope.raw = byte,
+        0x0400_0065 => bus.apu.ch1.setFreqHigh(byte),
+        0x0400_0069 => bus.apu.ch2.envelope.raw = byte,
+        0x0400_006D => bus.apu.ch2.setFreqHigh(byte),
+        0x0400_0070 => bus.apu.ch3.select.raw = byte,
+        0x0400_0079 => bus.apu.ch4.envelope.raw = byte,
+        0x0400_007D => bus.apu.ch4.cnt.raw = byte,
+        0x0400_0080 => bus.apu.setSoundCntLLow(byte),
+        0x0400_0084 => bus.apu.setSoundCntX(byte >> 7 & 1 == 1),
+        0x0400_0089 => bus.apu.setBiasHigh(byte),
 
         // Serial Communication 1
         0x0400_0128 => log.warn("Wrote 0x{X:0>2} to SIOCNT (low)", .{byte}),
@@ -304,8 +304,8 @@ pub fn write8(self: *Bus, addr: u32, byte: u8) void {
         0x0400_0140 => log.warn("Wrote 0x{X:0>2} to JOYCNT (low)", .{byte}),
 
         // Interrupts
-        0x0400_0208 => self.io.ime = byte & 1 == 1,
-        0x0400_0301 => self.io.haltcnt = if (byte >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
+        0x0400_0208 => bus.io.ime = byte & 1 == 1,
+        0x0400_0301 => bus.io.haltcnt = if (byte >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
         else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
@@ -460,5 +460,137 @@ pub const TimerControl = extern union {
     cascade: Bit(u16, 2),
     irq: Bit(u16, 6),
     enabled: Bit(u16, 7),
+    raw: u16,
+};
+
+/// Read / Write
+/// NR10
+pub const Sweep = extern union {
+    shift: Bitfield(u8, 0, 3),
+    direction: Bit(u8, 3),
+    period: Bitfield(u8, 4, 3),
+    raw: u8,
+};
+
+/// Read / Write
+/// This represents the Duty / Len
+/// NRx1
+pub const Duty = extern union {
+    /// Write-only
+    /// Only used when bit 6 is set
+    length: Bitfield(u16, 0, 6),
+    pattern: Bitfield(u16, 6, 2),
+    raw: u8,
+};
+
+/// Read / Write 
+/// NRx2
+pub const Envelope = extern union {
+    period: Bitfield(u8, 0, 3),
+    direction: Bit(u8, 3),
+    init_vol: Bitfield(u8, 4, 4),
+    raw: u8,
+};
+
+/// Read / Write
+/// NRx3, NRx4
+pub const Frequency = extern union {
+    /// Write-only
+    frequency: Bitfield(u16, 0, 11),
+    length_enable: Bit(u16, 14),
+    /// Write-only
+    trigger: Bit(u16, 15),
+
+    raw: u16,
+};
+
+/// Read / Write
+/// NR30
+pub const WaveSelect = extern union {
+    dimension: Bit(u8, 5),
+    bank: Bit(u8, 6),
+    enabled: Bit(u8, 7),
+    raw: u8,
+};
+
+/// Read / Write
+/// NR32
+pub const WaveVolume = extern union {
+    kind: Bitfield(u8, 5, 2),
+    force: Bit(u8, 7),
+    raw: u8,
+};
+
+/// Read / Write
+/// NR43
+pub const PolyCounter = extern union {
+    div_ratio: Bitfield(u8, 0, 3),
+    width: Bit(u8, 3),
+    shift: Bitfield(u8, 4, 4),
+    raw: u8,
+};
+
+/// Read / Write
+/// NR44
+pub const NoiseControl = extern union {
+    length_enable: Bit(u8, 6),
+    trigger: Bit(u8, 7),
+    raw: u8,
+};
+
+/// Read / Write
+pub const ChannelVolumeControl = extern union {
+    left_vol: Bitfield(u16, 0, 3),
+    right_vol: Bitfield(u16, 4, 3),
+
+    ch1_right: Bit(u16, 8),
+    ch2_right: Bit(u16, 9),
+    ch3_right: Bit(u16, 10),
+    ch4_right: Bit(u16, 11),
+    ch1_left: Bit(u16, 12),
+    ch2_left: Bit(u16, 13),
+    ch3_left: Bit(u16, 14),
+    ch4_left: Bit(u16, 15),
+    raw: u16,
+};
+
+/// Read / Write
+pub const DmaSoundControl = extern union {
+    ch_vol: Bitfield(u16, 0, 2),
+    sa_vol: Bit(u16, 2),
+    sb_vol: Bit(u16, 3),
+
+    sa_right_enable: Bit(u16, 8),
+    sa_left_enable: Bit(u16, 9),
+    sa_timer: Bit(u16, 10),
+    /// Write only?
+    sa_reset: Bit(u16, 11),
+
+    sb_right_enable: Bit(u16, 12),
+    sb_left_enable: Bit(u16, 13),
+    sb_timer: Bit(u16, 14),
+    /// Write only?
+    sb_reset: Bit(u16, 15),
+    raw: u16,
+};
+
+/// Read / Write
+pub const SoundControl = extern union {
+    /// Read-only
+    ch1_enable: Bit(u8, 0),
+    /// Read-only
+    ch2_enable: Bit(u8, 1),
+    /// Read-only
+    ch3_enable: Bit(u8, 2),
+    /// Read-only
+    ch4_enable: Bit(u8, 3),
+    apu_enable: Bit(u8, 7),
+    raw: u8,
+};
+
+/// Read / Write
+pub const SoundBias = extern union {
+    level: Bitfield(u16, 1, 9),
+    sampling_cycle: Bitfield(u16, 14, 2),
     raw: u16,
 };

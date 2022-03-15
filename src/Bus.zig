@@ -6,6 +6,7 @@ const GamePak = @import("bus/GamePak.zig");
 const Io = @import("bus/io.zig").Io;
 const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
+const Apu = @import("apu.zig").Apu;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const io = @import("bus/io.zig");
@@ -18,6 +19,7 @@ const panic_on_und_bus: bool = false;
 pak: GamePak,
 bios: Bios,
 ppu: Ppu,
+apu: Apu,
 iwram: Iwram,
 ewram: Ewram,
 io: Io,
@@ -27,6 +29,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bio
         .pak = try GamePak.init(alloc, rom_path),
         .bios = try Bios.init(alloc, maybe_bios),
         .ppu = try Ppu.init(alloc, sched),
+        .apu = Apu.init(),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
         .io = Io.init(sched),
