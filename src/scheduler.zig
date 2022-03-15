@@ -43,10 +43,10 @@ pub const Scheduler = struct {
                 },
                 .TimerOverflow => |id| {
                     switch (id) {
-                        0 => bus.io.tim0.handleOverflow(cpu, &bus.io),
-                        1 => bus.io.tim1.handleOverflow(cpu, &bus.io),
-                        2 => bus.io.tim2.handleOverflow(cpu, &bus.io),
-                        3 => bus.io.tim3.handleOverflow(cpu, &bus.io),
+                        0 => bus.tim._0.handleOverflow(cpu),
+                        1 => bus.tim._1.handleOverflow(cpu),
+                        2 => bus.tim._2.handleOverflow(cpu),
+                        3 => bus.tim._3.handleOverflow(cpu),
                     }
                 },
                 .HBlank => bus.ppu.handleHBlankEnd(cpu), // The end of a HBlank

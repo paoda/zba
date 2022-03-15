@@ -296,10 +296,10 @@ pub const Arm7tdmi = struct {
     }
 
     fn handleDMATransfers(self: *Self) bool {
-        if (self.bus.io.dma0.step(self.bus)) return self.bus.io.dma0.isBlocking();
-        if (self.bus.io.dma1.step(self.bus)) return self.bus.io.dma1.isBlocking();
-        if (self.bus.io.dma2.step(self.bus)) return self.bus.io.dma2.isBlocking();
-        if (self.bus.io.dma3.step(self.bus)) return self.bus.io.dma3.isBlocking();
+        if (self.bus.dma._0.step(self.bus)) return self.bus.dma._0.isBlocking();
+        if (self.bus.dma._1.step(self.bus)) return self.bus.dma._1.isBlocking();
+        if (self.bus.dma._2.step(self.bus)) return self.bus.dma._2.isBlocking();
+        if (self.bus.dma._3.step(self.bus)) return self.bus.dma._3.isBlocking();
 
         return false;
     }

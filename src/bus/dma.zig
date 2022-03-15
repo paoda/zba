@@ -5,8 +5,26 @@ const Bus = @import("../Bus.zig");
 
 const log = std.log.scoped(.DmaTransfer);
 
+pub const DmaControllers = struct {
+    const Self = @This();
+
+    _0: DmaController(0),
+    _1: DmaController(1),
+    _2: DmaController(2),
+    _3: DmaController(3),
+
+    pub fn init() Self {
+        return .{
+            ._0 = DmaController(0).init(),
+            ._1 = DmaController(1).init(),
+            ._2 = DmaController(2).init(),
+            ._3 = DmaController(3).init(),
+        };
+    }
+};
+
 /// Function that creates a DMAController. Determines unique DMA Controller behaiour at compile-time
-pub fn DmaController(comptime id: u2) type {
+fn DmaController(comptime id: u2) type {
     return struct {
         const Self = @This();
 
@@ -171,10 +189,10 @@ pub fn DmaController(comptime id: u2) type {
 }
 
 pub fn pollBlankingDma(bus: *Bus, comptime kind: DmaKind) void {
-    bus.io.dma0.pollBlankingDma(kind);
-    bus.io.dma1.pollBlankingDma(kind);
-    bus.io.dma2.pollBlankingDma(kind);
-    bus.io.dma3.pollBlankingDma(kind);
+    bus.dma._0.pollBlankingDma(kind);
+    bus.dma._1.pollBlankingDma(kind);
+    bus.dma._2.pollBlankingDma(kind);
+    bus.dma._3.pollBlankingDma(kind);
 }
 
 const Adjustment = enum(u2) {

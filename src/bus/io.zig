@@ -4,7 +4,6 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
-const Timer = @import("timer.zig").Timer;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
 const panic_on_und_io: bool = false;
@@ -20,24 +19,9 @@ pub const Io = struct {
     irq: InterruptRequest,
     postflg: PostFlag,
     haltcnt: HaltControl,
-
-    // DMA Controllers
-    // TODO: Figure out how to turn this into an array
-    dma0: DmaController(0),
-    dma1: DmaController(1),
-    dma2: DmaController(2),
-    dma3: DmaController(3),
-
-    // Timers
-    // TODO: Figure out how to turn this into an array
-    tim0: Timer(0),
-    tim1: Timer(1),
-    tim2: Timer(2),
-    tim3: Timer(3),
-
     keyinput: KeyInput,
 
-    pub fn init(sched: *Scheduler) Self {
+    pub fn init() Self {
         return .{
             .ime = false,
             .ie = .{ .raw = 0x0000 },
@@ -45,18 +29,6 @@ pub const Io = struct {
             .keyinput = .{ .raw = 0x03FF },
             .postflg = .FirstBoot,
             .haltcnt = .Execute,
-
-            // Dma Controllers
-            .dma0 = DmaController(0).init(),
-            .dma1 = DmaController(1).init(),
-            .dma2 = DmaController(2).init(),
-            .dma3 = DmaController(3).init(),
-
-            // Timers
-            .tim0 = Timer(0).init(sched),
-            .tim1 = Timer(1).init(sched),
-            .tim2 = Timer(2).init(sched),
-            .tim3 = Timer(3).init(sched),
         };
     }
 
@@ -74,16 +46,16 @@ pub fn read32(bus: *const Bus, addr: u32) u32 {
         0x0400_0006 => @as(u32, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
 
         // DMA Transfers
-        0x0400_00B8 => @as(u32, bus.io.dma0.cnt.raw) << 16,
-        0x0400_00C4 => @as(u32, bus.io.dma1.cnt.raw) << 16,
-        0x0400_00D0 => @as(u32, bus.io.dma1.cnt.raw) << 16,
-        0x0400_00DC => @as(u32, bus.io.dma3.cnt.raw) << 16,
+        0x0400_00B8 => @as(u32, bus.dma._0.cnt.raw) << 16,
+        0x0400_00C4 => @as(u32, bus.dma._1.cnt.raw) << 16,
+        0x0400_00D0 => @as(u32, bus.dma._1.cnt.raw) << 16,
+        0x0400_00DC => @as(u32, bus.dma._3.cnt.raw) << 16,
 
         // Timers
-        0x0400_0100 => @as(u32, bus.io.tim0.cnt.raw) << 16 | bus.io.tim0.counter(),
-        0x0400_0104 => @as(u32, bus.io.tim1.cnt.raw) << 16 | bus.io.tim1.counter(),
-        0x0400_0108 => @as(u32, bus.io.tim2.cnt.raw) << 16 | bus.io.tim2.counter(),
-        0x0400_010C => @as(u32, bus.io.tim3.cnt.raw) << 16 | bus.io.tim3.counter(),
+        0x0400_0100 => @as(u32, bus.tim._0.cnt.raw) << 16 | bus.tim._0.counter(),
+        0x0400_0104 => @as(u32, bus.tim._1.cnt.raw) << 16 | bus.tim._1.counter(),
+        0x0400_0108 => @as(u32, bus.tim._2.cnt.raw) << 16 | bus.tim._2.counter(),
+        0x0400_010C => @as(u32, bus.tim._3.cnt.raw) << 16 | bus.tim._3.counter(),
 
         // Interrupts
         0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
@@ -112,24 +84,24 @@ pub fn write32(bus: *Bus, addr: u32, word: u32) void {
         0x0400_00A4 => log.warn("Wrote 0x{X:0>8} to FIFO_B", .{word}),
 
         // DMA Transfers
-        0x0400_00B0 => bus.io.dma0.writeSad(word),
-        0x0400_00B4 => bus.io.dma0.writeDad(word),
-        0x0400_00B8 => bus.io.dma0.writeCnt(word),
-        0x0400_00BC => bus.io.dma1.writeSad(word),
-        0x0400_00C0 => bus.io.dma1.writeDad(word),
-        0x0400_00C4 => bus.io.dma1.writeCnt(word),
-        0x0400_00C8 => bus.io.dma2.writeSad(word),
-        0x0400_00CC => bus.io.dma2.writeDad(word),
-        0x0400_00D0 => bus.io.dma2.writeCnt(word),
-        0x0400_00D4 => bus.io.dma3.writeSad(word),
-        0x0400_00D8 => bus.io.dma3.writeDad(word),
-        0x0400_00DC => bus.io.dma3.writeCnt(word),
+        0x0400_00B0 => bus.dma._0.writeSad(word),
+        0x0400_00B4 => bus.dma._0.writeDad(word),
+        0x0400_00B8 => bus.dma._0.writeCnt(word),
+        0x0400_00BC => bus.dma._1.writeSad(word),
+        0x0400_00C0 => bus.dma._1.writeDad(word),
+        0x0400_00C4 => bus.dma._1.writeCnt(word),
+        0x0400_00C8 => bus.dma._2.writeSad(word),
+        0x0400_00CC => bus.dma._2.writeDad(word),
+        0x0400_00D0 => bus.dma._2.writeCnt(word),
+        0x0400_00D4 => bus.dma._3.writeSad(word),
+        0x0400_00D8 => bus.dma._3.writeDad(word),
+        0x0400_00DC => bus.dma._3.writeCnt(word),
 
         // Timers
-        0x0400_0100 => bus.io.tim0.writeCnt(word),
-        0x0400_0104 => bus.io.tim1.writeCnt(word),
-        0x0400_0108 => bus.io.tim2.writeCnt(word),
-        0x0400_010C => bus.io.tim3.writeCnt(word),
+        0x0400_0100 => bus.tim._0.writeCnt(word),
+        0x0400_0104 => bus.tim._1.writeCnt(word),
+        0x0400_0108 => bus.tim._2.writeCnt(word),
+        0x0400_010C => bus.tim._3.writeCnt(word),
 
         // Serial Communication 1
         0x0400_0120 => log.warn("Wrote 0x{X:0>8} to SIODATA32", .{word}),
@@ -153,14 +125,14 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         0x0400_0088 => bus.apu.bias.raw,
 
         // Timers
-        0x0400_0100 => bus.io.tim0.counter(),
-        0x0400_0102 => bus.io.tim0.cnt.raw,
-        0x0400_0104 => bus.io.tim1.counter(),
-        0x0400_0106 => bus.io.tim1.cnt.raw,
-        0x0400_0108 => bus.io.tim2.counter(),
-        0x0400_010A => bus.io.tim2.cnt.raw,
-        0x0400_010C => bus.io.tim3.counter(),
-        0x0400_010E => bus.io.tim3.cnt.raw,
+        0x0400_0100 => bus.tim._0.counter(),
+        0x0400_0102 => bus.tim._0.cnt.raw,
+        0x0400_0104 => bus.tim._1.counter(),
+        0x0400_0106 => bus.tim._1.cnt.raw,
+        0x0400_0108 => bus.tim._2.counter(),
+        0x0400_010A => bus.tim._2.cnt.raw,
+        0x0400_010C => bus.tim._3.counter(),
+        0x0400_010E => bus.tim._3.cnt.raw,
 
         // Serial Communication 1
         0x0400_0128 => unimplementedRead("Read halfword from SIOCNT", .{}),
@@ -216,24 +188,24 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
         0x0400_0088 => bus.apu.bias.raw = halfword,
 
         // Dma Transfers
-        0x0400_00B8 => bus.io.dma0.writeWordCount(halfword),
-        0x0400_00BA => bus.io.dma0.writeCntHigh(halfword),
-        0x0400_00C4 => bus.io.dma1.writeWordCount(halfword),
-        0x0400_00C6 => bus.io.dma1.writeCntHigh(halfword),
-        0x0400_00D0 => bus.io.dma2.writeWordCount(halfword),
-        0x0400_00D2 => bus.io.dma2.writeCntHigh(halfword),
-        0x0400_00DC => bus.io.dma3.writeWordCount(halfword),
-        0x0400_00DE => bus.io.dma3.writeCntHigh(halfword),
+        0x0400_00B8 => bus.dma._0.writeWordCount(halfword),
+        0x0400_00BA => bus.dma._0.writeCntHigh(halfword),
+        0x0400_00C4 => bus.dma._1.writeWordCount(halfword),
+        0x0400_00C6 => bus.dma._1.writeCntHigh(halfword),
+        0x0400_00D0 => bus.dma._2.writeWordCount(halfword),
+        0x0400_00D2 => bus.dma._2.writeCntHigh(halfword),
+        0x0400_00DC => bus.dma._3.writeWordCount(halfword),
+        0x0400_00DE => bus.dma._3.writeCntHigh(halfword),
 
         // Timers
-        0x0400_0100 => bus.io.tim0.writeCntLow(halfword),
-        0x0400_0102 => bus.io.tim0.writeCntHigh(halfword),
-        0x0400_0104 => bus.io.tim1.writeCntLow(halfword),
-        0x0400_0106 => bus.io.tim1.writeCntHigh(halfword),
-        0x0400_0108 => bus.io.tim2.writeCntLow(halfword),
-        0x0400_010A => bus.io.tim2.writeCntHigh(halfword),
-        0x0400_010C => bus.io.tim3.writeCntLow(halfword),
-        0x0400_010E => bus.io.tim3.writeCntHigh(halfword),
+        0x0400_0100 => bus.tim._0.writeCntLow(halfword),
+        0x0400_0102 => bus.tim._0.writeCntHigh(halfword),
+        0x0400_0104 => bus.tim._1.writeCntLow(halfword),
+        0x0400_0106 => bus.tim._1.writeCntHigh(halfword),
+        0x0400_0108 => bus.tim._2.writeCntLow(halfword),
+        0x0400_010A => bus.tim._2.writeCntHigh(halfword),
+        0x0400_010C => bus.tim._3.writeCntLow(halfword),
+        0x0400_010E => bus.tim._3.writeCntHigh(halfword),
 
         // Serial Communication 1
         0x0400_0120 => log.warn("Wrote 0x{X:0>4} to SIOMULTI0", .{halfword}),

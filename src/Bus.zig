@@ -7,6 +7,8 @@ const Io = @import("bus/io.zig").Io;
 const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
 const Apu = @import("apu.zig").Apu;
+const DmaControllers = @import("bus/dma.zig").DmaControllers;
+const Timers = @import("bus/timer.zig").Timers;
 const Scheduler = @import("scheduler.zig").Scheduler;
 
 const io = @import("bus/io.zig");
@@ -20,8 +22,11 @@ pak: GamePak,
 bios: Bios,
 ppu: Ppu,
 apu: Apu,
+dma: DmaControllers,
+tim: Timers,
 iwram: Iwram,
 ewram: Ewram,
+
 io: Io,
 
 pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bios: ?[]const u8) !Self {
@@ -32,7 +37,9 @@ pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bio
         .apu = Apu.init(),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
-        .io = Io.init(sched),
+        .dma = DmaControllers.init(),
+        .tim = Timers.init(sched),
+        .io = Io.init(),
     };
 }
 
