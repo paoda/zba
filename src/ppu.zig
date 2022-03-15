@@ -3,12 +3,14 @@ const io = @import("bus/io.zig");
 
 const EventKind = @import("scheduler.zig").EventKind;
 const Scheduler = @import("scheduler.zig").Scheduler;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
+const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
 
 pub const width = 240;
 pub const height = 160;
@@ -350,6 +352,59 @@ pub const Ppu = struct {
                 break :blk offset + offset_2 + (x % 256 / 8) * 2 + (y % 512 / 8) * 0x40;
             },
         };
+    }
+
+    pub fn handleHDrawEnd(self: *Self, cpu: *Arm7tdmi) void {
+        // Transitioning to a Hblank
+        if (self.dispstat.hblank_irq.read()) {
+            cpu.bus.io.irq.hblank.set();
+            cpu.handleInterrupt();
+        }
+
+        // See if HBlank DMA is present and not enabled
+        pollBlankingDma(cpu.bus, .HBlank);
+
+        self.dispstat.hblank.set();
+        self.sched.push(.HBlank, self.sched.now() + (68 * 4));
+    }
+
+    pub fn handleHBlankEnd(self: *Self, cpu: *Arm7tdmi) void {
+        // The End of a Hblank (During Draw or Vblank)
+        const old_scanline = self.vcount.scanline.read();
+        const scanline = (old_scanline + 1) % 228;
+
+        self.vcount.scanline.write(scanline);
+        self.dispstat.hblank.unset();
+
+        // Perform Vc == VcT check
+        const coincidence = scanline == self.dispstat.vcount_trigger.read();
+        self.dispstat.coincidence.write(coincidence);
+
+        if (coincidence and self.dispstat.vcount_irq.read()) {
+            cpu.bus.io.irq.coincidence.set();
+            cpu.handleInterrupt();
+        }
+
+        if (scanline < 160) {
+            // Transitioning to another Draw
+            self.sched.push(.Draw, self.sched.now() + (240 * 4));
+        } else {
+            // Transitioning to a Vblank
+            if (scanline == 160) {
+                self.dispstat.vblank.set();
+
+                if (self.dispstat.vblank_irq.read()) {
+                    cpu.bus.io.irq.vblank.set();
+                    cpu.handleInterrupt();
+                }
+
+                // See if Vblank DMA is present and not enabled
+                pollBlankingDma(cpu.bus, .VBlank);
+            }
+
+            if (scanline == 227) self.dispstat.vblank.unset();
+            self.sched.push(.VBlank, self.sched.now() + (240 * 4));
+        }
     }
 };
 
