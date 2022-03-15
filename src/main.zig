@@ -88,7 +88,7 @@ pub fn main() anyerror!void {
     var emu_fps = Atomic(u64).init(0);
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.runEmuThread, .{ &quit, &pause, &emu_fps, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &pause, &emu_fps, &scheduler, &cpu, &bus });
     defer emu_thread.join();
 
     // Initialize SDL
