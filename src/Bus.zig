@@ -147,7 +147,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0800_0000...0x09FF_FFFF => self.pak.get8(addr - 0x0800_0000),
         0x0A00_0000...0x0BFF_FFFF => self.pak.get8(addr - 0x0A00_0000),
         0x0C00_0000...0x0DFF_FFFF => self.pak.get8(addr - 0x0C00_0000),
-        0x0E00_0000...0x0EFF_FFFF => self.pak.sram.get8(addr & 0xFFFF),
+        0x0E00_0000...0x0E00_FFFF => self.pak.backup.get8(addr & 0xFFFF),
 
         else => undRead("Tried to read from 0x{X:0>2}", .{addr}),
     };
@@ -162,7 +162,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         0x0400_0410 => log.info("Ignored write of 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
 
         // External Memory (Game Pak)
-        0x0E00_0000...0x0E00_FFFF => self.pak.sram.set8(addr & 0xFFFF, byte),
+        0x0E00_0000...0x0E00_FFFF => self.pak.backup.set8(addr & 0xFFFF, byte),
         else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
