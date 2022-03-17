@@ -84,11 +84,10 @@ pub fn main() anyerror!void {
 
     // Init Atomics
     var quit = Atomic(bool).init(false);
-    var pause = Atomic(bool).init(false);
-    var emu_fps = Atomic(u64).init(0);
+    var emu_fps = FpsAverage.init();
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &pause, &emu_fps, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .UnlimitedFPS, &quit, &emu_fps, &scheduler, &cpu, &bus });
     defer emu_thread.join();
 
     // Initialize SDL
@@ -118,8 +117,6 @@ pub fn main() anyerror!void {
 
     // Init FPS Timer
     var dyn_title_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
-
-    var fps_avg = FpsAverage.init();
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
@@ -167,17 +164,13 @@ pub fn main() anyerror!void {
         }
 
         // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
-        pause.store(true, .Unordered);
         const buf_ptr = bus.ppu.framebuf.ptr;
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
-        pause.store(false, .Unordered);
 
-        fps_avg.add(emu_fps.load(.Unordered));
-        const avg = fps_avg.calc();
-
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 60) }) catch unreachable;
+        const avg = emu_fps.calc();
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 59) }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 

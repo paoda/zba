@@ -3,6 +3,7 @@ const std = @import("std");
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const FpsAverage = @import("util.zig").FpsAverage;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
@@ -24,13 +25,13 @@ const RunKind = enum {
     LimitedBusy,
 };
 
-pub fn run(kind: RunKind, quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     switch (kind) {
-        .Unlimited => runUnSync(quit, pause, sched, cpu, bus),
-        .Limited => runSync(quit, pause, sched, cpu, bus),
-        .UnlimitedFPS => runUnSyncFps(quit, pause, fps, sched, cpu, bus),
-        .LimitedFPS => runSyncFps(quit, pause, fps, sched, cpu, bus),
-        .LimitedBusy => runBusyLoop(quit, pause, sched, cpu, bus),
+        .Unlimited => runUnSync(quit, sched, cpu, bus),
+        .Limited => runSync(quit, sched, cpu, bus),
+        .UnlimitedFPS => runUnSyncFps(quit, fps, sched, cpu, bus),
+        .LimitedFPS => runSyncFps(quit, fps, sched, cpu, bus),
+        .LimitedBusy => runBusyLoop(quit, sched, cpu, bus),
     }
 }
 
@@ -46,17 +47,17 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     }
 }
 
-pub fn runUnSync(quit: *Atomic(bool), pause: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runUnSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     log.info("Unsynchronized EmuThread has begun", .{});
-    while (!quit.load(.Unordered)) if (!pause.load(.Unordered)) runFrame(sched, cpu, bus);
+    while (!quit.load(.Unordered)) runFrame(sched, cpu, bus);
 }
 
-pub fn runSync(quit: *Atomic(bool), pause: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     log.info("Synchronized EmuThread has begun", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
-    while (!quit.load(.Unordered)) if (!pause.load(.Unordered)) {
+    while (!quit.load(.Unordered)) {
         runFrame(sched, cpu, bus);
 
         // Put the Thread to Sleep + Backup Spin Loop
@@ -65,26 +66,26 @@ pub fn runSync(quit: *Atomic(bool), pause: *Atomic(bool), sched: *Scheduler, cpu
 
         // Update to the new wake time
         wake_time += frame_period;
-    };
+    }
 }
 
-pub fn runUnSyncFps(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runUnSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     log.info("Unsynchronized EmuThread with FPS Tracking has begun", .{});
     var fps_timer = Timer.start() catch unreachable;
 
-    while (!quit.load(.Unordered)) if (!pause.load(.Unordered)) {
+    while (!quit.load(.Unordered)) {
         runFrame(sched, cpu, bus);
-        fps.store(emuFps(fps_timer.lap()), .Unordered);
-    };
+        fps.add(emuFps(fps_timer.lap()));
+    }
 }
 
-pub fn runSyncFps(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     log.info("Synchronized EmuThread has begun", .{});
     var timer = Timer.start() catch unreachable;
     var fps_timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
-    while (!quit.load(.Unordered)) if (!pause.load(.Unordered)) {
+    while (!quit.load(.Unordered)) {
         runFrame(sched, cpu, bus);
 
         // Put the Thread to Sleep + Backup Spin Loop
@@ -92,29 +93,29 @@ pub fn runSyncFps(quit: *Atomic(bool), pause: *Atomic(bool), fps: *Atomic(u64), 
         sleep(&timer, &wake_time);
 
         // Determine FPS
-        fps.store(emuFps(fps_timer.lap()), .Unordered);
+        fps.add(emuFps(fps_timer.lap()));
 
         // Update to the new wake time
         wake_time += frame_period;
-    };
+    }
 }
 
-pub fn runBusyLoop(quit: *Atomic(bool), pause: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     log.info("Run EmuThread with spin-loop sync", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
-    while (!quit.load(.Unordered)) if (!pause.load(.Unordered)) {
+    while (!quit.load(.Unordered)) {
         runFrame(sched, cpu, bus);
         spinLoop(&timer, wake_time);
 
         // Update to the new wake time
         wake_time += frame_period;
-    };
+    }
 }
 
 fn sleep(timer: *Timer, wake_time: *u64) void {
-    const step = std.time.ns_per_ms * 10;
+    // const step = std.time.ns_per_ms * 10; // 10ms
     const timestamp = timer.read();
 
     // ns_late is non zero if we are late.
@@ -130,13 +131,15 @@ fn sleep(timer: *Timer, wake_time: *u64) void {
 
     const sleep_for = frame_period - ns_late;
 
-    // Employ several sleep calls in periods of 10ms
-    // By doing this the behaviour should average out to be
-    // more consistent
-    const loop_count = sleep_for / step; // How many groups of 10ms
+    // // Employ several sleep calls in periods of 10ms
+    // // By doing this the behaviour should average out to be
+    // // more consistent
+    // const loop_count = sleep_for / step; // How many groups of 10ms
 
-    var i: usize = 0;
-    while (i < loop_count) : (i += 1) std.time.sleep(step);
+    // var i: usize = 0;
+    // while (i < loop_count) : (i += 1) std.time.sleep(step);
+
+    std.time.sleep(sleep_for);
 
     // Spin to make up the difference if there is a need
     // Make sure that we're using the old wake time and not the onne we recalculated
