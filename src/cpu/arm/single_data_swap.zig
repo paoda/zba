@@ -4,6 +4,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
+const rotr = @import("../../util.zig").rotr;
+
 pub fn singleDataSwap(comptime B: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
@@ -20,7 +22,7 @@ pub fn singleDataSwap(comptime B: bool) InstrFn {
                 cpu.r[rd] = value;
             } else {
                 // SWP
-                const value = std.math.rotr(u32, bus.read32(address & 0xFFFF_FFFC), 8 * (address & 0x3));
+                const value = rotr(u32, bus.read32(address & 0xFFFF_FFFC), 8 * (address & 0x3));
                 bus.write32(address & 0xFFFF_FFFC, cpu.r[rm]);
                 cpu.r[rd] = value;
             }

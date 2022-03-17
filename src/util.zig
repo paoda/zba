@@ -1,10 +1,19 @@
 const std = @import("std");
+const Log2Int = std.math.Log2Int;
 
-pub fn sext(comptime bits: comptime_int, value: u32) u32 {
+pub inline fn sext(comptime bits: comptime_int, value: u32) u32 {
     comptime std.debug.assert(bits <= 32);
     const amount = 32 - bits;
 
     return @bitCast(u32, @bitCast(i32, value << amount) >> amount);
+}
+
+/// See https://godbolt.org/z/W3en9Eche
+pub inline fn rotr(comptime T: type, value: T, r: anytype) T {
+    comptime std.debug.assert(@typeInfo(T).Int.signedness == .unsigned);
+    const ar = @truncate(Log2Int(T), r);
+
+    return value >> ar | value << @truncate(Log2Int(T), @typeInfo(T).Int.bits - @as(T, ar));
 }
 
 pub const FpsAverage = struct {

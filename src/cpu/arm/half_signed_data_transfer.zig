@@ -5,6 +5,7 @@ const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
 const sext = @import("../../util.zig").sext;
+const rotr = @import("../../util.zig").rotr;
 
 pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
@@ -38,7 +39,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     0b01 => {
                         // LDRH
                         const value = bus.read16(address & 0xFFFF_FFFE);
-                        result = std.math.rotr(u32, value, 8 * (address & 1));
+                        result = rotr(u32, value, 8 * (address & 1));
                     },
                     0b10 => {
                         // LDRSB
@@ -52,7 +53,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                             break :blk sext(16, bus.read16(address));
                         };
 
-                        result = std.math.rotr(u32, value, 8 * (address & 1));
+                        result = rotr(u32, value, 8 * (address & 1));
                     },
                     0b00 => unreachable, // SWP
                 }

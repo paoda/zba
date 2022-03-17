@@ -6,6 +6,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ArmInstrFn;
 
+const rotr = @import("../../util.zig").rotr;
+
 pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, comptime B: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u32) void {
@@ -33,7 +35,7 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
                 } else {
                     // LDR
                     const value = bus.read32(address & 0xFFFF_FFFC);
-                    result = std.math.rotr(u32, value, 8 * (address & 0x3));
+                    result = rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {

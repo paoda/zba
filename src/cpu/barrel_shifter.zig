@@ -3,6 +3,8 @@ const std = @import("std");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const CPSR = @import("../cpu.zig").PSR;
 
+const rotr = @import("../util.zig").rotr;
+
 pub fn execute(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var result: u32 = undefined;
     if (opcode >> 4 & 1 == 1) {
@@ -141,7 +143,7 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
 }
 
 pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
-    const result = std.math.rotr(u32, rm, total_amount);
+    const result = rotr(u32, rm, total_amount);
 
     if (S and total_amount != 0) {
         cpsr.c.write(result >> 31 & 1 == 1);

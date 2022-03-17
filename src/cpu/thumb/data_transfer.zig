@@ -4,6 +4,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
 
+const rotr = @import("../../util.zig").rotr;
+
 pub fn format6(comptime rd: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
@@ -39,7 +41,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     0b10 => {
                         // LDRH
                         const value = bus.read16(address & 0xFFFF_FFFE);
-                        cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 1));
+                        cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
                     },
                     0b11 => {
                         // LDRSH
@@ -49,7 +51,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                             break :blk sext(16, bus.read16(address));
                         };
 
-                        cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 1));
+                        cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
                     },
                 }
             } else {
@@ -66,7 +68,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     0b10 => {
                         // LDR
                         const value = bus.read32(address & 0xFFFF_FFFC);
-                        cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
+                        cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
                     },
                     0b11 => {
                         // LDRB
@@ -93,7 +95,7 @@ pub fn format9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn 
                     // LDR
                     const address = cpu.r[rb] + (@as(u32, offset) << 2);
                     const value = bus.read32(address & 0xFFFF_FFFC);
-                    cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
+                    cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
@@ -121,7 +123,7 @@ pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
             if (L) {
                 // LDRH
                 const value = bus.read16(address & 0xFFFF_FFFE);
-                cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 1));
+                cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
             } else {
                 // STRH
                 bus.write16(address & 0xFFFF_FFFE, @truncate(u16, cpu.r[rd]));
@@ -139,7 +141,7 @@ pub fn format11(comptime L: bool, comptime rd: u3) InstrFn {
             if (L) {
                 // LDR
                 const value = bus.read32(address & 0xFFFF_FFFC);
-                cpu.r[rd] = std.math.rotr(u32, value, 8 * (address & 0x3));
+                cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
             } else {
                 // STR
                 bus.write32(address & 0xFFFF_FFFC, cpu.r[rd]);

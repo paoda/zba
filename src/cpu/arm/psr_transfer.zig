@@ -7,6 +7,8 @@ const PSR = @import("../../cpu.zig").PSR;
 
 const log = std.log.scoped(.PsrTransfer);
 
+const rotr = @import("../../util.zig").rotr;
+
 pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
@@ -22,7 +24,7 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                     // MSR
                     const field_mask = @truncate(u4, opcode >> 16 & 0xF);
                     const rm_idx = opcode & 0xF;
-                    const right = if (I) std.math.rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1) else cpu.r[rm_idx];
+                    const right = if (I) rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1) else cpu.r[rm_idx];
 
                     if (R and !cpu.hasSPSR()) log.warn("Tried to write to SPSR in User/System Mode", .{});
 
