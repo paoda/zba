@@ -92,35 +92,34 @@ pub const Ppu = struct {
             // Attributes in OAM are 6 bytes long, with 2 bytes of padding
             // Grab Attributes from OAM
             const attr0 = @bitCast(Attr0, self.oam.get16(i));
-            const attr1 = @bitCast(Attr1, self.oam.get16(i + 2));
-            const attr2 = @bitCast(Attr2, self.oam.get16(i + 4));
-            const sprite = Sprite.init(attr0, attr1, attr2);
 
-            // Only consider enabled sprites
-            if (sprite.isDisabled()) continue;
+            // Only consider enabled Sprites
+            if (!attr0.disabled.read()) {
+                const attr1 = @bitCast(Attr1, self.oam.get16(i + 2));
 
-            // When fetching sprites we only care about ones that could be rendered
-            // on this scanline
-            const iy = @bitCast(i8, y);
+                // When fetching sprites we only care about ones that could be rendered
+                // on this scanline
+                const iy = @bitCast(i8, y);
 
-            const start = sprite.y();
-            const istart = @bitCast(i8, start);
+                const start = attr0.y.read();
+                const istart = @bitCast(i8, start);
 
-            const end = start +% sprite.height;
-            const iend = @bitCast(i8, end);
+                const end = start +% spriteDimensions(attr0.shape.read(), attr1.size.read())[1];
+                const iend = @bitCast(i8, end);
 
-            // Sprites are expected to be able to wraparound, we perform the same check
-            // for unsigned and signed values so that we handle all valid sprite positions
-            if ((start <= y and y < end) or (istart <= iy and iy < iend)) {
-                for (self.scanline_sprites) |*maybe_sprite| {
-                    if (maybe_sprite.* == null) {
-                        maybe_sprite.* = sprite;
-                        continue :search;
+                // Sprites are expected to be able to wraparound, we perform the same check
+                // for unsigned and signed values so that we handle all valid sprite positions
+                if ((start <= y and y < end) or (istart <= iy and iy < iend)) {
+                    for (self.scanline_sprites) |*maybe_sprite| {
+                        if (maybe_sprite.* == null) {
+                            maybe_sprite.* = Sprite.init(attr0, attr1, @bitCast(Attr2, self.oam.get16(i + 4)));
+                            continue :search;
+                        }
                     }
-                }
 
-                log.err("Found more than 128 sprites in OAM Search", .{});
-                unreachable; // TODO: Is this truly unreachable?
+                    log.err("Found more than 128 sprites in OAM Search", .{});
+                    unreachable; // TODO: Is this truly unreachable?
+                }
             }
         }
     }
@@ -630,10 +629,6 @@ const Sprite = struct {
 
     inline fn priority(self: *const Self) u2 {
         return self.attr2.rel_prio.read();
-    }
-
-    inline fn isDisabled(self: *const Self) bool {
-        return self.attr0.disabled.read();
     }
 };
 

@@ -107,8 +107,15 @@ fn DmaController(comptime id: u2) type {
             self.writeCntHigh(@truncate(u16, word >> 16));
         }
 
-        pub fn step(self: *Self, bus: *Bus) bool {
-            if (!self.enabled or !self.cnt.enabled.read()) return false;
+        pub inline fn check(self: *Self, bus: *Bus) bool {
+            if (!self.enabled) return false; // FIXME: Check CNT register?
+
+            self.step(bus);
+            return true;
+        }
+
+        pub fn step(self: *Self, bus: *Bus) void {
+            @setCold(true);
 
             const sad_adj = std.meta.intToEnum(Adjustment, self.cnt.sad_adj.read()) catch unreachable;
             const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
@@ -160,8 +167,6 @@ fn DmaController(comptime id: u2) type {
                 // timing window
                 self.enabled = false;
             }
-
-            return true;
         }
 
         pub fn isBlocking(self: *const Self) bool {

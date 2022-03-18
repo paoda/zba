@@ -296,24 +296,22 @@ pub const Arm7tdmi = struct {
     }
 
     fn handleDMATransfers(self: *Self) bool {
-        if (self.bus.dma._0.step(self.bus)) return self.bus.dma._0.isBlocking();
-        if (self.bus.dma._1.step(self.bus)) return self.bus.dma._1.isBlocking();
-        if (self.bus.dma._2.step(self.bus)) return self.bus.dma._2.isBlocking();
-        if (self.bus.dma._3.step(self.bus)) return self.bus.dma._3.isBlocking();
+        if (self.bus.dma._0.check(self.bus)) return self.bus.dma._0.isBlocking();
+        if (self.bus.dma._1.check(self.bus)) return self.bus.dma._1.isBlocking();
+        if (self.bus.dma._2.check(self.bus)) return self.bus.dma._2.isBlocking();
+        if (self.bus.dma._3.check(self.bus)) return self.bus.dma._3.isBlocking();
 
         return false;
     }
 
     fn thumbFetch(self: *Self) u16 {
-        const halfword = self.bus.read16(self.r[15]);
-        self.r[15] += 2;
-        return halfword;
+        defer self.r[15] += 2;
+        return self.bus.read16(self.r[15]);
     }
 
     fn fetch(self: *Self) u32 {
-        const word = self.bus.read32(self.r[15]);
-        self.r[15] += 4;
-        return word;
+        defer self.r[15] += 4;
+        return self.bus.read32(self.r[15]);
     }
 
     pub fn fakePC(self: *const Self) u32 {
