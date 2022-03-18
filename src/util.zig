@@ -42,3 +42,14 @@ pub const FpsAverage = struct {
         self.sample_count = 1;
     }
 };
+
+pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
+    comptime std.debug.assert(@typeInfo(T) == .Int);
+
+    var result: [@sizeOf(T)]u8 = undefined;
+
+    var i: Log2Int(T) = 0;
+    while (i < result.len) : (i += 1) result[i] = @truncate(u8, value >> i * @bitSizeOf(u8));
+
+    return result;
+}

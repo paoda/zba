@@ -11,10 +11,14 @@ const Bitfield = @import("bitfield").Bitfield;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
 const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
+const intToBytes = @import("util.zig").intToBytes;
+
+/// This is used to generate byuu / Talurabi's Color Correction algorithm
+// const COLOUR_LUT = genColourLut();
 
 pub const width = 240;
 pub const height = 160;
-pub const framebuf_pitch = width * @sizeOf(u16);
+pub const framebuf_pitch = width * @sizeOf(u32);
 
 pub const Ppu = struct {
     const Self = @This();
@@ -274,8 +278,7 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x0 => {
-                const start = framebuf_pitch * @as(usize, scanline);
-
+                const fb_base = framebuf_pitch * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var i: usize = 0;
@@ -292,9 +295,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, j| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-
-                    self.framebuf[(start + j * 2 + 1)] = @truncate(u8, bgr555 >> 8);
-                    self.framebuf[(start + j * 2 + 0)] = @truncate(u8, bgr555);
+                    std.mem.copy(u8, self.framebuf[fb_base + j * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
 
                 // Reset Scanline Buffer
@@ -303,23 +304,26 @@ pub const Ppu = struct {
                 std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x3 => {
-                const start = framebuf_pitch * @as(usize, scanline);
-                std.mem.copy(u8, self.framebuf[start..][0..framebuf_pitch], self.vram.buf[start..][0..framebuf_pitch]);
+                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const vram_base = width * @sizeOf(u16) * @as(usize, scanline);
+
+                var i: usize = 0;
+                while (i < width) : (i += 1) {
+                    const bgr555 = self.vram.get16(vram_base + i * @sizeOf(u16));
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                }
             },
             0x4 => {
                 const select = self.dispcnt.frame_select.read();
-                const vram_start = width * @as(usize, scanline);
-                const buf_start = vram_start * @sizeOf(u16);
-
-                const start = vram_start + if (select) 0xA000 else @as(usize, 0);
-                const end = start + width; // Each Entry is only a byte long
+                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const vram_base = width * @as(usize, scanline) + if (select) 0xA000 else @as(usize, 0);
 
                 // Render Current Scanline
-                for (self.vram.buf[start..end]) |byte, i| {
-                    const id = @as(u16, byte) * 2;
-                    const j = i * @sizeOf(u16);
+                for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
+                    const pal_id = @as(u16, byte) * @sizeOf(u16);
+                    const bgr555 = self.palette.get16(pal_id);
 
-                    std.mem.copy(u8, self.framebuf[(buf_start + j)..][0..2], self.palette.buf[id..][0..2]);
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -683,4 +687,45 @@ fn spriteDimensions(shape: u2, size: u2) [2]u8 {
         },
         else => std.debug.panic("{} is an invalid sprite shape", .{shape}),
     };
+}
+
+fn toRgba8888(bgr555: u16) u32 {
+    const b = @as(u32, bgr555 >> 10 & 0x1F);
+    const g = @as(u32, bgr555 >> 5 & 0x1F);
+    const r = @as(u32, bgr555 & 0x1F);
+
+    return (r << 3 | r >> 2) << 24 | (g << 3 | g >> 2) << 16 | (b << 3 | b >> 2) << 8 | 0xFF;
+}
+
+fn genColourLut() [0x8000]u32 {
+    return comptime {
+        @setEvalBranchQuota(std.math.maxInt(u32));
+
+        var lut: [0x8000]u32 = undefined;
+        for (lut) |*px, i| px.* = toRgba8888Talarubi(i);
+        return lut;
+    };
+}
+
+// FIXME: The implementation is incorrect and using it in the LUT crashes the compiler (OOM)
+/// Implementation courtesy of byuu and Talarubi at https://near.sh/articles/video/color-emulation
+fn toRgba8888Talarubi(bgr555: u16) u32 {
+    @setRuntimeSafety(false);
+
+    const lcd_gamma: f64 = 4;
+    const out_gamma: f64 = 2.2;
+
+    const b = @as(u32, bgr555 >> 10 & 0x1F);
+    const g = @as(u32, bgr555 >> 5 & 0x1F);
+    const r = @as(u32, bgr555 & 0x1F);
+
+    const lb = std.math.pow(f64, @intToFloat(f64, b << 3 | b >> 2) / 31, lcd_gamma);
+    const lg = std.math.pow(f64, @intToFloat(f64, g << 3 | g >> 2) / 31, lcd_gamma);
+    const lr = std.math.pow(f64, @intToFloat(f64, r << 3 | r >> 2) / 31, lcd_gamma);
+
+    const out_b = std.math.pow(f64, (220 * lb + 10 * lg + 50 * lr) / 255, 1 / out_gamma);
+    const out_g = std.math.pow(f64, (30 * lb + 230 * lg + 10 * lr) / 255, 1 / out_gamma);
+    const out_r = std.math.pow(f64, (0 * lb + 50 * lg + 255 * lr) / 255, 1 / out_gamma);
+
+    return @floatToInt(u32, out_r) << 24 | @floatToInt(u32, out_g) << 16 | @floatToInt(u32, out_b) << 8 | 0xFF;
 }

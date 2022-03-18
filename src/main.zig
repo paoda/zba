@@ -72,7 +72,7 @@ pub fn main() anyerror!void {
     var cpu = Arm7tdmi.init(&scheduler, &bus);
     cpu.fastBoot();
 
-    var log_file: ?File = undefined;
+    var log_file: ?File = null;
     if (enable_logging) {
         const file_name: []const u8 = if (is_binary) "zba.bin" else "zba.log";
         const file = try std.fs.cwd().createFile(file_name, .{});
@@ -112,7 +112,7 @@ pub fn main() anyerror!void {
     var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
     defer SDL.SDL_DestroyRenderer(renderer);
 
-    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_BGR555, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
+    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_RGBA8888, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
     defer SDL.SDL_DestroyTexture(texture);
 
     // Init FPS Timer
