@@ -37,14 +37,9 @@ pub fn main() anyerror!void {
     var args = try clap.parse(clap.Help, &params, .{});
     defer args.deinit();
 
-    if (args.flag("--help")) {
-        return clap.help(std.io.getStdErr().writer(), &params);
-    }
+    if (args.flag("--help")) return clap.help(std.io.getStdErr().writer(), &params);
 
-    var maybe_bios: ?[]const u8 = null;
-    if (args.option("--bios")) |path| {
-        maybe_bios = path;
-    }
+    const maybe_bios: ?[]const u8 = if (args.option("--bios")) |p| p else null;
 
     const positionals = args.positionals();
     const stderr = std.io.getStdErr();
@@ -72,14 +67,11 @@ pub fn main() anyerror!void {
     var cpu = Arm7tdmi.init(&scheduler, &bus);
     cpu.fastBoot();
 
-    var log_file: ?File = null;
-    if (enable_logging) {
-        const file_name: []const u8 = if (is_binary) "zba.bin" else "zba.log";
-        const file = try std.fs.cwd().createFile(file_name, .{});
+    const log_file: ?File = if (enable_logging) blk: {
+        const file = try std.fs.cwd().createFile(if (is_binary) "zba.bin" else "zba.log", .{});
         cpu.useLogger(&file, is_binary);
-
-        log_file = file;
-    }
+        break :blk file;
+    } else null;
     defer if (log_file) |file| file.close();
 
     // Init Atomics
@@ -109,7 +101,7 @@ pub fn main() anyerror!void {
     ) orelse sdlPanic();
     defer SDL.SDL_DestroyWindow(window);
 
-    var renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
+    const renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
     defer SDL.SDL_DestroyRenderer(renderer);
 
     const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_RGBA8888, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
@@ -120,7 +112,7 @@ pub fn main() anyerror!void {
 
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
-        if (SDL.SDL_PollEvent(&event) != 0) {
+        while (SDL.SDL_PollEvent(&event) != 0) {
             // Pause Emulation Thread during Input Writing
 
             switch (event.type) {
