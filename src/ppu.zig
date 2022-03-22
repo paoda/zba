@@ -71,6 +71,7 @@ pub const Ppu = struct {
         self.alloc.free(self.framebuf);
         self.vram.deinit();
         self.palette.deinit();
+        self.oam.deinit();
     }
 
     pub fn setBgOffsets(self: *Self, comptime n: u3, word: u32) void {
@@ -515,6 +516,10 @@ const Oam = struct {
             .buf = buf,
             .alloc = alloc,
         };
+    }
+
+    fn deinit(self: Self) void {
+        self.alloc.free(self.buf);
     }
 
     pub fn get32(self: *const Self, idx: usize) u32 {
