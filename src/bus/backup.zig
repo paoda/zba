@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
 const correctTitle = @import("../util.zig").correctTitle;
+const safeTitle = @import("../util.zig").safeTitle;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -61,7 +62,7 @@ pub const Backup = struct {
     }
 
     pub fn deinit(self: Self) void {
-        if (self.save_path) |path| self.writeSaveToDisk(path) catch |e| log.err("Failed to save {}", .{e});
+        if (self.save_path) |path| self.writeSaveToDisk(path) catch |e| log.err("Failed to write save: {}", .{e});
 
         self.alloc.free(self.buf);
     }
@@ -93,7 +94,7 @@ pub const Backup = struct {
     }
 
     fn getSaveFilename(self: *const Self) ![]const u8 {
-        const title = correctTitle(self.title);
+        const title = correctTitle(safeTitle(self.title));
         return try std.mem.concat(self.alloc, u8, &[_][]const u8{ title, ".sav" });
     }
 

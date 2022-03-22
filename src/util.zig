@@ -74,12 +74,12 @@ pub fn correctTitle(title: [12]u8) []const u8 {
 /// Copies a Title and returns either an identical or similar 
 /// array consisting of ASCII that won't make any file system angry
 ///
-/// Currently Unused but I assume there's some ROM out there that will require this 
+/// e.g. POKEPIN R/S to POKEPIN R_S
 pub fn safeTitle(title: [12]u8) [12]u8 {
     var result: [12]u8 = title;
 
     for (result) |*char| {
-        if (char.* == '-') char.* = '_';
+        if (char.* == '/' or char.* == '\\') char.* = '_';
         if (char.* == 0) break;
     }
 
