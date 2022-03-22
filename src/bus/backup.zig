@@ -102,11 +102,11 @@ pub const Backup = struct {
         const file_path = try self.getSaveFilePath(path);
         defer self.alloc.free(file_path);
 
-        const file = try std.fs.createFileAbsolute(file_path, .{});
-        defer file.close();
-
         switch (self.kind) {
             .Sram => {
+                const file = try std.fs.createFileAbsolute(file_path, .{});
+                defer file.close();
+
                 try file.writeAll(self.buf);
                 log.info("Dumped SRAM to {s}", .{file_path});
             },
