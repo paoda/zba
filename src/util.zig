@@ -33,8 +33,8 @@ pub const FpsAverage = struct {
         self.sample_count += 1;
     }
 
-    pub fn calc(self: *const Self) u64 {
-        return self.total / self.sample_count;
+    pub fn calc(self: *const Self) f64 {
+        return @intToFloat(f64, std.time.ns_per_s) / (@intToFloat(f64, self.total) / @intToFloat(f64, self.sample_count));
     }
 
     fn reset(self: *Self, sample: u64) void {

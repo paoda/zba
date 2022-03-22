@@ -17,6 +17,7 @@ const window_scale = 3;
 const gba_width = @import("ppu.zig").width;
 const gba_height = @import("ppu.zig").height;
 const framebuf_pitch = @import("ppu.zig").framebuf_pitch;
+const expected_rate = @import("emu.zig").frame_rate;
 
 pub const enable_logging: bool = false;
 const is_binary: bool = false;
@@ -76,10 +77,10 @@ pub fn main() anyerror!void {
 
     // Init Atomics
     var quit = Atomic(bool).init(false);
-    var emu_fps = FpsAverage.init();
+    var emu_rate = FpsAverage.init();
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .UnlimitedFPS, &quit, &emu_fps, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu, &bus });
     defer emu_thread.join();
 
     // Initialize SDL
@@ -161,8 +162,8 @@ pub fn main() anyerror!void {
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
 
-        const avg = emu_fps.calc();
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3}fps, {d:0>3}%] ", .{ title, avg, (avg * 100 / 59) }) catch unreachable;
+        const actual = emu_rate.calc();
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3.2}fps, {d:0>3.2}%] ", .{ title, actual, actual * 100 / expected_rate }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
