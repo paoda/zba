@@ -10,8 +10,8 @@ buf: []u8,
 alloc: Allocator,
 backup: Backup,
 
-pub fn init(alloc: Allocator, path: []const u8) !Self {
-    const file = try std.fs.cwd().openFile(path, .{});
+pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Self {
+    const file = try std.fs.cwd().openFile(rom_path, .{});
     defer file.close();
 
     const len = try file.getEndPos();
@@ -24,7 +24,7 @@ pub fn init(alloc: Allocator, path: []const u8) !Self {
         .buf = buf,
         .alloc = alloc,
         .title = title,
-        .backup = try Backup.init(alloc, kind),
+        .backup = try Backup.init(alloc, kind, title, save_path),
     };
     pak.parseHeader();
 
@@ -40,7 +40,7 @@ fn parseHeader(self: *const Self) void {
     log.info("Title: {s}", .{title});
     if (version != 0) log.info("Version: {}", .{version});
     log.info("Game Code: {s}", .{code});
-    if (lookupMaker(maker)) |c| log.info("Maker Code: {s}", .{c}) else log.info("Maker: {s}", .{maker});
+    if (lookupMaker(maker)) |c| log.info("Maker: {s}", .{c}) else log.info("Maker Code: {s}", .{maker});
 }
 
 fn parseTitle(buf: []u8) [12]u8 {

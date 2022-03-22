@@ -29,10 +29,10 @@ ewram: Ewram,
 
 io: Io,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, maybe_bios: ?[]const u8) !Self {
+pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path: ?[]const u8, save_path: ?[]const u8) !Self {
     return Self{
-        .pak = try GamePak.init(alloc, rom_path),
-        .bios = try Bios.init(alloc, maybe_bios),
+        .pak = try GamePak.init(alloc, rom_path, save_path),
+        .bios = try Bios.init(alloc, bios_path),
         .ppu = try Ppu.init(alloc, sched),
         .apu = Apu.init(),
         .iwram = try Iwram.init(alloc),

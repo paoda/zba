@@ -1,7 +1,8 @@
 const std = @import("std");
-
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
+
+const correctTitle = @import("../util.zig").correctTitle;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -18,7 +19,10 @@ pub const Backup = struct {
     alloc: Allocator,
     kind: BackupKind,
 
-    pub fn init(alloc: Allocator, kind: BackupKind) !Self {
+    title: [12]u8,
+    save_path: ?[]const u8,
+
+    pub fn init(alloc: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
         const buf_len: usize = switch (kind) {
             .Sram => 0x8000, // 32K
             .Flash => 0x10000, // 64K
@@ -29,11 +33,16 @@ pub const Backup = struct {
         const buf = try alloc.alloc(u8, buf_len);
         std.mem.set(u8, buf, 0);
 
-        return Self{
+        var backup = Self{
             .buf = buf,
             .alloc = alloc,
             .kind = kind,
+            .title = title,
+            .save_path = path,
         };
+        if (backup.save_path) |p| backup.loadSaveFromDisk(p) catch |e| log.err("Failed to load save: {}", .{e});
+
+        return backup;
     }
 
     pub fn guessKind(rom: []const u8) ?BackupKind {
@@ -52,7 +61,56 @@ pub const Backup = struct {
     }
 
     pub fn deinit(self: Self) void {
+        if (self.save_path) |path| self.writeSaveToDisk(path) catch |e| log.err("Failed to save {}", .{e});
+
         self.alloc.free(self.buf);
+    }
+
+    fn loadSaveFromDisk(self: *Self, path: []const u8) !void {
+        const file_path = try self.getSaveFilePath(path);
+        defer self.alloc.free(file_path);
+
+        const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
+
+        const len = try file.getEndPos();
+        const file_buf = try file.readToEndAlloc(self.alloc, len);
+        defer self.alloc.free(file_buf);
+
+        switch (self.kind) {
+            .Sram => {
+                std.mem.copy(u8, self.buf, file_buf);
+                log.info("Loaded Save from {s}", .{file_path});
+            },
+            else => return SaveError.UnsupportedBackupKind,
+        }
+    }
+
+    fn getSaveFilePath(self: *const Self, path: []const u8) ![]const u8 {
+        const filename = try self.getSaveFilename();
+        defer self.alloc.free(filename);
+
+        return try std.fs.path.join(self.alloc, &[_][]const u8{ path, filename });
+    }
+
+    fn getSaveFilename(self: *const Self) ![]const u8 {
+        const title = correctTitle(self.title);
+        return try std.mem.concat(self.alloc, u8, &[_][]const u8{ title, ".sav" });
+    }
+
+    fn writeSaveToDisk(self: Self, path: []const u8) !void {
+        const file_path = try self.getSaveFilePath(path);
+        defer self.alloc.free(file_path);
+
+        const file = try std.fs.createFileAbsolute(file_path, .{});
+        defer file.close();
+
+        switch (self.kind) {
+            .Sram => {
+                try file.writeAll(self.buf);
+                log.info("Dumped SRAM to {s}", .{file_path});
+            },
+            else => return SaveError.UnsupportedBackupKind,
+        }
     }
 
     pub fn get8(self: *const Self, idx: usize) u8 {
@@ -95,4 +153,8 @@ const Needle = struct {
             .kind = kind,
         };
     }
+};
+
+const SaveError = error{
+    UnsupportedBackupKind,
 };

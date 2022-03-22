@@ -53,3 +53,50 @@ pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
 
     return result;
 }
+
+/// The Title from the GBA Cartridge may be null padded to a maximum
+/// length of 12 bytes. 
+///
+/// This function returns a slice of everything just before the first 
+/// `\0`
+pub fn correctTitle(title: [12]u8) []const u8 {
+    var len = title.len;
+    for (title) |char, i| {
+        if (char == 0) {
+            len = i;
+            break;
+        }
+    }
+
+    return title[0..len];
+}
+
+/// Copies a Title and returns either an identical or similar 
+/// array consisting of ASCII that won't make any file system angry
+///
+/// Currently Unused but I assume there's some ROM out there that will require this 
+pub fn safeTitle(title: [12]u8) [12]u8 {
+    var result: [12]u8 = title;
+
+    for (result) |*char| {
+        if (char.* == '-') char.* = '_';
+        if (char.* == 0) break;
+    }
+
+    return result;
+}
+
+pub fn fixTitle(alloc: std.mem.Allocator, title: [12]u8) ![]u8 {
+    var len: usize = 12;
+    for (title) |char, i| {
+        if (char == 0) {
+            len = i;
+            break;
+        }
+    }
+
+    const buf = try alloc.alloc(u8, len);
+    std.mem.copy(u8, buf, title[0..len]);
+
+    return buf;
+}

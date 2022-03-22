@@ -11,7 +11,7 @@ const Atomic = std.atomic.Atomic;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896
-const clock_rate: u64 = 1 << 24; // 16.78MHz 
+const clock_rate: u64 = 1 << 24; // 16.78MHz
 
 // TODO: Don't truncate this, be more accurate w/ timing
 // 59.6046447754ns (truncated to just 59ns)
@@ -19,7 +19,7 @@ const clock_period: u64 = std.time.ns_per_s / clock_rate;
 const frame_period = (clock_period * cycles_per_frame);
 
 // 59.7275005696Hz
-pub const frame_rate = @intToFloat(f64, std.time.ns_per_s) / 
+pub const frame_rate = @intToFloat(f64, std.time.ns_per_s) /
     ((@intToFloat(f64, std.time.ns_per_s) / @intToFloat(f64, clock_rate)) * @intToFloat(f64, cycles_per_frame));
 
 const log = std.log.scoped(.Emulation);

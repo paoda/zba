@@ -1,6 +1,7 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const clap = @import("clap");
+const known_folders = @import("known_folders");
 
 const emu = @import("emu.zig");
 const Bus = @import("Bus.zig");
@@ -21,6 +22,9 @@ const expected_rate = @import("emu.zig").frame_rate;
 
 pub const enable_logging: bool = false;
 const is_binary: bool = false;
+const log = std.log.scoped(.GUI);
+
+const correctTitle = @import("util.zig").correctTitle;
 
 pub fn main() anyerror!void {
     // Allocator for Emulator + CLI
@@ -40,7 +44,7 @@ pub fn main() anyerror!void {
 
     if (args.flag("--help")) return clap.help(std.io.getStdErr().writer(), &params);
 
-    const maybe_bios: ?[]const u8 = if (args.option("--bios")) |p| p else null;
+    const bios_path: ?[]const u8 = if (args.option("--bios")) |p| p else null;
 
     const positionals = args.positionals();
     const stderr = std.io.getStdErr();
@@ -58,11 +62,16 @@ pub fn main() anyerror!void {
         },
     };
 
+    // Determine Save Directory
+    const save_path = try setupSavePath(alloc);
+    defer if (save_path) |path| alloc.free(path);
+    log.info("Save Path: {s}", .{save_path});
+
     // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
-    var bus = try Bus.init(alloc, &scheduler, rom_path, maybe_bios);
+    var bus = try Bus.init(alloc, &scheduler, rom_path, bios_path, save_path);
     defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
@@ -88,12 +97,13 @@ pub fn main() anyerror!void {
     if (status < 0) sdlPanic();
     defer SDL.SDL_Quit();
 
+    const title = correctTitle(bus.pak.title);
+
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
-    var title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{bus.pak.title});
-    correctTitleSlice(&title);
+    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{title});
 
     var window = SDL.SDL_CreateWindow(
-        title.ptr,
+        window_title.ptr,
         SDL.SDL_WINDOWPOS_CENTERED,
         SDL.SDL_WINDOWPOS_CENTERED,
         gba_width * window_scale,
@@ -163,7 +173,7 @@ pub fn main() anyerror!void {
         SDL.SDL_RenderPresent(renderer);
 
         const actual = emu_rate.calc();
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3.2}fps, {d:0>3.2}%] ", .{ title, actual, actual * 100 / expected_rate }) catch unreachable;
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3.2}fps, {d:0>3.2}%] ", .{ window_title, actual, actual * 100 / expected_rate }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
@@ -180,14 +190,22 @@ const CliError = error{
     UnneededOptions,
 };
 
-/// The slice considers some null values to be a part of the string
-/// so change the length of the slice so that isn't the case
-// FIXME: This is awful and bad
-fn correctTitleSlice(title: *[]u8) void {
-    for (title.*) |char, i| {
-        if (char == 0) {
-            title.len = i;
-            break;
-        }
+// FIXME: Superfluous allocations?
+fn setupSavePath(alloc: std.mem.Allocator) !?[]const u8 {
+    const save_subpath = try std.fs.path.join(alloc, &[_][]const u8{ "zba", "save" });
+    defer alloc.free(save_subpath);
+
+    const maybe_data_path = try known_folders.getPath(alloc, .data);
+    defer if (maybe_data_path) |path| alloc.free(path);
+
+    const save_path = if (maybe_data_path) |base| try std.fs.path.join(alloc, &[_][]const u8{ base, save_subpath }) else null;
+
+    if (save_path) |_| {
+        // If we've determined what our save path should be, ensure the prereq directories
+        // are present so that we can successfully write to the path when necessary
+        const maybe_data_dir = try known_folders.open(alloc, .data, .{});
+        if (maybe_data_dir) |data_dir| try data_dir.makePath(save_subpath);
     }
+
+    return save_path;
 }
