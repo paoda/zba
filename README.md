@@ -13,26 +13,27 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [v0.10.0-dev.1037+331cc810d](https://github.com/ziglang/zig/tree/331cc810d)
+Most recently built on Zig [v0.10.0-dev.1659+4dd65316b](https://github.com/ziglang/zig/tree/4dd65316b)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
     * [SDL2](https://www.libsdl.org/download-2.0.php)
 * [zig-clap](https://github.com/Hejsil/zig-clap)
+* [known-folders](https://github.com/ziglibs/known-folders)
 * [`bitfields.zig`](https://github.com/FlorenceOS/Florence/blob/f6044db788d35d43d66c1d7e58ef1e3c79f10d6f/lib/util/bitfields.zig)
 
 `bitfields.zig` from [FlorenceOS](https://github.com/FlorenceOS) is included under `lib/util/bitfield.zig`.
 
-`SDL.zig` and `zig-clap` are git submodules you can init using `git submodule update --init` from your terminal. 
+Use `git submodule update --init` from the project root to pull the git submodules `SDL.zig`, `zig-clap`, and `known-folders`
 
-On Linux, be sure to have SDL2 installed using whatever package manager your distro uses. 
+Be sure to provide SDL2 using: 
+* Linux: Your distro's package manager
+* MacOS: ¯\\\_(ツ)_/¯
+* Windows: [`vcpkg`](https://github.com/Microsoft/vcpkg) (install `sdl2:x64-windows`)
 
-On Windows, it's easiest if you use [`vcpkg`](https://github.com/Microsoft/vcpkg) to install `sdl2:x64-windows`. If not, 
-`SDL2.zig` will provide a helpful compile error which should help you get what you need.
+`SDL.zig` will provide a helpful compile error if the zig compiler is unable to find SDL2. 
 
-On macOS? ¯\\\_(ツ)_/¯ I hope it isn't too hard to compile though. 
-
-Once you've got all the dependencies, run `zig build -Drelease-fast`. The executable is located at `zig-out/bin/`. 
+Once you've got all the dependencies, execute `zig build -Drelease-fast`. The executable is located at `zig-out/bin/`. 
 
 ## Controls
 Key | Button
