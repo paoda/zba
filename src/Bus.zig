@@ -27,8 +27,6 @@ tim: Timers,
 iwram: Iwram,
 ewram: Ewram,
 
-sched: *Scheduler,
-
 io: Io,
 
 pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path: ?[]const u8, save_path: ?[]const u8) !Self {
@@ -42,7 +40,6 @@ pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path
         .dma = DmaControllers.init(),
         .tim = Timers.init(sched),
         .io = Io.init(),
-        .sched = sched,
     };
 }
 
@@ -55,8 +52,6 @@ pub fn deinit(self: Self) void {
 }
 
 pub fn read32(self: *const Self, addr: u32) u32 {
-    self.sched.tick += 1;
-
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get32(addr),
@@ -79,7 +74,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
 }
 
 pub fn write32(self: *Self, addr: u32, word: u32) void {
-    self.sched.tick += 1;
+    // TODO: write32 can write to GamePak Flash
 
     switch (addr) {
         // General Internal Memory
@@ -97,8 +92,6 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
 }
 
 pub fn read16(self: *const Self, addr: u32) u16 {
-    self.sched.tick += 1;
-
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get16(addr),
@@ -121,8 +114,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
 }
 
 pub fn write16(self: *Self, addr: u32, halfword: u16) void {
-    self.sched.tick += 1;
-
+    // TODO: write16 can write to GamePak Flash
     switch (addr) {
         // General Internal Memory
         0x0200_0000...0x02FF_FFFF => self.ewram.set16(addr & 0x3FFFF, halfword),
@@ -140,8 +132,6 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
 }
 
 pub fn read8(self: *const Self, addr: u32) u8 {
-    self.sched.tick += 1;
-
     return switch (addr) {
         // General Internal Memory
         0x0000_0000...0x0000_3FFF => self.bios.get8(addr),
@@ -165,8 +155,6 @@ pub fn read8(self: *const Self, addr: u32) u8 {
 }
 
 pub fn write8(self: *Self, addr: u32, byte: u8) void {
-    self.sched.tick += 1;
-
     switch (addr) {
         // General Internal Memory
         0x0200_0000...0x02FF_FFFF => self.ewram.set8(addr & 0x3FFFF, byte),
