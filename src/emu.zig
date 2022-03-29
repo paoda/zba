@@ -43,9 +43,9 @@ pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsAverage, sched: *Schedul
 }
 
 pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
-    var cycles: u64 = 0;
-    while (cycles < cycles_per_frame) : (cycles += 1) {
-        sched.tick += 1;
+    const frame_end = sched.tick + cycles_per_frame;
+
+    while (sched.tick < frame_end) {
         _ = cpu.step();
 
         while (sched.tick >= sched.nextTimestamp()) {
