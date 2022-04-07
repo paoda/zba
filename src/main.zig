@@ -32,26 +32,25 @@ pub fn main() anyerror!void {
     const alloc = gpa.allocator();
     defer std.debug.assert(!gpa.deinit());
 
-    // Parse CLI Arguments
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help         Display this help and exit.     ") catch unreachable,
-        clap.parseParam("-b, --bios <PATH>  Optional Path to GBA BIOS ROM.  ") catch unreachable,
-        clap.parseParam("<PATH>             Path to GBA GamePak ROM         ") catch unreachable,
-    };
+    // CLI Arguments
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help            Display this help and exit.
+        \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
+        \\<str>                 Path to the GBA GamePak ROM
+        \\
+    );
 
-    var args = try clap.parse(clap.Help, &params, .{});
-    defer args.deinit();
+    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    defer res.deinit();
 
-    if (args.flag("--help")) return clap.help(std.io.getStdErr().writer(), &params);
-
-    const bios_path: ?[]const u8 = if (args.option("--bios")) |p| p else null;
-
-    const positionals = args.positionals();
     const stderr = std.io.getStdErr();
     defer stderr.close();
 
-    const rom_path = switch (positionals.len) {
-        1 => positionals[0],
+    if (res.args.help) return clap.help(stderr.writer(), clap.Help, &params, .{});
+    const bios_path: ?[]const u8 = if (res.args.bios) |p| p else null;
+
+    const rom_path = switch (res.positionals.len) {
+        1 => res.positionals[0],
         0 => {
             try stderr.writeAll("ZBA requires a positional path to a GamePak ROM.\n");
             return CliError.InsufficientOptions;
