@@ -124,6 +124,9 @@ pub fn read16(bus: *const Bus, addr: u32) u16 {
         // Sound
         0x0400_0088 => bus.apu.bias.raw,
 
+        // DMA Transfers
+        0x0400_00BA => bus.dma._0.cnt.raw,
+
         // Timers
         0x0400_0100 => bus.tim._0.counter(),
         0x0400_0102 => bus.tim._0.cnt.raw,
@@ -221,6 +224,8 @@ pub fn write16(bus: *Bus, addr: u32, halfword: u16) void {
 
         // Serial Communication 2
         0x0400_0134 => log.warn("Wrote 0x{X:0>4} to RCNT", .{halfword}),
+        0x0400_0140 => log.warn("Wrote 0x{X:0>4} to JOYCNT", .{halfword}),
+        0x0400_0158 => log.warn("Wrote 0x{X:0>4} to JOYSTAT", .{halfword}),
 
         // Interrupts
         0x0400_0200 => bus.io.ie.raw = halfword,
@@ -239,6 +244,13 @@ pub fn read8(bus: *const Bus, addr: u32) u8 {
         0x0400_0006 => @truncate(u8, bus.ppu.vcount.raw),
 
         // Sound
+        0x0400_0060 => bus.apu.ch1.sweep.raw,
+        0x0400_0063 => bus.apu.ch1.envelope.raw,
+        0x0400_0069 => bus.apu.ch2.envelope.raw,
+        0x0400_0073 => bus.apu.ch3.vol.raw,
+        0x0400_0079 => bus.apu.ch4.envelope.raw,
+        0x0400_007C => bus.apu.ch4.poly.raw,
+        0x0400_0081 => @truncate(u8, bus.apu.ch_vol_cnt.raw >> 8),
         0x0400_0089 => @truncate(u8, bus.apu.bias.raw >> 8),
 
         // Serial Communication 1
@@ -258,14 +270,26 @@ pub fn write8(bus: *Bus, addr: u32, byte: u8) void {
         0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, byte) << 8) | (bus.ppu.dispstat.raw & 0xFF),
 
         // Sound
+        0x0400_0060 => bus.apu.ch1.sweep.raw = byte,
+        0x0400_0062 => bus.apu.ch1.duty.raw = byte,
         0x0400_0063 => bus.apu.ch1.envelope.raw = byte,
+        0x0400_0064 => bus.apu.ch1.setFreqLow(byte),
         0x0400_0065 => bus.apu.ch1.setFreqHigh(byte),
+        0x0400_0068 => bus.apu.ch2.duty.raw = byte,
         0x0400_0069 => bus.apu.ch2.envelope.raw = byte,
+        0x0400_006C => bus.apu.ch2.setFreqLow(byte),
         0x0400_006D => bus.apu.ch2.setFreqHigh(byte),
         0x0400_0070 => bus.apu.ch3.select.raw = byte,
+        0x0400_0072 => bus.apu.ch3.length = byte,
+        0x0400_0073 => bus.apu.ch3.vol.raw = byte,
+        0x0400_0074 => bus.apu.ch3.setFreqLow(byte),
+        0x0400_0075 => bus.apu.ch3.setFreqHigh(byte),
+        0x0400_0078 => bus.apu.ch4.len = @truncate(u6, byte),
         0x0400_0079 => bus.apu.ch4.envelope.raw = byte,
+        0x0400_007C => bus.apu.ch4.poly.raw = byte,
         0x0400_007D => bus.apu.ch4.cnt.raw = byte,
         0x0400_0080 => bus.apu.setSoundCntLLow(byte),
+        0x0400_0081 => bus.apu.setSoundCntLHigh(byte),
         0x0400_0084 => bus.apu.setSoundCntX(byte >> 7 & 1 == 1),
         0x0400_0089 => bus.apu.setBiasHigh(byte),
 

@@ -125,6 +125,7 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         0x0500_0000...0x05FF_FFFF => self.ppu.palette.set16(addr & 0x3FF, halfword),
         0x0600_0000...0x0601_7FFF => self.ppu.vram.set16(addr - 0x0600_0000, halfword),
         0x0700_0000...0x07FF_FFFF => self.ppu.oam.set16(addr & 0x3FF, halfword),
+        0x0800_00C4, 0x0800_00C6, 0x0800_00C8 => log.warn("Tried to write 0x{X:0>4} to GPIO", .{halfword}),
 
         else => undWrite("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }

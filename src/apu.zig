@@ -43,6 +43,10 @@ pub const Apu = struct {
         self.ch_vol_cnt.raw = (self.ch_vol_cnt.raw & 0xFF00) | byte;
     }
 
+    pub fn setSoundCntLHigh(self: *Self, byte: u8) void {
+        self.ch_vol_cnt.raw = @as(u16, byte) << 8 | (self.ch_vol_cnt.raw & 0xFF);
+    }
+
     pub fn setBiasHigh(self: *Self, byte: u8) void {
         self.bias.raw = (@as(u16, byte) << 8) | (self.bias.raw & 0xFF);
     }
@@ -51,9 +55,13 @@ pub const Apu = struct {
 const ToneSweep = struct {
     const Self = @This();
 
+    /// NR10
     sweep: io.Sweep,
+    /// NR11
     duty: io.Duty,
+    /// NR12
     envelope: io.Envelope,
+    /// NR13, NR14
     freq: io.Frequency,
 
     fn init() Self {
@@ -65,6 +73,10 @@ const ToneSweep = struct {
         };
     }
 
+    pub fn setFreqLow(self: *Self, byte: u8) void {
+        self.freq.raw = (self.freq.raw & 0xFF00) | byte;
+    }
+
     pub fn setFreqHigh(self: *Self, byte: u8) void {
         self.freq.raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF);
     }
@@ -73,8 +85,11 @@ const ToneSweep = struct {
 const Tone = struct {
     const Self = @This();
 
+    /// NR21
     duty: io.Duty,
+    /// NR22
     envelope: io.Envelope,
+    /// NR23, NR24
     freq: io.Frequency,
 
     fn init() Self {
@@ -85,8 +100,12 @@ const Tone = struct {
         };
     }
 
+    pub fn setFreqLow(self: *Self, byte: u8) void {
+        self.freq.raw = (self.freq.raw & 0xFF00) | byte;
+    }
+
     pub fn setFreqHigh(self: *Self, byte: u8) void {
-        self.freq.raw = (self.freq.raw & 0x00FF) | (@as(u16, byte) << 8);
+        self.freq.raw = @as(u16, byte) << 8 | (self.freq.raw & 0xFF);
     }
 };
 
@@ -94,10 +113,13 @@ const Wave = struct {
     const Self = @This();
 
     /// Write-only
+    /// NR30
     select: io.WaveSelect,
     /// NR31    
     length: u8,
+    /// NR32
     vol: io.WaveVolume,
+    /// NR33, NR34
     freq: io.Frequency,
 
     fn init() Self {
@@ -108,6 +130,14 @@ const Wave = struct {
             .length = 0,
         };
     }
+
+    pub fn setFreqLow(self: *Self, byte: u8) void {
+        self.freq.raw = (self.freq.raw & 0xFF00) | byte;
+    }
+
+    pub fn setFreqHigh(self: *Self, byte: u8) void {
+        self.freq.raw = @as(u16, byte) << 8 | (self.freq.raw & 0xFF);
+    }
 };
 
 const Noise = struct {
@@ -116,8 +146,11 @@ const Noise = struct {
     /// Write-only
     /// NR41
     len: u6,
+    /// NR42
     envelope: io.Envelope,
+    /// NR43
     poly: io.PolyCounter,
+    /// NR44
     cnt: io.NoiseControl,
 
     fn init() Self {
