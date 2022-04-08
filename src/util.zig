@@ -56,9 +56,9 @@ pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
 }
 
 /// The Title from the GBA Cartridge may be null padded to a maximum
-/// length of 12 bytes. 
+/// length of 12 bytes.
 ///
-/// This function returns a slice of everything just before the first 
+/// This function returns a slice of everything just before the first
 /// `\0`
 pub fn correctTitle(title: [12]u8) []const u8 {
     var len = title.len;
@@ -72,7 +72,7 @@ pub fn correctTitle(title: [12]u8) []const u8 {
     return title[0..len];
 }
 
-/// Copies a Title and returns either an identical or similar 
+/// Copies a Title and returns either an identical or similar
 /// array consisting of ASCII that won't make any file system angry
 ///
 /// e.g. POKEPIN R/S to POKEPIN R_S

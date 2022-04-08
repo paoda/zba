@@ -46,7 +46,7 @@ fn DmaController(comptime id: u2) type {
         /// Note: Use writeControl instead of manipulating cnt directly.
         cnt: DmaControl,
 
-        /// Internal. Currrent Source Address 
+        /// Internal. Currrent Source Address
         _sad: u32,
         /// Internal. Current Destination Address
         _dad: u32,

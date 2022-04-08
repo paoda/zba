@@ -479,7 +479,7 @@ pub const Duty = extern union {
     raw: u8,
 };
 
-/// Read / Write 
+/// Read / Write
 /// NRx2
 pub const Envelope = extern union {
     period: Bitfield(u8, 0, 3),

@@ -55,7 +55,7 @@ pub const Scheduler = struct {
         }
     }
 
-    /// Removes the **first** scheduled event of type `needle` 
+    /// Removes the **first** scheduled event of type `needle`
     pub fn removeScheduledEvent(self: *Self, needle: EventKind) void {
         var it = self.queue.iterator();
 

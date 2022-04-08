@@ -115,7 +115,7 @@ const Wave = struct {
     /// Write-only
     /// NR30
     select: io.WaveSelect,
-    /// NR31    
+    /// NR31
     length: u8,
     /// NR32
     vol: io.WaveVolume,
