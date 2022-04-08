@@ -241,7 +241,7 @@ pub const Ppu = struct {
 
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
-            const entry = @bitCast(ScreenEntry, self.vram.get16(entry_addr));
+            const entry = @bitCast(ScreenEntry, self.vram.read(u16, entry_addr));
 
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
@@ -309,7 +309,7 @@ pub const Ppu = struct {
 
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
-                    const bgr555 = self.vram.get16(vram_base + i * @sizeOf(u16));
+                    const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
                     std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
             },
@@ -479,26 +479,29 @@ const Vram = struct {
         self.alloc.free(self.buf);
     }
 
-    pub fn get32(self: *const Self, idx: usize) u32 {
-        return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
+    pub fn read(self: *const Self, comptime T: type, addr: usize) T {
+        switch (T) {
+            u32 => return (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
+            u16 => return (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
+            u8 => return self.buf[addr],
+            else => @compileError("VRAM: Unsupported read width"),
+        }
     }
 
-    pub fn set32(self: *Self, idx: usize, word: u32) void {
-        self.set16(idx + 2, @truncate(u16, word >> 16));
-        self.set16(idx, @truncate(u16, word));
-    }
-
-    pub fn get16(self: *const Self, idx: usize) u16 {
-        return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
-    }
-
-    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
-        self.buf[idx + 1] = @truncate(u8, halfword >> 8);
-        self.buf[idx] = @truncate(u8, halfword);
-    }
-
-    pub fn get8(self: *const Self, idx: usize) u8 {
-        return self.buf[idx];
+    pub fn write(self: *Self, comptime T: type, addr: usize, value: T) void {
+        switch (T) {
+            u32 => {
+                self.buf[addr + 3] = @truncate(u8, value >> 24);
+                self.buf[addr + 2] = @truncate(u8, value >> 16);
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            u16 => {
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            else => @compileError("VRAM: Unsupported write width"),
+        }
     }
 };
 
