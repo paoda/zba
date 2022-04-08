@@ -21,7 +21,7 @@ pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Sel
     defer alloc.free(file_buf);
 
     const title = parseTitle(file_buf);
-    const kind = Backup.guessKind(file_buf) orelse .Sram;
+    const kind = Backup.guessKind(file_buf) orelse .None;
 
     const buf = try alloc.alloc(u8, 0x200_0000); // 32MiB
 
@@ -40,6 +40,7 @@ pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Sel
         .backup = try Backup.init(alloc, kind, title, save_path),
     };
     pak.parseHeader();
+    log.info("Backup: {}", .{kind});
 
     return pak;
 }

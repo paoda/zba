@@ -32,10 +32,11 @@ pub const Backup = struct {
             .Flash => 0x10000, // 64K
             .Flash1M => 0x20000, // 128K
             .Eeprom => 0x2000, // FIXME: We assume 8K here
+            .None => 0,
         };
 
         const buf = try alloc.alloc(u8, buf_len);
-        std.mem.set(u8, buf, 0);
+        std.mem.set(u8, buf, 0xFF);
 
         var backup = Self{
             .buf = buf,
@@ -80,8 +81,10 @@ pub const Backup = struct {
 
         switch (self.kind) {
             .Sram, .Flash, .Flash1M => {
-                std.mem.copy(u8, self.buf, file_buf);
-                log.info("Loaded Save from {s}", .{file_path});
+                if (self.buf.len == file_buf.len) {
+                    std.mem.copy(u8, self.buf, file_buf);
+                    log.info("Loaded Save from {s}", .{file_path});
+                }
             },
             else => return SaveError.UnsupportedBackupKind,
         }
@@ -139,6 +142,7 @@ pub const Backup = struct {
             },
             .Eeprom => return self.buf[addr],
             .Sram => return self.buf[addr & 0x7FFF], // 32K SRAM chip is mirrored
+            .None => return 0xFF,
         }
     }
 
@@ -171,6 +175,7 @@ pub const Backup = struct {
             },
             .Eeprom => self.buf[addr] = byte,
             .Sram => self.buf[addr & 0x7FFF] = byte,
+            .None => {},
         }
     }
 };
@@ -180,6 +185,7 @@ const BackupKind = enum {
     Sram,
     Flash,
     Flash1M,
+    None,
 };
 
 const Needle = struct {

@@ -14,6 +14,9 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
+
+const rotr = @import("util.zig").rotr;
+
 const Self = @This();
 
 const panic_on_und_bus: bool = false;
@@ -68,6 +71,7 @@ pub fn read32(self: *const Self, addr: u32) u32 {
         0x0800_0000...0x09FF_FFFF => self.pak.read(u32, addr),
         0x0A00_0000...0x0BFF_FFFF => self.pak.read(u32, addr),
         0x0C00_0000...0x0DFF_FFFF => self.pak.read(u32, addr),
+        0x0E00_0000...0x0FFF_FFFF => @as(u32, self.pak.backup.read(addr)) * 0x01010101,
 
         else => undRead("Tried to read from 0x{X:0>8}", .{addr}),
     };
@@ -86,6 +90,10 @@ pub fn write32(self: *Self, addr: u32, word: u32) void {
         0x0500_0000...0x05FF_FFFF => self.ppu.palette.write(u32, addr, word),
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.write(u32, addr, word),
         0x0700_0000...0x07FF_FFFF => self.ppu.oam.write(u32, addr, word),
+        0x0E00_0000...0x0FFF_FFFF => {
+            const value = rotr(u32, word, 8 * (addr & 3));
+            self.pak.backup.write(addr, @truncate(u8, value));
+        },
 
         else => undWrite("Tried to write 0x{X:0>8} to 0x{X:0>8}", .{ word, addr }),
     }
@@ -108,6 +116,7 @@ pub fn read16(self: *const Self, addr: u32) u16 {
         0x0800_0000...0x09FF_FFFF => self.pak.read(u16, addr),
         0x0A00_0000...0x0BFF_FFFF => self.pak.read(u16, addr),
         0x0C00_0000...0x0DFF_FFFF => self.pak.read(u16, addr),
+        0x0E00_0000...0x0FFF_FFFF => @as(u16, self.pak.backup.read(addr)) * 0x0101,
 
         else => undRead("Tried to read from 0x{X:0>8}", .{addr}),
     };
@@ -126,6 +135,9 @@ pub fn write16(self: *Self, addr: u32, halfword: u16) void {
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.write(u16, addr, halfword),
         0x0700_0000...0x07FF_FFFF => self.ppu.oam.write(u16, addr, halfword),
         0x0800_00C4, 0x0800_00C6, 0x0800_00C8 => log.warn("Tried to write 0x{X:0>4} to GPIO", .{halfword}),
+
+        // External Memory (Game Pak)
+        0x0E00_0000...0x0FFF_FFFF => self.pak.backup.write(addr, @truncate(u8, rotr(u16, halfword, 8 * (addr & 1)))),
 
         else => undWrite("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ halfword, addr }),
     }
@@ -148,7 +160,7 @@ pub fn read8(self: *const Self, addr: u32) u8 {
         0x0800_0000...0x09FF_FFFF => self.pak.read(u8, addr),
         0x0A00_0000...0x0BFF_FFFF => self.pak.read(u8, addr),
         0x0C00_0000...0x0DFF_FFFF => self.pak.read(u8, addr),
-        0x0E00_0000...0x0E00_FFFF => self.pak.backup.read(addr),
+        0x0E00_0000...0x0FFF_FFFF => self.pak.backup.read(addr),
 
         else => undRead("Tried to read from 0x{X:0>2}", .{addr}),
     };
@@ -163,7 +175,7 @@ pub fn write8(self: *Self, addr: u32, byte: u8) void {
         0x0400_0410 => log.info("Ignored write of 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
 
         // External Memory (Game Pak)
-        0x0E00_0000...0x0E00_FFFF => self.pak.backup.write(addr, byte),
+        0x0E00_0000...0x0FFF_FFFF => self.pak.backup.write(addr, byte),
         else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ byte, addr }),
     }
 }
