@@ -63,12 +63,7 @@ pub fn read(self: *const Self, comptime T: type, address: u32) T {
         0x00 => self.bios.read(T, align_addr),
         0x02 => self.ewram.read(T, align_addr),
         0x03 => self.iwram.read(T, align_addr),
-        0x04 => switch (T) {
-            u32 => io.read32(self, align_addr),
-            u16 => io.read16(self, align_addr),
-            u8 => io.read8(self, align_addr),
-            else => @compileError("I/O: Unsupported read width"),
-        },
+        0x04 => io.read(self, T, align_addr),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.read(T, align_addr),
@@ -102,12 +97,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
         0x00 => self.bios.write(T, align_addr, value),
         0x02 => self.ewram.write(T, align_addr, value),
         0x03 => self.iwram.write(T, align_addr, value),
-        0x04 => switch (T) {
-            u32 => io.write32(self, align_addr, value),
-            u16 => io.write16(self, align_addr, value),
-            u8 => io.write8(self, align_addr, value),
-            else => @compileError("I/O: Unsupported write width"),
-        },
+        0x04 => io.write(self, T, align_addr, value),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.write(T, align_addr, value),
