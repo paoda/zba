@@ -479,16 +479,20 @@ const Vram = struct {
         self.alloc.free(self.buf);
     }
 
-    pub fn read(self: *const Self, comptime T: type, addr: usize) T {
-        switch (T) {
-            u32 => return (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
-            u16 => return (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
-            u8 => return self.buf[addr],
+    pub fn read(self: *const Self, comptime T: type, address: usize) T {
+        const addr = Self.mirror(address);
+
+        return switch (T) {
+            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
+            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
+            u8 => self.buf[addr],
             else => @compileError("VRAM: Unsupported read width"),
-        }
+        };
     }
 
-    pub fn write(self: *Self, comptime T: type, addr: usize, value: T) void {
+    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
+        const addr = Self.mirror(address);
+
         switch (T) {
             u32 => {
                 self.buf[addr + 3] = @truncate(u8, value >> 24);
@@ -502,6 +506,11 @@ const Vram = struct {
             },
             else => @compileError("VRAM: Unsupported write width"),
         }
+    }
+
+    fn mirror(address: usize) usize {
+        const addr = address & 0x1FFFF; // repeated in steps of 128KiB
+        return if (addr >= 0x18000) addr & 0x7FFF else addr; // 64K + 32K + 32K (abcc)
     }
 };
 
