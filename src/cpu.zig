@@ -306,12 +306,12 @@ pub const Arm7tdmi = struct {
 
     fn thumbFetch(self: *Self) u16 {
         defer self.r[15] += 2;
-        return self.bus.read16(self.r[15]);
+        return self.bus.read(u16, self.r[15]);
     }
 
     fn fetch(self: *Self) u32 {
         defer self.r[15] += 4;
-        return self.bus.read32(self.r[15]);
+        return self.bus.read(u32, self.r[15]);
     }
 
     pub fn fakePC(self: *const Self) u32 {
@@ -341,11 +341,11 @@ pub const Arm7tdmi = struct {
         prettyPrintPsr(&self.spsr);
 
         if (self.cpsr.t.read()) {
-            const opcode = self.bus.read16(self.r[15] - 4);
+            const opcode = self.bus.read(u16, self.r[15] - 4);
             const id = thumbIdx(opcode);
             std.debug.print("opcode: ID: 0x{b:0>10} 0x{X:0>4}\n", .{ id, opcode });
         } else {
-            const opcode = self.bus.read32(self.r[15] - 4);
+            const opcode = self.bus.read(u32, self.r[15] - 4);
             const id = armIdx(opcode);
             std.debug.print("opcode: ID: 0x{X:0>3} 0x{X:0>8}\n", .{ id, opcode });
         }
@@ -432,7 +432,7 @@ pub const Arm7tdmi = struct {
         if (self.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const tmp_opcode = self.bus.read32(self.r[15] - 2);
+                const tmp_opcode = self.bus.read(u32, self.r[15] - 2);
                 const be_opcode = tmp_opcode << 16 | tmp_opcode >> 16;
                 log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, be_opcode });
             } else {

@@ -457,6 +457,7 @@ const Palette = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
+            u8 => log.err("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
             else => @compileError("PALRAM: Unsupported write width"),
         }
     }
@@ -511,6 +512,7 @@ const Vram = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
+            u8 => log.err("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
             else => @compileError("VRAM: Unsupported write width"),
         }
     }
@@ -566,6 +568,7 @@ const Oam = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
+            u8 => log.err("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
             else => @compileError("OAM: Unsupported write width"),
         }
     }

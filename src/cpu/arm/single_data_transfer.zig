@@ -31,21 +31,21 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
             if (L) {
                 if (B) {
                     // LDRB
-                    result = bus.read8(address);
+                    result = bus.read(u8, address);
                 } else {
                     // LDR
-                    const value = bus.read32(address);
+                    const value = bus.read(u32, address);
                     result = rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
                     // STRB
                     const value = if (rd == 0xF) cpu.r[rd] + 8 else cpu.r[rd];
-                    bus.write8(address, @truncate(u8, value));
+                    bus.write(u8, address, @truncate(u8, value));
                 } else {
                     // STR
                     const value = if (rd == 0xF) cpu.r[rd] + 8 else cpu.r[rd];
-                    bus.write32(address, value);
+                    bus.write(u32, address, value);
                 }
             }
 

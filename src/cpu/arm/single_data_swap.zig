@@ -17,13 +17,13 @@ pub fn singleDataSwap(comptime B: bool) InstrFn {
 
             if (B) {
                 // SWPB
-                const value = bus.read8(address);
-                bus.write8(address, @truncate(u8, cpu.r[rm]));
+                const value = bus.read(u8, address);
+                bus.write(u8, address, @truncate(u8, cpu.r[rm]));
                 cpu.r[rd] = value;
             } else {
                 // SWP
-                const value = rotr(u32, bus.read32(address), 8 * (address & 0x3));
-                bus.write32(address, cpu.r[rm]);
+                const value = rotr(u32, bus.read(u32, address), 8 * (address & 0x3));
+                bus.write(u32, address, cpu.r[rm]);
                 cpu.r[rd] = value;
             }
         }

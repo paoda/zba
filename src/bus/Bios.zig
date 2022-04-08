@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Bios);
 const Self = @This();
 
 buf: ?[]u8,
@@ -37,4 +38,9 @@ pub fn read(self: *const Self, comptime T: type, addr: usize) T {
     }
 
     std.debug.panic("[BIOS] ZBA tried to read {} from 0x{X:0>8} but not BIOS was present", .{ T, addr });
+}
+
+pub fn write(_: *Self, comptime T: type, addr: usize, value: T) void {
+    @setCold(true);
+    log.err("Tried to write {} 0x{X:} to 0x{X:0>8} ", .{ T, value, addr });
 }

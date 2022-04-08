@@ -11,7 +11,7 @@ pub fn format6(comptime rd: u3) InstrFn {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             // LDR
             const offset = (opcode & 0xFF) << 2;
-            cpu.r[rd] = bus.read32((cpu.r[15] + 2 & 0xFFFF_FFFD) + offset);
+            cpu.r[rd] = bus.read(u32, (cpu.r[15] + 2 & 0xFFFF_FFFD) + offset);
         }
     }.inner;
 }
@@ -32,23 +32,23 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                 switch (op) {
                     0b00 => {
                         // STRH
-                        bus.write16(address, @truncate(u16, cpu.r[rd]));
+                        bus.write(u16, address, @truncate(u16, cpu.r[rd]));
                     },
                     0b01 => {
                         // LDSB
-                        cpu.r[rd] = sext(8, bus.read8(address));
+                        cpu.r[rd] = sext(8, bus.read(u8, address));
                     },
                     0b10 => {
                         // LDRH
-                        const value = bus.read16(address);
+                        const value = bus.read(u16, address);
                         cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
                     },
                     0b11 => {
                         // LDRSH
                         const value = if (address & 1 == 1) blk: {
-                            break :blk sext(8, bus.read8(address));
+                            break :blk sext(8, bus.read(u8, address));
                         } else blk: {
-                            break :blk sext(16, bus.read16(address));
+                            break :blk sext(16, bus.read(u16, address));
                         };
 
                         cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
@@ -59,20 +59,20 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                 switch (op) {
                     0b00 => {
                         // STR
-                        bus.write32(address, cpu.r[rd]);
+                        bus.write(u32, address, cpu.r[rd]);
                     },
                     0b01 => {
                         // STRB
-                        bus.write8(address, @truncate(u8, cpu.r[rd]));
+                        bus.write(u8, address, @truncate(u8, cpu.r[rd]));
                     },
                     0b10 => {
                         // LDR
-                        const value = bus.read32(address);
+                        const value = bus.read(u32, address);
                         cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
                     },
                     0b11 => {
                         // LDRB
-                        cpu.r[rd] = bus.read8(address);
+                        cpu.r[rd] = bus.read(u8, address);
                     },
                 }
             }
@@ -90,22 +90,22 @@ pub fn format9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn 
                 if (B) {
                     // LDRB
                     const address = cpu.r[rb] + offset;
-                    cpu.r[rd] = bus.read8(address);
+                    cpu.r[rd] = bus.read(u8, address);
                 } else {
                     // LDR
                     const address = cpu.r[rb] + (@as(u32, offset) << 2);
-                    const value = bus.read32(address);
+                    const value = bus.read(u32, address);
                     cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
                 if (B) {
                     // STRB
                     const address = cpu.r[rb] + offset;
-                    bus.write8(address, @truncate(u8, cpu.r[rd]));
+                    bus.write(u8, address, @truncate(u8, cpu.r[rd]));
                 } else {
                     // STR
                     const address = cpu.r[rb] + (@as(u32, offset) << 2);
-                    bus.write32(address, cpu.r[rd]);
+                    bus.write(u32, address, cpu.r[rd]);
                 }
             }
         }
@@ -122,11 +122,11 @@ pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
 
             if (L) {
                 // LDRH
-                const value = bus.read16(address);
+                const value = bus.read(u16, address);
                 cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
             } else {
                 // STRH
-                bus.write16(address, @truncate(u16, cpu.r[rd]));
+                bus.write(u16, address, @truncate(u16, cpu.r[rd]));
             }
         }
     }.inner;
@@ -140,11 +140,11 @@ pub fn format11(comptime L: bool, comptime rd: u3) InstrFn {
 
             if (L) {
                 // LDR
-                const value = bus.read32(address);
+                const value = bus.read(u32, address);
                 cpu.r[rd] = rotr(u32, value, 8 * (address & 0x3));
             } else {
                 // STR
-                bus.write32(address, cpu.r[rd]);
+                bus.write(u32, address, cpu.r[rd]);
             }
         }
     }.inner;

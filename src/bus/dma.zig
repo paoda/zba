@@ -123,12 +123,12 @@ fn DmaController(comptime id: u2) type {
             var offset: u32 = 0;
             if (self.cnt.transfer_type.read()) {
                 offset = @sizeOf(u32); // 32-bit Transfer
-                const word = bus.read32(self._sad);
-                bus.write32(self._dad, word);
+                const word = bus.read(u32, self._sad);
+                bus.write(u32, self._dad, word);
             } else {
                 offset = @sizeOf(u16); // 16-bit Transfer
-                const halfword = bus.read16(self._sad);
-                bus.write16(self._dad, halfword);
+                const halfword = bus.read(u16, self._sad);
+                bus.write(u16, self._dad, halfword);
             }
 
             switch (sad_adj) {

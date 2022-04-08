@@ -54,9 +54,9 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                 }
 
                 if (L) {
-                    cpu.r[15] = bus.read32(und_addr);
+                    cpu.r[15] = bus.read(u32, und_addr);
                 } else {
-                    bus.write32(und_addr, cpu.r[15] + 8);
+                    bus.write(u32, und_addr, cpu.r[15] + 8);
                 }
 
                 cpu.r[rn] = if (U) cpu.r[rn] + 0x40 else cpu.r[rn] - 0x40;
@@ -83,9 +83,9 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
             if (L) {
                 if (S and !r15_present) {
                     // Always Transfer User mode Registers
-                    cpu.setUserModeRegister(i, bus.read32(address));
+                    cpu.setUserModeRegister(i, bus.read(u32, address));
                 } else {
-                    const value = bus.read32(address);
+                    const value = bus.read(u32, address);
                     cpu.r[i] = if (i == 0xF) value & 0xFFFF_FFFC else value;
                     if (S and i == 0xF) cpu.setCpsr(cpu.spsr.raw);
                 }
@@ -94,9 +94,9 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                     // Always Transfer User mode Registers
                     // This happens regardless if r15 is in the list
                     const value = cpu.getUserModeRegister(i);
-                    bus.write32(address, value + if (i == 0xF) 8 else @as(u32, 0)); // PC is already 4 ahead to make 12
+                    bus.write(u32, address, value + if (i == 0xF) 8 else @as(u32, 0)); // PC is already 4 ahead to make 12
                 } else {
-                    bus.write32(address, cpu.r[i] + if (i == 0xF) 8 else @as(u32, 0));
+                    bus.write(u32, address, cpu.r[i] + if (i == 0xF) 8 else @as(u32, 0));
                 }
             }
         }
