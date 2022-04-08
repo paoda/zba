@@ -21,9 +21,9 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
             while (i < 8) : (i += 1) {
                 if (opcode >> i & 1 == 1) {
                     if (L) {
-                        cpu.r[i] = bus.read32(address & 0xFFFF_FFFC);
+                        cpu.r[i] = bus.read32(address);
                     } else {
-                        bus.write32(address & 0xFFFF_FFFC, cpu.r[i]);
+                        bus.write32(address, cpu.r[i]);
                     }
 
                     address += 4;
@@ -32,10 +32,10 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
 
             if (R) {
                 if (L) {
-                    const value = bus.read32(address & 0xFFFF_FFFC);
+                    const value = bus.read32(address);
                     cpu.r[15] = value & 0xFFFF_FFFE;
                 } else {
-                    bus.write32(address & 0xFFFF_FFFC, cpu.r[14]);
+                    bus.write32(address, cpu.r[14]);
                 }
                 address += 4;
             }
@@ -52,7 +52,7 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
             const end_address = cpu.r[rb] + 4 * countRlist(opcode);
 
             if (opcode & 0xFF == 0) {
-                if (L) cpu.r[15] = bus.read32(address & 0xFFFF_FFFC) else bus.write32(address & 0xFFFF_FFFC, cpu.r[15] + 4);
+                if (L) cpu.r[15] = bus.read32(address) else bus.write32(address, cpu.r[15] + 4);
                 cpu.r[rb] += 0x40;
                 return;
             }
@@ -63,9 +63,9 @@ pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
             while (i < 8) : (i += 1) {
                 if (opcode >> i & 1 == 1) {
                     if (L) {
-                        cpu.r[i] = bus.read32(address & 0xFFFF_FFFC);
+                        cpu.r[i] = bus.read32(address);
                     } else {
-                        bus.write32(address & 0xFFFF_FFFC, cpu.r[i]);
+                        bus.write32(address, cpu.r[i]);
                     }
 
                     if (!L and first_write) {

@@ -34,7 +34,7 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
                     result = bus.read8(address);
                 } else {
                     // LDR
-                    const value = bus.read32(address & 0xFFFF_FFFC);
+                    const value = bus.read32(address);
                     result = rotr(u32, value, 8 * (address & 0x3));
                 }
             } else {
@@ -45,7 +45,7 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
                 } else {
                     // STR
                     const value = if (rd == 0xF) cpu.r[rd] + 8 else cpu.r[rd];
-                    bus.write32(address & 0xFFFF_FFFC, value);
+                    bus.write32(address, value);
                 }
             }
 

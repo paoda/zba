@@ -38,7 +38,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                 switch (@truncate(u2, opcode >> 5)) {
                     0b01 => {
                         // LDRH
-                        const value = bus.read16(address & 0xFFFF_FFFE);
+                        const value = bus.read16(address);
                         result = rotr(u32, value, 8 * (address & 1));
                     },
                     0b10 => {
@@ -60,7 +60,7 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
             } else {
                 if (opcode >> 5 & 0x01 == 0x01) {
                     // STRH
-                    bus.write16(address & 0xFFFF_FFFE, @truncate(u16, cpu.r[rd]));
+                    bus.write16(address, @truncate(u16, cpu.r[rd]));
                 } else unreachable; // SWP
             }
 
