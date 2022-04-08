@@ -20,28 +20,32 @@ pub fn deinit(self: Self) void {
     self.alloc.free(self.buf);
 }
 
-pub fn get32(self: *const Self, idx: usize) u32 {
-    return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
+pub fn read(self: *const Self, comptime T: type, address: usize) T {
+    const addr = address & 0x3FFFF;
+
+    return switch (T) {
+        u32 => (@as(u32, self.buf[addr + 3]) << 24) | (@as(u32, self.buf[addr + 2]) << 16) | (@as(u32, self.buf[addr + 1]) << 8) | (@as(u32, self.buf[addr])),
+        u16 => (@as(u16, self.buf[addr + 1]) << 8) | @as(u16, self.buf[addr]),
+        u8 => self.buf[addr],
+        else => @compileError("EWRAM: Unsupported read width"),
+    };
 }
 
-pub fn set32(self: *Self, idx: usize, word: u32) void {
-    self.set16(idx + 2, @truncate(u16, word >> 16));
-    self.set16(idx, @truncate(u16, word));
-}
+pub fn write(self: *const Self, comptime T: type, address: usize, value: T) void {
+    const addr = address & 0x3FFFF;
 
-pub fn get16(self: *const Self, idx: usize) u16 {
-    return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
-}
-
-pub fn set16(self: *Self, idx: usize, halfword: u16) void {
-    self.buf[idx + 1] = @truncate(u8, halfword >> 8);
-    self.buf[idx] = @truncate(u8, halfword);
-}
-
-pub fn get8(self: *const Self, idx: usize) u8 {
-    return self.buf[idx];
-}
-
-pub fn set8(self: *Self, idx: usize, byte: u8) void {
-    self.buf[idx] = byte;
+    return switch (T) {
+        u32 => {
+            self.buf[addr + 3] = @truncate(u8, value >> 24);
+            self.buf[addr + 2] = @truncate(u8, value >> 16);
+            self.buf[addr + 1] = @truncate(u8, value >> 8);
+            self.buf[addr + 0] = @truncate(u8, value >> 0);
+        },
+        u16 => {
+            self.buf[addr + 1] = @truncate(u8, value >> 8);
+            self.buf[addr + 0] = @truncate(u8, value >> 0);
+        },
+        u8 => self.buf[addr] = value,
+        else => @compileError("EWRAM: Unsupported write width"),
+    };
 }

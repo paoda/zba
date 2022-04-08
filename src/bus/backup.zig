@@ -115,38 +115,42 @@ pub const Backup = struct {
         }
     }
 
-    pub fn get8(self: *const Self, idx: usize) u8 {
+    pub fn read(self: *const Self, address: usize) u8 {
+        const addr = address & 0xFFFF;
+
         switch (self.kind) {
             .Flash => {
-                switch (idx) {
+                switch (addr) {
                     0x0000 => if (self.flash.id_mode) return 0x32, // Panasonic manufacturer ID
                     0x0001 => if (self.flash.id_mode) return 0x1B, // Panasonic device ID
                     else => {},
                 }
 
-                return self.flash.read(self.buf, idx);
+                return self.flash.read(self.buf, addr);
             },
             .Flash1M => {
-                switch (idx) {
+                switch (addr) {
                     0x0000 => if (self.flash.id_mode) return 0x62, // Sanyo manufacturer ID
                     0x0001 => if (self.flash.id_mode) return 0x13, // Sanyo device ID
                     else => {},
                 }
 
-                return self.flash.read(self.buf, idx);
+                return self.flash.read(self.buf, addr);
             },
-            .Eeprom => return self.buf[idx],
-            .Sram => return self.buf[idx & 0x7FFF], // 32K SRAM chip is mirrored
+            .Eeprom => return self.buf[addr],
+            .Sram => return self.buf[addr & 0x7FFF], // 32K SRAM chip is mirrored
         }
     }
 
-    pub fn set8(self: *Self, idx: usize, byte: u8) void {
+    pub fn write(self: *Self, address: usize, byte: u8) void {
+        const addr = address & 0xFFFF;
+
         switch (self.kind) {
             .Flash, .Flash1M => {
-                if (self.flash.prep_write) return self.flash.write(self.buf, idx, byte);
-                if (self.flash.shouldEraseSector(idx, byte)) return self.flash.eraseSector(self.buf, idx);
+                if (self.flash.prep_write) return self.flash.write(self.buf, addr, byte);
+                if (self.flash.shouldEraseSector(addr, byte)) return self.flash.eraseSector(self.buf, addr);
 
-                switch (idx) {
+                switch (addr) {
                     0x0000 => if (self.kind == .Flash1M and self.flash.set_bank) {
                         self.flash.bank = @truncate(u1, byte);
                     },
@@ -165,8 +169,8 @@ pub const Backup = struct {
                     else => {},
                 }
             },
-            .Eeprom => self.buf[idx] = byte,
-            .Sram => self.buf[idx & 0x7FFF] = byte,
+            .Eeprom => self.buf[addr] = byte,
+            .Sram => self.buf[addr & 0x7FFF] = byte,
         }
     }
 };

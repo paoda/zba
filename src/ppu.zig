@@ -92,11 +92,11 @@ pub const Ppu = struct {
         search: while (i < self.oam.buf.len) : (i += 8) {
             // Attributes in OAM are 6 bytes long, with 2 bytes of padding
             // Grab Attributes from OAM
-            const attr0 = @bitCast(Attr0, self.oam.get16(i));
+            const attr0 = @bitCast(Attr0, self.oam.read(u16, i));
 
             // Only consider enabled Sprites
             if (!attr0.disabled.read()) {
-                const attr1 = @bitCast(Attr1, self.oam.get16(i + 2));
+                const attr1 = @bitCast(Attr1, self.oam.read(u16, i + 2));
 
                 // When fetching sprites we only care about ones that could be rendered
                 // on this scanline
@@ -113,7 +113,7 @@ pub const Ppu = struct {
                 if ((start <= y and y < end) or (istart <= iy and iy < iend)) {
                     for (self.scanline_sprites) |*maybe_sprite| {
                         if (maybe_sprite.* == null) {
-                            maybe_sprite.* = Sprite.init(attr0, attr1, @bitCast(Attr2, self.oam.get16(i + 4)));
+                            maybe_sprite.* = Sprite.init(attr0, attr1, @bitCast(Attr2, self.oam.read(u16, i + 4)));
                             continue :search;
                         }
                     }
@@ -205,7 +205,7 @@ pub const Ppu = struct {
         } else tile;
 
         // Sprite Palette starts at 0x0500_0200
-        if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.get16(0x200 + pal_id * 2);
+        if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.read(u16, 0x200 + pal_id * 2);
     }
 
     fn drawBackround(self: *Self, comptime n: u3) void {
@@ -266,7 +266,7 @@ pub const Ppu = struct {
                 break :blk pal_bank | nybble_tile;
             } else tile;
 
-            if (pal_id != 0) self.scanline_buf[i] = self.palette.get16(pal_id * 2);
+            if (pal_id != 0) self.scanline_buf[i] = self.palette.read(u16, pal_id * 2);
         }
     }
 
@@ -321,7 +321,7 @@ pub const Ppu = struct {
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const pal_id = @as(u16, byte) * @sizeOf(u16);
-                    const bgr555 = self.palette.get16(pal_id);
+                    const bgr555 = self.palette.read(u16, pal_id);
 
                     std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
@@ -432,30 +432,37 @@ const Palette = struct {
         self.alloc.free(self.buf);
     }
 
-    pub fn get32(self: *const Self, idx: usize) u32 {
-        return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
+    pub fn read(self: *const Self, comptime T: type, address: usize) T {
+        const addr = address & 0x3FF;
+
+        return switch (T) {
+            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
+            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
+            u8 => self.buf[addr],
+            else => @compileError("PALRAM: Unsupported read width"),
+        };
     }
 
-    pub fn set32(self: *Self, idx: usize, word: u32) void {
-        self.set16(idx + 2, @truncate(u16, word >> 16));
-        self.set16(idx, @truncate(u16, word));
-    }
+    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
+        const addr = address & 0x3FF;
 
-    pub fn get16(self: *const Self, idx: usize) u16 {
-        return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
-    }
-
-    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
-        self.buf[idx + 1] = @truncate(u8, halfword >> 8);
-        self.buf[idx] = @truncate(u8, halfword);
-    }
-
-    pub fn get8(self: *const Self, idx: usize) u8 {
-        return self.buf[idx];
+        switch (T) {
+            u32 => {
+                self.buf[addr + 3] = @truncate(u8, value >> 24);
+                self.buf[addr + 2] = @truncate(u8, value >> 16);
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            u16 => {
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            else => @compileError("PALRAM: Unsupported write width"),
+        }
     }
 
     fn getBackdrop(self: *const Self) u16 {
-        return self.get16(0);
+        return self.read(u16, 0);
     }
 };
 
@@ -534,28 +541,33 @@ const Oam = struct {
         self.alloc.free(self.buf);
     }
 
-    pub fn get32(self: *const Self, idx: usize) u32 {
-        return (@as(u32, self.buf[idx + 3]) << 24) | (@as(u32, self.buf[idx + 2]) << 16) | (@as(u32, self.buf[idx + 1]) << 8) | (@as(u32, self.buf[idx]));
+    pub fn read(self: *const Self, comptime T: type, address: usize) T {
+        const addr = address & 0x3FF;
+
+        return switch (T) {
+            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
+            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
+            u8 => self.buf[addr],
+            else => @compileError("OAM: Unsupported read width"),
+        };
     }
 
-    pub fn set32(self: *Self, idx: usize, word: u32) void {
-        self.buf[idx + 3] = @truncate(u8, word >> 24);
-        self.buf[idx + 2] = @truncate(u8, word >> 16);
-        self.buf[idx + 1] = @truncate(u8, word >> 8);
-        self.buf[idx] = @truncate(u8, word);
-    }
+    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
+        const addr = address & 0x3FF;
 
-    pub fn get16(self: *const Self, idx: usize) u16 {
-        return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
-    }
-
-    pub fn set16(self: *Self, idx: usize, halfword: u16) void {
-        self.buf[idx + 1] = @truncate(u8, halfword >> 8);
-        self.buf[idx] = @truncate(u8, halfword);
-    }
-
-    pub fn get8(self: *const Self, idx: usize) u8 {
-        return self.buf[idx];
+        switch (T) {
+            u32 => {
+                self.buf[addr + 3] = @truncate(u8, value >> 24);
+                self.buf[addr + 2] = @truncate(u8, value >> 16);
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            u16 => {
+                self.buf[addr + 1] = @truncate(u8, value >> 8);
+                self.buf[addr + 0] = @truncate(u8, value >> 0);
+            },
+            else => @compileError("OAM: Unsupported write width"),
+        }
     }
 };
 

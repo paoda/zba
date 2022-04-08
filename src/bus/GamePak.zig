@@ -60,14 +60,13 @@ pub fn deinit(self: Self) void {
     self.backup.deinit();
 }
 
-pub fn get32(self: *const Self, idx: usize) u32 {
-    return (@as(u32, self.get16(idx + 2)) << 16) | @as(u32, self.get16(idx));
-}
+pub fn read(self: *const Self, comptime T: type, address: u32) T {
+    const addr = address & 0x1FF_FFFF;
 
-pub fn get16(self: *const Self, idx: usize) u16 {
-    return (@as(u16, self.buf[idx + 1]) << 8) | @as(u16, self.buf[idx]);
-}
-
-pub fn get8(self: *const Self, idx: usize) u8 {
-    return self.buf[idx];
+    return switch (T) {
+        u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
+        u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
+        u8 => self.buf[addr],
+        else => @compileError("GamePak: Unsupported read width"),
+    };
 }
