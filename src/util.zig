@@ -9,11 +9,12 @@ pub inline fn sext(comptime bits: comptime_int, value: u32) u32 {
 }
 
 /// See https://godbolt.org/z/W3en9Eche
-pub inline fn rotr(comptime T: type, value: T, r: anytype) T {
-    comptime std.debug.assert(@typeInfo(T).Int.signedness == .unsigned);
-    const ar = @truncate(Log2Int(T), r);
+pub inline fn rotr(comptime T: type, x: T, r: anytype) T {
+    if (@typeInfo(T).Int.signedness == .signed)
+        @compileError("cannot rotate signed integer");
 
-    return value >> ar | value << @truncate(Log2Int(T), @typeInfo(T).Int.bits - @as(T, ar));
+    const ar = @intCast(Log2Int(T), @mod(r, @typeInfo(T).Int.bits));
+    return x >> ar | x << (1 +% ~ar);
 }
 
 pub const FpsAverage = struct {
