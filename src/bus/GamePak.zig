@@ -3,6 +3,9 @@ const std = @import("std");
 const Backup = @import("backup.zig").Backup;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.GamePak);
+
+const intToBytes = @import("../util.zig").intToBytes;
+
 const Self = @This();
 
 title: [12]u8,
@@ -14,11 +17,21 @@ pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Sel
     const file = try std.fs.cwd().openFile(rom_path, .{});
     defer file.close();
 
-    const len = try file.getEndPos();
-    const buf = try file.readToEndAlloc(alloc, len);
-    const title = parseTitle(buf);
+    const file_buf = try file.readToEndAlloc(alloc, try file.getEndPos());
+    defer alloc.free(file_buf);
 
-    const kind = Backup.guessKind(buf) orelse .Sram;
+    const title = parseTitle(file_buf);
+    const kind = Backup.guessKind(file_buf) orelse .Sram;
+
+    const buf = try alloc.alloc(u8, 0x200_0000); // 32MiB
+
+    // GamePak addressable space has known values if there's no cartridge inserted
+    var i: usize = 0;
+    while (i < buf.len) : (i += @sizeOf(u16)) {
+        std.mem.copy(u8, buf[i..][0..2], &intToBytes(u16, @truncate(u16, i / 2)));
+    }
+
+    std.mem.copy(u8, buf[0..file_buf.len], file_buf[0..file_buf.len]); // Copy over ROM
 
     const pak = Self{
         .buf = buf,
