@@ -245,12 +245,15 @@ pub const Arm7tdmi = struct {
         self.cpsr.raw = 0x6000001F;
     }
 
-    pub fn step(self: *Self) u64 {
+    pub fn step(self: *Self) void {
         // If we're processing a DMA (not Sound or Blanking) the CPU is disabled
-        if (self.handleDMATransfers()) return 1;
+        if (self.handleDMATransfers()) return;
 
         // If we're halted, the cpu is disabled
-        if (self.bus.io.haltcnt == .Halt) return 1;
+        if (self.bus.io.haltcnt == .Halt) {
+            self.sched.tick += 1;
+            return;
+        }
 
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
@@ -265,8 +268,6 @@ pub const Arm7tdmi = struct {
                 arm_lut[armIdx(opcode)](self, self.bus, opcode);
             }
         }
-
-        return 1;
     }
 
     pub fn handleInterrupt(self: *Self) void {

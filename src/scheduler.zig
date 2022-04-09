@@ -31,6 +31,8 @@ pub const Scheduler = struct {
 
     pub fn handleEvent(self: *Self, cpu: *Arm7tdmi, bus: *Bus) void {
         if (self.queue.removeOrNull()) |event| {
+            const late = self.tick - event.tick;
+
             switch (event.kind) {
                 .HeatDeath => {
                     log.err("A u64 overflowered. This *actually* should never happen.", .{});
@@ -39,18 +41,18 @@ pub const Scheduler = struct {
                 .Draw => {
                     // The end of a VDraw
                     bus.ppu.drawScanline();
-                    bus.ppu.handleHDrawEnd(cpu);
+                    bus.ppu.handleHDrawEnd(cpu, late);
                 },
                 .TimerOverflow => |id| {
                     switch (id) {
-                        0 => bus.tim._0.handleOverflow(cpu),
-                        1 => bus.tim._1.handleOverflow(cpu),
-                        2 => bus.tim._2.handleOverflow(cpu),
-                        3 => bus.tim._3.handleOverflow(cpu),
+                        0 => bus.tim._0.handleOverflow(cpu, late),
+                        1 => bus.tim._1.handleOverflow(cpu, late),
+                        2 => bus.tim._2.handleOverflow(cpu, late),
+                        3 => bus.tim._3.handleOverflow(cpu, late),
                     }
                 },
-                .HBlank => bus.ppu.handleHBlankEnd(cpu), // The end of a HBlank
-                .VBlank => bus.ppu.handleHDrawEnd(cpu), // The end of a VBlank
+                .HBlank => bus.ppu.handleHBlankEnd(cpu, late), // The end of a HBlank
+                .VBlank => bus.ppu.handleHDrawEnd(cpu, late), // The end of a VBlank
             }
         }
     }

@@ -29,8 +29,9 @@ dma: DmaControllers,
 tim: Timers,
 iwram: Iwram,
 ewram: Ewram,
-
 io: Io,
+
+sched: *Scheduler,
 
 pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path: ?[]const u8, save_path: ?[]const u8) !Self {
     return Self{
@@ -43,6 +44,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path
         .dma = DmaControllers.init(),
         .tim = Timers.init(sched),
         .io = Io.init(),
+        .sched = sched,
     };
 }
 
@@ -57,6 +59,7 @@ pub fn deinit(self: Self) void {
 pub fn read(self: *const Self, comptime T: type, address: u32) T {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
+    self.sched.tick += 1;
 
     return switch (page) {
         // General Internal Memory
@@ -91,6 +94,7 @@ pub fn read(self: *const Self, comptime T: type, address: u32) T {
 pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
+    self.sched.tick += 1;
 
     switch (page) {
         // General Internal Memory

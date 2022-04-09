@@ -81,13 +81,13 @@ fn Timer(comptime id: u2) type {
                 // Reload on Rising edge
                 self._counter = self._reload;
 
-                if (!new.cascade.read()) self.scheduleOverflow();
+                if (!new.cascade.read()) self.scheduleOverflow(0);
             }
 
             self.cnt.raw = halfword;
         }
 
-        pub fn handleOverflow(self: *Self, cpu: *Arm7tdmi) void {
+        pub fn handleOverflow(self: *Self, cpu: *Arm7tdmi, late: u64) void {
             // Fire IRQ if enabled
             const io = &cpu.bus.io;
             const tim = &cpu.bus.tim;
@@ -107,21 +107,15 @@ fn Timer(comptime id: u2) type {
             switch (id) {
                 0 => if (tim._1.cnt.cascade.read()) {
                     tim._1._counter +%= 1;
-
-                    if (tim._1._counter == 0)
-                        tim._1.handleOverflow(cpu);
+                    if (tim._1._counter == 0) tim._1.handleOverflow(cpu, late);
                 },
                 1 => if (tim._2.cnt.cascade.read()) {
                     tim._2._counter +%= 1;
-
-                    if (tim._2._counter == 0)
-                        tim._2.handleOverflow(cpu);
+                    if (tim._2._counter == 0) tim._2.handleOverflow(cpu, late);
                 },
                 2 => if (tim._3.cnt.cascade.read()) {
                     tim._3._counter +%= 1;
-
-                    if (tim._3._counter == 0)
-                        tim._3.handleOverflow(cpu);
+                    if (tim._3._counter == 0) tim._3.handleOverflow(cpu, late);
                 },
                 3 => {}, // There is no Timer for TIM3 to "cascade" to,
             }
@@ -129,15 +123,15 @@ fn Timer(comptime id: u2) type {
             // Reschedule Timer if we're not cascading
             if (!self.cnt.cascade.read()) {
                 self._counter = self._reload;
-                self.scheduleOverflow();
+                self.scheduleOverflow(late);
             }
         }
 
-        fn scheduleOverflow(self: *Self) void {
+        fn scheduleOverflow(self: *Self, late: u64) void {
             const when = (@as(u64, 0x10000) - self._counter) * self.frequency();
 
             self._start_timestamp = self.sched.now();
-            self.sched.push(.{ .TimerOverflow = id }, self.sched.now() + when);
+            self.sched.push(.{ .TimerOverflow = id }, self.sched.now() + when - late);
         }
 
         fn frequency(self: *const Self) u16 {
