@@ -53,10 +53,13 @@ fn DmaController(comptime id: u2) type {
         /// Internal. Word Count
         _word_count: if (id == 3) u16 else u14,
 
+        // Internal. FIFO Word Count
+        _fifo_word_count: u8,
+
         /// Some DMA Transfers are enabled during Hblank / VBlank and / or
         /// have delays. Thefore bit 15 of DMACNT isn't actually something
         /// we can use to control when we do or do not execute a step in a DMA Transfer
-        enabled: bool,
+        active: bool,
 
         pub fn init() Self {
             return .{
@@ -70,7 +73,8 @@ fn DmaController(comptime id: u2) type {
                 ._sad = 0,
                 ._dad = 0,
                 ._word_count = 0,
-                .enabled = false,
+                ._fifo_word_count = 4,
+                .active = false,
             };
         }
 
@@ -96,7 +100,7 @@ fn DmaController(comptime id: u2) type {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
 
                 // Only a Start Timing of 00 has a DMA Transfer immediately begin
-                self.enabled = new.start_timing.read() == 0b00;
+                self.active = new.start_timing.read() == 0b00;
             }
 
             self.cnt.raw = halfword;
@@ -108,27 +112,50 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub inline fn check(self: *Self, bus: *Bus) bool {
-            if (!self.enabled) return false; // FIXME: Check CNT register?
+            if (!self.active) return false; // FIXME: Check CNT register?
 
             self.step(bus);
             return true;
         }
 
-        pub fn step(self: *Self, bus: *Bus) void {
-            @setCold(true);
+        pub fn step(self: *Self, bus: *Bus) bool {
+            if (!self.active) return false;
 
             const sad_adj = std.meta.intToEnum(Adjustment, self.cnt.sad_adj.read()) catch unreachable;
             const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
+            const is_fifo = (self.id == 1 or self.id == 2) and self.cnt.start_timing.read() == 0b11;
 
-            var offset: u32 = 0;
-            if (self.cnt.transfer_type.read()) {
-                offset = @sizeOf(u32); // 32-bit Transfer
-                const word = bus.read(u32, self._sad);
-                bus.write(u32, self._dad, word);
+            // // if (is_fifo) {
+            // //     const offset = @sizeOf(u32);
+            // //     bus.write(u32, self._dad, bus.read(u32, self._sad));
+
+            // //     // TODO: Deduplicate
+            // //     switch (sad_adj) {
+            // //         .Increment => self._sad +%= offset,
+            // //         .Decrement => self._sad -%= offset,
+            // //         .Fixed => {},
+
+            // //         // TODO: Figure out correct behaviour on Illegal Source Addr Control Type
+            // //         .IncrementReload => std.debug.panic("panic(DmaTransfer): {} is an illegal src addr adjustment type", .{sad_adj}),
+            // //     }
+
+            // //     self._fifo_word_count -= 1;
+
+            // //     if (self._fifo_word_count == 0) {
+            // //         self._fifo_word_count = 4;
+            // //         self.active = false;
+            // //     }
+
+            // //     return true;
+            // // }
+
+            const transfer_type = self.cnt.transfer_type.read() or is_fifo;
+            const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
+
+            if (transfer_type) {
+                bus.write(u32, self._dad, bus.read(u32, self._sad));
             } else {
-                offset = @sizeOf(u16); // 16-bit Transfer
-                const halfword = bus.read(u16, self._sad);
-                bus.write(u16, self._dad, halfword);
+                bus.write(u16, self._dad, bus.read(u16, self._sad));
             }
 
             switch (sad_adj) {
@@ -140,10 +167,12 @@ fn DmaController(comptime id: u2) type {
                 .IncrementReload => std.debug.panic("panic(DmaTransfer): {} is an illegal src addr adjustment type", .{sad_adj}),
             }
 
-            switch (dad_adj) {
-                .Increment, .IncrementReload => self._dad +%= offset,
-                .Decrement => self._dad -%= offset,
-                .Fixed => {},
+            if (!is_fifo) {
+                switch (dad_adj) {
+                    .Increment, .IncrementReload => self._dad +%= offset,
+                    .Decrement => self._dad -%= offset,
+                    .Fixed => {},
+                }
             }
 
             self._word_count -= 1;
@@ -165,8 +194,10 @@ fn DmaController(comptime id: u2) type {
                 // We want to disable our internal enabled flag regardless of repeat
                 // because we only want to step A DMA that repeats during it's specific
                 // timing window
-                self.enabled = false;
+                self.active = false;
             }
+
+            return true;
         }
 
         pub fn isBlocking(self: *const Self) bool {
@@ -175,19 +206,29 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn pollBlankingDma(self: *Self, comptime kind: DmaKind) void {
-            if (self.enabled) return;
+            if (self.active) return;
 
             switch (kind) {
-                .HBlank => self.enabled = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
-                .VBlank => self.enabled = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
+                .HBlank => self.active = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
+                .VBlank => self.active = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
                 .Immediate, .Special => {},
             }
 
-            if (self.cnt.repeat.read() and self.enabled) {
+            if (self.cnt.repeat.read() and self.active) {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
 
                 const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
                 if (dad_adj == .IncrementReload) self._dad = self.dad;
+            }
+        }
+
+        pub fn enableSoundDma(self: *Self, fifo_addr: u32) void {
+            comptime std.debug.assert(id == 1 or id == 2);
+
+            if (self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b11 and self.dad == fifo_addr) {
+                self.active = true;
+                self._word_count = 4;
+                self.cnt.repeat.set();
             }
         }
     };

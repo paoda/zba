@@ -66,11 +66,33 @@ pub fn main() anyerror!void {
     defer if (save_path) |path| alloc.free(path);
     log.info("Save Path: {s}", .{save_path});
 
+    // Initialize SDL
+    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
+    defer SDL.SDL_Quit();
+    if (status < 0) sdlPanic();
+
+    // Initialize SDL Audio
+    var have: SDL.SDL_AudioSpec = undefined;
+    var want = std.mem.zeroes(SDL.SDL_AudioSpec);
+    want.freq = 32768;
+    want.format = SDL.AUDIO_S8;
+    want.channels = 2;
+    want.samples = 0x200;
+    want.callback = null;
+
+    const audio_dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
+    defer SDL.SDL_CloseAudioDevice(audio_dev);
+    if (audio_dev == 0) sdlPanic();
+
+    // Start Playback on the Audio evice
+    SDL.SDL_PauseAudioDevice(audio_dev, 0);
+
     // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
-    var bus = try Bus.init(alloc, &scheduler, rom_path, bios_path, save_path);
+    const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_path };
+    var bus = try Bus.init(alloc, &scheduler, audio_dev, paths);
     defer bus.deinit();
 
     var cpu = Arm7tdmi.init(&scheduler, &bus);
@@ -90,11 +112,6 @@ pub fn main() anyerror!void {
     // Create Emulator Thread
     const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu, &bus });
     defer emu_thread.join();
-
-    // Initialize SDL
-    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
-    if (status < 0) sdlPanic();
-    defer SDL.SDL_Quit();
 
     const title = correctTitle(bus.pak.title);
 

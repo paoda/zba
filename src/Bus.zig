@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AudioDeviceId = @import("sdl2").SDL_AudioDeviceID;
 const Bios = @import("bus/Bios.zig");
 const Ewram = @import("bus/Ewram.zig");
 const GamePak = @import("bus/GamePak.zig");
@@ -10,6 +11,7 @@ const Apu = @import("apu.zig").Apu;
 const DmaControllers = @import("bus/dma.zig").DmaControllers;
 const Timers = @import("bus/timer.zig").Timers;
 const Scheduler = @import("scheduler.zig").Scheduler;
+const FilePaths = @import("util.zig").FilePaths;
 
 const io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
@@ -33,12 +35,12 @@ io: Io,
 
 sched: *Scheduler,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, rom_path: []const u8, bios_path: ?[]const u8, save_path: ?[]const u8) !Self {
+pub fn init(alloc: Allocator, sched: *Scheduler, dev: AudioDeviceId, paths: FilePaths) !Self {
     return Self{
-        .pak = try GamePak.init(alloc, rom_path, save_path),
-        .bios = try Bios.init(alloc, bios_path),
+        .pak = try GamePak.init(alloc, paths.rom, paths.save),
+        .bios = try Bios.init(alloc, paths.bios),
         .ppu = try Ppu.init(alloc, sched),
-        .apu = Apu.init(),
+        .apu = Apu.init(dev),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
         .dma = DmaControllers.init(),
@@ -54,6 +56,22 @@ pub fn deinit(self: Self) void {
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
+}
+
+pub fn handleDMATransfers(self: *Self) void {
+    while (self.isDmaRunning()) {
+        if (self.dma._1.step(self)) continue;
+        if (self.dma._0.step(self)) continue;
+        if (self.dma._2.step(self)) continue;
+        if (self.dma._3.step(self)) continue;
+    }
+}
+
+fn isDmaRunning(self: *const Self) bool {
+    return self.dma._0.active or
+        self.dma._1.active or
+        self.dma._2.active or
+        self.dma._3.active;
 }
 
 pub fn read(self: *const Self, comptime T: type, address: u32) T {

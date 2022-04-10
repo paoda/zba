@@ -246,15 +246,6 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) void {
-        // If we're processing a DMA (not Sound or Blanking) the CPU is disabled
-        if (self.handleDMATransfers()) return;
-
-        // If we're halted, the cpu is disabled
-        if (self.bus.io.haltcnt == .Halt) {
-            self.sched.tick += 1;
-            return;
-        }
-
         if (self.cpsr.t.read()) {
             const opcode = self.thumbFetch();
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
@@ -294,15 +285,6 @@ pub const Arm7tdmi = struct {
             self.spsr.raw = cpsr;
             self.r[15] = 0x000_0018;
         }
-    }
-
-    fn handleDMATransfers(self: *Self) bool {
-        if (self.bus.dma._0.check(self.bus)) return self.bus.dma._0.isBlocking();
-        if (self.bus.dma._1.check(self.bus)) return self.bus.dma._1.isBlocking();
-        if (self.bus.dma._2.check(self.bus)) return self.bus.dma._2.isBlocking();
-        if (self.bus.dma._3.check(self.bus)) return self.bus.dma._3.isBlocking();
-
-        return false;
     }
 
     fn thumbFetch(self: *Self) u16 {

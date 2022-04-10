@@ -46,7 +46,9 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
     const frame_end = sched.tick + cycles_per_frame;
 
     while (sched.tick < frame_end) {
-        cpu.step();
+        if (bus.io.haltcnt == .Halt) sched.tick += 1;
+        if (bus.io.haltcnt == .Execute) cpu.step();
+        bus.handleDMATransfers();
 
         while (sched.tick >= sched.nextTimestamp()) {
             sched.handleEvent(cpu, bus);

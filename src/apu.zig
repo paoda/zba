@@ -1,8 +1,13 @@
 const std = @import("std");
+const SDL = @import("sdl2");
+const io = @import("bus/io.zig");
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
+const AudioDeviceId = SDL.SDL_AudioDeviceID;
 
-const io = @import("bus/io.zig");
+const intToBytes = @import("util.zig").intToBytes;
+const log = std.log.scoped(.APU);
 
 pub const Apu = struct {
     const Self = @This();
@@ -11,28 +16,43 @@ pub const Apu = struct {
     ch2: Tone,
     ch3: Wave,
     ch4: Noise,
-    chA: DmaSound,
-    chB: DmaSound,
+    chA: DmaSound(.A),
+    chB: DmaSound(.B),
 
     bias: io.SoundBias,
     ch_vol_cnt: io.ChannelVolumeControl,
     dma_cnt: io.DmaSoundControl,
     cnt: io.SoundControl,
 
-    pub fn init() Self {
+    dev: AudioDeviceId,
+
+    pub fn init(dev: AudioDeviceId) Self {
         return .{
             .ch1 = ToneSweep.init(),
             .ch2 = Tone.init(),
             .ch3 = Wave.init(),
             .ch4 = Noise.init(),
-            .chA = DmaSound.init(),
-            .chB = DmaSound.init(),
+            .chA = DmaSound(.A).init(),
+            .chB = DmaSound(.B).init(),
 
             .ch_vol_cnt = .{ .raw = 0 },
             .dma_cnt = .{ .raw = 0 },
             .cnt = .{ .raw = 0 },
             .bias = .{ .raw = 0x0200 },
+
+            .dev = dev,
         };
+    }
+
+    pub fn setDmaCnt(self: *Self, value: u16) void {
+        const new: io.DmaSoundControl = .{ .raw = value };
+
+        // Reinitializing instead of resetting is fine because
+        // the FIFOs I'm using are stack allocated and 0x20 bytes big
+        if (new.sa_reset.read()) self.chA.fifo = SoundFifo.init();
+        if (new.sb_reset.read()) self.chB.fifo = SoundFifo.init();
+
+        self.dma_cnt = new;
     }
 
     pub fn setSoundCntX(self: *Self, value: bool) void {
@@ -49,6 +69,21 @@ pub const Apu = struct {
 
     pub fn setBiasHigh(self: *Self, byte: u8) void {
         self.bias.raw = (@as(u16, byte) << 8) | (self.bias.raw & 0xFF);
+    }
+
+    pub fn handleTimerOverflow(self: *Self, kind: DmaSoundKind, cpu: *Arm7tdmi) void {
+        if (!self.cnt.apu_enable.read()) return;
+
+        const samples = switch (kind) {
+            .A => blk: {
+                break :blk self.chA.handleTimerOverflow(cpu, self.dma_cnt);
+            },
+            .B => blk: {
+                break :blk self.chB.handleTimerOverflow(cpu, self.dma_cnt);
+            },
+        };
+
+        _ = SDL.SDL_QueueAudio(self.dev, &samples, 2);
     }
 };
 
@@ -162,16 +197,66 @@ const Noise = struct {
         };
     }
 };
-const DmaSound = struct {
-    const Self = @This();
 
-    a: SoundFifo,
-    b: SoundFifo,
+pub fn DmaSound(comptime kind: DmaSoundKind) type {
+    return struct {
+        const Self = @This();
 
-    fn init() Self {
-        return .{
-            .a = SoundFifo.init(),
-            .b = SoundFifo.init(),
-        };
-    }
+        fifo: SoundFifo,
+
+        kind: DmaSoundKind,
+
+        fn init() Self {
+            return .{ .fifo = SoundFifo.init(), .kind = kind };
+        }
+
+        pub fn push(self: *Self, value: u32) void {
+            self.fifo.write(&intToBytes(u32, value)) catch {};
+        }
+
+        pub fn pop(self: *Self) u8 {
+            return self.fifo.readItem() orelse 0;
+        }
+
+        pub fn len(self: *const Self) usize {
+            return self.fifo.readableLength();
+        }
+
+        pub fn handleTimerOverflow(self: *Self, cpu: *Arm7tdmi, cnt: io.DmaSoundControl) [2]u8 {
+            const sample = self.pop();
+
+            var left: u8 = 0;
+            var right: u8 = 0;
+            var fifo_addr: u32 = undefined;
+
+            switch (kind) {
+                .A => {
+                    const vol = @boolToInt(!cnt.sa_vol.read()); // if unset, vol is 50%
+                    if (cnt.sa_left_enable.read()) left = sample >> vol;
+                    if (cnt.sa_right_enable.read()) right = sample >> vol;
+
+                    fifo_addr = 0x0400_00A0;
+                },
+                .B => {
+                    const vol = @boolToInt(!cnt.sb_vol.read()); // if unset, vol is 50%
+                    if (cnt.sb_left_enable.read()) left = sample >> vol;
+                    if (cnt.sb_right_enable.read()) right = sample >> vol;
+
+                    fifo_addr = 0x0400_00A4;
+                },
+            }
+
+            if (self.len() <= 15) {
+                cpu.bus.dma._1.enableSoundDma(fifo_addr);
+                cpu.bus.dma._2.enableSoundDma(fifo_addr);
+            }
+
+            return .{ left, right };
+        }
+    };
+}
+
+const DmaSoundKind = enum {
+    A,
+    B,
 };

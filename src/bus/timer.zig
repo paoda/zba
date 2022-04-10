@@ -103,6 +103,17 @@ fn Timer(comptime id: u2) type {
                 cpu.handleInterrupt();
             }
 
+            // DMA Sound Things
+            if (id == 0 or id == 1) {
+                const apu = &cpu.bus.apu;
+
+                const a_tim = @boolToInt(apu.dma_cnt.sa_timer.read());
+                const b_tim = @boolToInt(apu.dma_cnt.sb_timer.read());
+
+                if (a_tim == id) apu.handleTimerOverflow(.A, cpu);
+                if (b_tim == id) apu.handleTimerOverflow(.B, cpu);
+            }
+
             // Perform Cascade Behaviour
             switch (id) {
                 0 => if (tim._1.cnt.cascade.read()) {

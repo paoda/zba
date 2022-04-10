@@ -143,8 +143,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_001C => bus.ppu.setBgOffsets(3, value),
 
             // Sound
-            0x0400_00A0 => log.warn("Wrote 0x{X:0>8} to FIFO_A", .{value}),
-            0x0400_00A4 => log.warn("Wrote 0x{X:0>8} to FIFO_B", .{value}),
+            0x0400_00A0 => bus.apu.chA.push(value),
+            0x0400_00A4 => bus.apu.chB.push(value),
 
             // DMA Transfers
             0x0400_00B0 => bus.dma._0.writeSad(value),
@@ -208,7 +208,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Sound
             0x0400_0080 => bus.apu.ch_vol_cnt.raw = value,
-            0x0400_0082 => bus.apu.dma_cnt.raw = value,
+            0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
             0x0400_0088 => bus.apu.bias.raw = value,
 
