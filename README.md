@@ -2,9 +2,15 @@
 An in-progress Gameboy Advance Emulator written in Zig ⚡!
 
 ## Tests 
-- [x] [`arm.gba`](https://github.com/jsmolka/gba-tests/tree/master/arm)
-- [x] [`thumb.gba`](https://github.com/jsmolka/gba-tests/tree/master/thumb)
+- [jsmolka GBA Test Collection](https://github.com/jsmolka/gba-tests)
+    - [x] `arm.gba` and `thumb.gba`
+    - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
+    - [x] `hello.gba`, `shades.gba`, and `stripes.gba`
+    - [x] `memory.gba`
+    - [ ] `bios.gba`
+    - [ ] `nes.gba`
 - [x] [`armwrestler-gba-fixed.gba`](https://github.com/destoer/armwrestler-gba-fixed)
+- [x] [FuzzARM](https://github.com/DenSinH/FuzzARM)
 
 ## Resources
 * [GBATEK](https://problemkaputt.de/gbatek.htm)
@@ -13,7 +19,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [v0.10.0-dev.1659+4dd65316b](https://github.com/ziglang/zig/tree/4dd65316b)
+Most recently built on Zig [0.10.0-dev.1741+d2681d253](https://github.com/ziglang/zig/tree/d2681d253)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
