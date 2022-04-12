@@ -68,12 +68,19 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0000 => bus.ppu.dispcnt.raw,
             0x0400_0004 => bus.ppu.dispstat.raw,
             0x0400_0006 => bus.ppu.vcount.raw,
+            0x0400_0008 => bus.ppu.bg[0].cnt.raw,
+            0x0400_000A => bus.ppu.bg[1].cnt.raw,
+            0x0400_000C => bus.ppu.bg[2].cnt.raw,
+            0x0400_000E => bus.ppu.bg[3].cnt.raw,
 
             // Sound
             0x0400_0088 => bus.apu.bias.raw,
 
             // DMA Transfers
             0x0400_00BA => bus.dma._0.cnt.raw,
+            0x0400_00C6 => bus.dma._1.cnt.raw,
+            0x0400_00D2 => bus.dma._2.cnt.raw,
+            0x0400_00DE => bus.dma._3.cnt.raw,
 
             // Timers
             0x0400_0100 => bus.tim._0.counter(),
@@ -96,7 +103,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0202 => bus.io.irq.raw,
             0x0400_0204 => unimplementedRead("Read halfword from WAITCNT", .{}),
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => undRead("Tried to read halfword from 0x{X:0>8}", .{address}),
+            else => undRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
             // Display
@@ -143,6 +150,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_001C => bus.ppu.setBgOffsets(3, value),
 
             // Sound
+            0x0400_0080 => {
+                bus.apu.ch_vol_cnt.raw = @truncate(u16, value);
+                bus.apu.dma_cnt.raw = @truncate(u16, value >> 16);
+            },
             0x0400_00A0 => bus.apu.chA.push(value),
             0x0400_00A4 => bus.apu.chB.push(value),
 
@@ -179,6 +190,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Display
             0x0400_0000 => bus.ppu.dispcnt.raw = value,
             0x0400_0004 => bus.ppu.dispstat.raw = value,
+            0x0400_0006 => {}, // vcount is read-only
             0x0400_0008 => bus.ppu.bg[0].cnt.raw = value,
             0x0400_000A => bus.ppu.bg[1].cnt.raw = value,
             0x0400_000C => bus.ppu.bg[2].cnt.raw = value,
@@ -192,9 +204,21 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_001C => bus.ppu.bg[3].hofs.raw = value,
             0x0400_001E => bus.ppu.bg[3].vofs.raw = value,
             0x0400_0020 => log.warn("Wrote 0x{X:0>4} to BG2PA", .{value}),
+            0x0400_0022 => log.warn("Wrote 0x{X:0>4} to BG2PB", .{value}),
+            0x0400_0024 => log.warn("Wrote 0x{X:0>4} to BG2PC", .{value}),
             0x0400_0026 => log.warn("Wrote 0x{X:0>4} to BG2PD", .{value}),
+            0x0400_0028 => log.warn("Wrote 0x{X:0>4} to BG2X_L", .{value}),
+            0x0400_002A => log.warn("Wrote 0x{X:0>4} to BG2X_H", .{value}),
+            0x0400_002C => log.warn("Wrote 0x{X:0>4} to BG2Y_L", .{value}),
+            0x0400_002E => log.warn("Wrote 0x{X:0>4} to BG2Y_H", .{value}),
             0x0400_0030 => log.warn("Wrote 0x{X:0>4} to BG3PA", .{value}),
+            0x0400_0032 => log.warn("Wrote 0x{X:0>4} to BG3PB", .{value}),
+            0x0400_0034 => log.warn("Wrote 0x{X:0>4} to BG3PC", .{value}),
             0x0400_0036 => log.warn("Wrote 0x{X:0>4} to BG3PD", .{value}),
+            0x0400_0038 => log.warn("Wrote 0x{X:0>4} to BG3X_L", .{value}),
+            0x0400_003A => log.warn("Wrote 0x{X:0>4} to BG3X_H", .{value}),
+            0x0400_003C => log.warn("Wrote 0x{X:0>4} to BG3Y_L", .{value}),
+            0x0400_003E => log.warn("Wrote 0x{X:0>4} to BG3Y_H", .{value}),
             0x0400_0040 => log.warn("Wrote 0x{X:0>4} to WIN0H", .{value}),
             0x0400_0042 => log.warn("Wrote 0x{X:0>4} to WIN1H", .{value}),
             0x0400_0044 => log.warn("Wrote 0x{X:0>4} to WIN0V", .{value}),
@@ -205,20 +229,41 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0050 => log.warn("Wrote 0x{X:0>4} to BLDCNT", .{value}),
             0x0400_0052 => log.warn("Wrote 0x{X:0>4} to BLDALPHA", .{value}),
             0x0400_0054 => log.warn("Wrote 0x{X:0>4} to BLDY", .{value}),
+            0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
             0x0400_0080 => bus.apu.ch_vol_cnt.raw = value,
             0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
             0x0400_0088 => bus.apu.bias.raw = value,
+            0x0400_0090...0x0400_009F => log.warn("Wrote 0x{X:0>4} to WAVE_RAM", .{value}),
 
             // Dma Transfers
+            0x0400_00B0 => bus.dma._0.writeSad(bus.dma._0.sad & 0xFFFF_0000 | value),
+            0x0400_00B2 => bus.dma._0.writeSad(bus.dma._0.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00B4 => bus.dma._0.writeDad(bus.dma._0.dad & 0xFFFF_0000 | value),
+            0x0400_00B6 => bus.dma._0.writeDad(bus.dma._0.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
             0x0400_00B8 => bus.dma._0.writeWordCount(value),
             0x0400_00BA => bus.dma._0.writeCntHigh(value),
+
+            0x0400_00BC => bus.dma._1.writeSad(bus.dma._1.sad & 0xFFFF_0000 | value),
+            0x0400_00BE => bus.dma._1.writeSad(bus.dma._1.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00C0 => bus.dma._1.writeDad(bus.dma._1.dad & 0xFFFF_0000 | value),
+            0x0400_00C2 => bus.dma._1.writeDad(bus.dma._1.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
             0x0400_00C4 => bus.dma._1.writeWordCount(value),
             0x0400_00C6 => bus.dma._1.writeCntHigh(value),
+
+            0x0400_00C8 => bus.dma._2.writeSad(bus.dma._2.sad & 0xFFFF_0000 | value),
+            0x0400_00CA => bus.dma._2.writeSad(bus.dma._2.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00CC => bus.dma._2.writeDad(bus.dma._2.dad & 0xFFFF_0000 | value),
+            0x0400_00CE => bus.dma._2.writeDad(bus.dma._2.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
             0x0400_00D0 => bus.dma._2.writeWordCount(value),
             0x0400_00D2 => bus.dma._2.writeCntHigh(value),
+
+            0x0400_00D4 => bus.dma._3.writeSad(bus.dma._3.sad & 0xFFFF_0000 | value),
+            0x0400_00D6 => bus.dma._3.writeSad(bus.dma._3.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00D8 => bus.dma._3.writeDad(bus.dma._3.dad & 0xFFFF_0000 | value),
+            0x0400_00DA => bus.dma._3.writeDad(bus.dma._3.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
             0x0400_00DC => bus.dma._3.writeWordCount(value),
             0x0400_00DE => bus.dma._3.writeCntHigh(value),
 
@@ -231,6 +276,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_010A => bus.tim._2.writeCntHigh(value),
             0x0400_010C => bus.tim._3.writeCntLow(value),
             0x0400_010E => bus.tim._3.writeCntHigh(value),
+            0x0400_0110 => {}, // Not Used
 
             // Serial Communication 1
             0x0400_0120 => log.warn("Wrote 0x{X:0>4} to SIOMULTI0", .{value}),
@@ -248,13 +294,15 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0134 => log.warn("Wrote 0x{X:0>4} to RCNT", .{value}),
             0x0400_0140 => log.warn("Wrote 0x{X:0>4} to JOYCNT", .{value}),
             0x0400_0158 => log.warn("Wrote 0x{X:0>4} to JOYSTAT", .{value}),
+            0x0400_0142, 0x0400_015A => {}, // Not Used
 
             // Interrupts
             0x0400_0200 => bus.io.ie.raw = value,
             0x0400_0202 => bus.io.irq.raw &= ~value,
             0x0400_0204 => log.warn("Wrote 0x{X:0>4} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            else => undWrite("Tried to write 0x{X:0>4} to 0x{X:0>8}", .{ value, address }),
+            0x0400_0206, 0x0400_020A => {}, // Not Used
+            else => undWrite("Tried to write {} 0x{X:0>4} to 0x{X:0>8}", .{ T, value, address }),
         },
         u8 => switch (address) {
             // Display
