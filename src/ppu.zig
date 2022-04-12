@@ -457,7 +457,13 @@ const Palette = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
-            u8 => return,
+            u8 => {
+                const halfword: u16 = @as(u16, value) * 0x0101;
+                const real_addr = addr & ~@as(u32, 1); // *was* 8-bit read so address won't be aligned
+
+                self.buf[real_addr + 1] = @truncate(u8, halfword >> 8);
+                self.buf[real_addr + 0] = @truncate(u8, halfword >> 0);
+            },
             else => @compileError("PALRAM: Unsupported write width"),
         }
     }
@@ -498,7 +504,8 @@ const Vram = struct {
         };
     }
 
-    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
+    pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address: usize, value: T) void {
+        const mode: u3 = dispcnt.bg_mode.read();
         const addr = Self.mirror(address);
 
         switch (T) {
@@ -512,7 +519,19 @@ const Vram = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
-            u8 => return,
+            u8 => {
+                // Ignore if write is in OBJ
+                switch (mode) {
+                    0, 1, 2 => if (0x0601_0000 <= address and address < 0x0601_8000) return,
+                    else => if (0x0601_4000 <= address and address < 0x0601_8000) return,
+                }
+
+                const halfword: u16 = @as(u16, value) * 0x0101;
+                const real_addr = addr & ~@as(u32, 1);
+
+                self.buf[real_addr + 1] = @truncate(u8, halfword >> 8);
+                self.buf[real_addr + 0] = @truncate(u8, halfword >> 0);
+            },
             else => @compileError("VRAM: Unsupported write width"),
         }
     }
@@ -568,7 +587,7 @@ const Oam = struct {
                 self.buf[addr + 1] = @truncate(u8, value >> 8);
                 self.buf[addr + 0] = @truncate(u8, value >> 0);
             },
-            u8 => return,
+            u8 => return, // 8-bit writes are explicitly ignored
             else => @compileError("OAM: Unsupported write width"),
         }
     }

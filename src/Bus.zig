@@ -123,7 +123,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
 
         // Internal Display Memory
         0x05 => self.ppu.palette.write(T, align_addr, value),
-        0x06 => self.ppu.vram.write(T, align_addr, value),
+        0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, align_addr, value),
         0x07 => self.ppu.oam.write(T, align_addr, value),
 
         // External Memory (Game Pak)
