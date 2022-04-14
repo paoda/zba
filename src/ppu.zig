@@ -413,13 +413,14 @@ pub const Ppu = struct {
 };
 
 const Palette = struct {
+    const palram_size = 0x400;
     const Self = @This();
 
     buf: []u8,
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, 0x400);
+        const buf = try alloc.alloc(u8, palram_size);
         std.mem.set(u8, buf, 0);
 
         return Self{
@@ -474,13 +475,14 @@ const Palette = struct {
 };
 
 const Vram = struct {
+    const vram_size = 0x18000;
     const Self = @This();
 
     buf: []u8,
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, 0x18000);
+        const buf = try alloc.alloc(u8, vram_size);
         std.mem.set(u8, buf, 0);
 
         return Self{
@@ -543,13 +545,14 @@ const Vram = struct {
 };
 
 const Oam = struct {
+    const oam_size = 0x400;
     const Self = @This();
 
     buf: []u8,
     alloc: Allocator,
 
     fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, 0x400);
+        const buf = try alloc.alloc(u8, oam_size);
         std.mem.set(u8, buf, 0);
 
         return Self{

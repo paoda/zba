@@ -1,13 +1,14 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const iwram_size = 0x8000;
 const Self = @This();
 
 buf: []u8,
 alloc: Allocator,
 
 pub fn init(alloc: Allocator) !Self {
-    const buf = try alloc.alloc(u8, 0x8000);
+    const buf = try alloc.alloc(u8, iwram_size);
     std.mem.set(u8, buf, 0);
 
     return Self{

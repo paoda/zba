@@ -27,7 +27,7 @@ pub const Backup = struct {
     flash: Flash,
 
     pub fn init(alloc: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
-        const buf_len: usize = switch (kind) {
+        const buf_size: usize = switch (kind) {
             .Sram => 0x8000, // 32K
             .Flash => 0x10000, // 64K
             .Flash1M => 0x20000, // 128K
@@ -35,7 +35,7 @@ pub const Backup = struct {
             .None => 0,
         };
 
-        const buf = try alloc.alloc(u8, buf_len);
+        const buf = try alloc.alloc(u8, buf_size);
         std.mem.set(u8, buf, 0xFF);
 
         var backup = Self{
@@ -74,17 +74,17 @@ pub const Backup = struct {
         defer self.alloc.free(file_path);
 
         const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
-
-        const len = try file.getEndPos();
-        const file_buf = try file.readToEndAlloc(self.alloc, len);
+        const file_buf = try file.readToEndAlloc(self.alloc, try file.getEndPos());
         defer self.alloc.free(file_buf);
 
         switch (self.kind) {
             .Sram, .Flash, .Flash1M => {
                 if (self.buf.len == file_buf.len) {
                     std.mem.copy(u8, self.buf, file_buf);
-                    log.info("Loaded Save from {s}", .{file_path});
+                    return log.info("Loaded Save from {s}", .{file_path});
                 }
+
+                log.err("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
             },
             else => return SaveError.UnsupportedBackupKind,
         }

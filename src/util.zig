@@ -87,21 +87,6 @@ pub fn safeTitle(title: [12]u8) [12]u8 {
     return result;
 }
 
-pub fn fixTitle(alloc: std.mem.Allocator, title: [12]u8) ![]u8 {
-    var len: usize = 12;
-    for (title) |char, i| {
-        if (char == 0) {
-            len = i;
-            break;
-        }
-    }
-
-    const buf = try alloc.alloc(u8, len);
-    std.mem.copy(u8, buf, title[0..len]);
-
-    return buf;
-}
-
 pub const FilePaths = struct {
     rom: []const u8,
     bios: ?[]const u8,

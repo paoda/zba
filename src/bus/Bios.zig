@@ -12,9 +12,7 @@ pub fn init(alloc: Allocator, maybe_path: ?[]const u8) !Self {
     if (maybe_path) |path| {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
-
-        const len = try file.getEndPos();
-        buf = try file.readToEndAlloc(alloc, len);
+        buf = try file.readToEndAlloc(alloc, try file.getEndPos());
     }
 
     return Self{
