@@ -24,9 +24,9 @@ pub const Apu = struct {
     dma_cnt: io.DmaSoundControl,
     cnt: io.SoundControl,
 
-    dev: AudioDeviceId,
+    dev: ?AudioDeviceId,
 
-    pub fn init(dev: AudioDeviceId) Self {
+    pub fn init() Self {
         return .{
             .ch1 = ToneSweep.init(),
             .ch2 = Tone.init(),
@@ -40,8 +40,12 @@ pub const Apu = struct {
             .cnt = .{ .raw = 0 },
             .bias = .{ .raw = 0x0200 },
 
-            .dev = dev,
+            .dev = null,
         };
+    }
+
+    pub fn attachAudioDevice(self: *Self, dev: AudioDeviceId) void {
+        self.dev = dev;
     }
 
     pub fn setDmaCnt(self: *Self, value: u16) void {
@@ -83,7 +87,7 @@ pub const Apu = struct {
             },
         };
 
-        _ = SDL.SDL_QueueAudio(self.dev, &samples, 2);
+        if (self.dev) |dev| _ = SDL.SDL_QueueAudio(dev, &samples, 2);
     }
 };
 

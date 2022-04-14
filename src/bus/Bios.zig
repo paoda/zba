@@ -2,6 +2,9 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bios);
+
+/// Size of the BIOS in bytes
+pub const size = 0x4000;
 const Self = @This();
 
 buf: ?[]u8,

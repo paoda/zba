@@ -32,42 +32,42 @@ const RunKind = enum {
     LimitedBusy,
 };
 
-pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi) void {
     switch (kind) {
-        .Unlimited => runUnsync(quit, sched, cpu, bus),
-        .Limited => runSync(quit, sched, cpu, bus),
-        .UnlimitedFPS => runUnsyncFps(quit, fps, sched, cpu, bus),
-        .LimitedFPS => runSyncFps(quit, fps, sched, cpu, bus),
-        .LimitedBusy => runBusyLoop(quit, sched, cpu, bus),
+        .Unlimited => runUnsync(quit, sched, cpu),
+        .Limited => runSync(quit, sched, cpu),
+        .UnlimitedFPS => runUnsyncFps(quit, fps, sched, cpu),
+        .LimitedFPS => runSyncFps(quit, fps, sched, cpu),
+        .LimitedBusy => runBusyLoop(quit, sched, cpu),
     }
 }
 
-pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
     while (sched.tick < frame_end) {
-        if (bus.io.haltcnt == .Halt) sched.tick += 1;
-        if (bus.io.haltcnt == .Execute) cpu.step();
-        bus.handleDMATransfers();
+        if (cpu.bus.io.haltcnt == .Halt) sched.tick += 1;
+        if (cpu.bus.io.haltcnt == .Execute) cpu.step();
+        cpu.bus.handleDMATransfers();
 
         while (sched.tick >= sched.nextTimestamp()) {
-            sched.handleEvent(cpu, bus);
+            sched.handleEvent(cpu);
         }
     }
 }
 
-pub fn runUnsync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runUnsync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
     log.info("Unsynchronized EmuThread has begun", .{});
-    while (!quit.load(.Unordered)) runFrame(sched, cpu, bus);
+    while (!quit.load(.Unordered)) runFrame(sched, cpu);
 }
 
-pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
     log.info("Synchronized EmuThread has begun", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
     while (!quit.load(.Unordered)) {
-        runFrame(sched, cpu, bus);
+        runFrame(sched, cpu);
 
         // Put the Thread to Sleep + Backup Spin Loop
         // This saves on resource usage when frame limiting
@@ -78,24 +78,24 @@ pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus
     }
 }
 
-pub fn runUnsyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runUnsyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi) void {
     log.info("Unsynchronized EmuThread with FPS Tracking has begun", .{});
     var fps_timer = Timer.start() catch unreachable;
 
     while (!quit.load(.Unordered)) {
-        runFrame(sched, cpu, bus);
+        runFrame(sched, cpu);
         fps.add(fps_timer.lap());
     }
 }
 
-pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi) void {
     log.info("Synchronized EmuThread has begun", .{});
     var timer = Timer.start() catch unreachable;
     var fps_timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
     while (!quit.load(.Unordered)) {
-        runFrame(sched, cpu, bus);
+        runFrame(sched, cpu);
 
         // Put the Thread to Sleep + Backup Spin Loop
         // This saves on resource usage when frame limiting
@@ -109,13 +109,13 @@ pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu:
     }
 }
 
-pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, bus: *Bus) void {
+pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
     log.info("Run EmuThread with spin-loop sync", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
     while (!quit.load(.Unordered)) {
-        runFrame(sched, cpu, bus);
+        runFrame(sched, cpu);
         spinLoop(&timer, wake_time);
 
         // Update to the new wake time

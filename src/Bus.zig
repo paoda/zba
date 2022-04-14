@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const AudioDeviceId = @import("sdl2").SDL_AudioDeviceID;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Bios = @import("bus/Bios.zig");
 const Ewram = @import("bus/Ewram.zig");
 const GamePak = @import("bus/GamePak.zig");
@@ -18,7 +19,6 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 
 const rotr = @import("util.zig").rotr;
-
 const Self = @This();
 
 const panic_on_und_bus: bool = false;
@@ -33,19 +33,21 @@ iwram: Iwram,
 ewram: Ewram,
 io: Io,
 
+cpu: ?*Arm7tdmi,
 sched: *Scheduler,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, dev: AudioDeviceId, paths: FilePaths) !Self {
+pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
     return Self{
         .pak = try GamePak.init(alloc, paths.rom, paths.save),
         .bios = try Bios.init(alloc, paths.bios),
         .ppu = try Ppu.init(alloc, sched),
-        .apu = Apu.init(dev),
+        .apu = Apu.init(),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
         .dma = DmaControllers.init(),
         .tim = Timers.init(sched),
         .io = Io.init(),
+        .cpu = null,
         .sched = sched,
     };
 }
@@ -74,6 +76,29 @@ fn isDmaRunning(self: *const Self) bool {
         self.dma._3.active;
 }
 
+pub fn debugRead(self: *const Self, comptime T: type, address: u32) T {
+    const cached = self.sched.tick;
+    defer self.sched.tick = cached;
+
+    return self.read(T, address);
+}
+
+fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
+    if (self.cpu.?.cpsr.t.read()) {
+        log.err("TODO: {} open bus read in THUMB", .{T});
+        return 0;
+    }
+
+    const word = self.debugRead(u32, self.cpu.?.r[15] + 4);
+    return @truncate(T, rotr(u32, word, 8 * (address & 3)));
+}
+
+fn readBios(self: *const Self, comptime T: type, address: u32) T {
+    if (address < Bios.size) return self.bios.read(T, alignAddress(T, address));
+
+    return self.readOpenBus(T, address);
+}
+
 pub fn read(self: *const Self, comptime T: type, address: u32) T {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
@@ -81,7 +106,7 @@ pub fn read(self: *const Self, comptime T: type, address: u32) T {
 
     return switch (page) {
         // General Internal Memory
-        0x00 => self.bios.read(T, align_addr),
+        0x00 => self.readBios(T, address),
         0x02 => self.ewram.read(T, align_addr),
         0x03 => self.iwram.read(T, align_addr),
         0x04 => io.read(self, T, align_addr),
@@ -105,7 +130,7 @@ pub fn read(self: *const Self, comptime T: type, address: u32) T {
 
             break :blk @as(T, value) * multiplier;
         },
-        else => undRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+        else => readOpenBus(self, T, address),
     };
 }
 

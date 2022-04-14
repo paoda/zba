@@ -92,10 +92,10 @@ pub fn main() anyerror!void {
     defer scheduler.deinit();
 
     const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_path };
-    var bus = try Bus.init(alloc, &scheduler, audio_dev, paths);
-    defer bus.deinit();
+    var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
+    defer cpu.deinit();
 
-    var cpu = Arm7tdmi.init(&scheduler, &bus);
+    cpu.bus.apu.attachAudioDevice(audio_dev);
     cpu.fastBoot();
 
     const log_file: ?File = if (enable_logging) blk: {
@@ -110,10 +110,10 @@ pub fn main() anyerror!void {
     var emu_rate = FpsAverage.init();
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu, &bus });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
-    const title = correctTitle(bus.pak.title);
+    const title = correctTitle(cpu.bus.pak.title);
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
     const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{title});
@@ -145,36 +145,38 @@ pub fn main() anyerror!void {
             switch (event.type) {
                 SDL.SDL_QUIT => break :emu_loop,
                 SDL.SDL_KEYDOWN => {
+                    const io = &cpu.bus.io;
                     const key_code = event.key.keysym.sym;
 
                     switch (key_code) {
-                        SDL.SDLK_UP => bus.io.keyinput.up.unset(),
-                        SDL.SDLK_DOWN => bus.io.keyinput.down.unset(),
-                        SDL.SDLK_LEFT => bus.io.keyinput.left.unset(),
-                        SDL.SDLK_RIGHT => bus.io.keyinput.right.unset(),
-                        SDL.SDLK_x => bus.io.keyinput.a.unset(),
-                        SDL.SDLK_z => bus.io.keyinput.b.unset(),
-                        SDL.SDLK_a => bus.io.keyinput.shoulder_l.unset(),
-                        SDL.SDLK_s => bus.io.keyinput.shoulder_r.unset(),
-                        SDL.SDLK_RETURN => bus.io.keyinput.start.unset(),
-                        SDL.SDLK_RSHIFT => bus.io.keyinput.select.unset(),
+                        SDL.SDLK_UP => io.keyinput.up.unset(),
+                        SDL.SDLK_DOWN => io.keyinput.down.unset(),
+                        SDL.SDLK_LEFT => io.keyinput.left.unset(),
+                        SDL.SDLK_RIGHT => io.keyinput.right.unset(),
+                        SDL.SDLK_x => io.keyinput.a.unset(),
+                        SDL.SDLK_z => io.keyinput.b.unset(),
+                        SDL.SDLK_a => io.keyinput.shoulder_l.unset(),
+                        SDL.SDLK_s => io.keyinput.shoulder_r.unset(),
+                        SDL.SDLK_RETURN => io.keyinput.start.unset(),
+                        SDL.SDLK_RSHIFT => io.keyinput.select.unset(),
                         else => {},
                     }
                 },
                 SDL.SDL_KEYUP => {
+                    const io = &cpu.bus.io;
                     const key_code = event.key.keysym.sym;
 
                     switch (key_code) {
-                        SDL.SDLK_UP => bus.io.keyinput.up.set(),
-                        SDL.SDLK_DOWN => bus.io.keyinput.down.set(),
-                        SDL.SDLK_LEFT => bus.io.keyinput.left.set(),
-                        SDL.SDLK_RIGHT => bus.io.keyinput.right.set(),
-                        SDL.SDLK_x => bus.io.keyinput.a.set(),
-                        SDL.SDLK_z => bus.io.keyinput.b.set(),
-                        SDL.SDLK_a => bus.io.keyinput.shoulder_l.set(),
-                        SDL.SDLK_s => bus.io.keyinput.shoulder_r.set(),
-                        SDL.SDLK_RETURN => bus.io.keyinput.start.set(),
-                        SDL.SDLK_RSHIFT => bus.io.keyinput.select.set(),
+                        SDL.SDLK_UP => io.keyinput.up.set(),
+                        SDL.SDLK_DOWN => io.keyinput.down.set(),
+                        SDL.SDLK_LEFT => io.keyinput.left.set(),
+                        SDL.SDLK_RIGHT => io.keyinput.right.set(),
+                        SDL.SDLK_x => io.keyinput.a.set(),
+                        SDL.SDLK_z => io.keyinput.b.set(),
+                        SDL.SDLK_a => io.keyinput.shoulder_l.set(),
+                        SDL.SDLK_s => io.keyinput.shoulder_r.set(),
+                        SDL.SDLK_RETURN => io.keyinput.start.set(),
+                        SDL.SDLK_RSHIFT => io.keyinput.select.set(),
                         else => {},
                     }
                 },
@@ -183,7 +185,7 @@ pub fn main() anyerror!void {
         }
 
         // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
-        const buf_ptr = bus.ppu.framebuf.ptr;
+        const buf_ptr = cpu.bus.ppu.framebuf.ptr;
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
