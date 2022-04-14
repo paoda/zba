@@ -27,6 +27,8 @@ pub const Backup = struct {
     flash: Flash,
 
     pub fn init(alloc: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
+        log.info("Kind: {}", .{kind});
+
         const buf_size: usize = switch (kind) {
             .Sram => 0x8000, // 32K
             .Flash => 0x10000, // 64K

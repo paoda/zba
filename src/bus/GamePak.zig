@@ -28,7 +28,6 @@ pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Sel
         .backup = try Backup.init(alloc, kind, title, save_path),
     };
     pak.parseHeader();
-    log.info("Backup: {}", .{kind});
 
     return pak;
 }
