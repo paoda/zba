@@ -33,7 +33,7 @@ fn Timer(comptime id: u2) type {
         /// Read Only, Internal. Please use self.counter()
         _counter: u16,
 
-        /// Write Only, Internal. Please use self.writeCntLow()
+        /// Write Only, Internal. Please use self.setReload()
         _reload: u16,
 
         /// Write Only, Internal. Please use self.WriteCntHigh()
@@ -56,18 +56,17 @@ fn Timer(comptime id: u2) type {
         }
 
         pub fn counter(self: *const Self) u16 {
-            if (self.cnt.cascade.read())
-                return self._counter
-            else
-                return self._counter +% @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
+            if (self.cnt.cascade.read() or !self.cnt.enabled.read()) return self._counter;
+
+            return self._counter +% @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
         }
 
         pub fn writeCnt(self: *Self, word: u32) void {
-            self.writeCntLow(@truncate(u16, word));
+            self.setReload(@truncate(u16, word));
             self.writeCntHigh(@truncate(u16, word >> 16));
         }
 
-        pub fn writeCntLow(self: *Self, halfword: u16) void {
+        pub fn setReload(self: *Self, halfword: u16) void {
             self._reload = halfword;
         }
 
@@ -77,12 +76,17 @@ fn Timer(comptime id: u2) type {
             // If Timer happens to be enabled, It will either be resheduled or disabled
             self.sched.removeScheduledEvent(.{ .TimerOverflow = id });
 
-            if (!self.cnt.enabled.read() and new.enabled.read()) {
-                // Reload on Rising edge
-                self._counter = self._reload;
-
-                if (!new.cascade.read()) self.scheduleOverflow(0);
+            if (self.cnt.enabled.read() and (new.cascade.read() or !new.enabled.read())) {
+                // Either through the cascade bit or the enable bit, the timer has effectively been disabled
+                // The Counter should hold whatever value it should have been at when it was disabled
+                self._counter +%= @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
             }
+
+            // The counter is only reloaded on the rising edge of the enable bit
+            if (!self.cnt.enabled.read() and new.enabled.read()) self._counter = self._reload;
+
+            // If Timer is enabled and we're not cascading, we need to schedule an overflow event
+            if (new.enabled.read() and !new.cascade.read()) self.scheduleOverflow(0);
 
             self.cnt.raw = halfword;
         }

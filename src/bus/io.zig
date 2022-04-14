@@ -268,13 +268,13 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00DE => bus.dma._3.writeCntHigh(value),
 
             // Timers
-            0x0400_0100 => bus.tim._0.writeCntLow(value),
+            0x0400_0100 => bus.tim._0.setReload(value),
             0x0400_0102 => bus.tim._0.writeCntHigh(value),
-            0x0400_0104 => bus.tim._1.writeCntLow(value),
+            0x0400_0104 => bus.tim._1.setReload(value),
             0x0400_0106 => bus.tim._1.writeCntHigh(value),
-            0x0400_0108 => bus.tim._2.writeCntLow(value),
+            0x0400_0108 => bus.tim._2.setReload(value),
             0x0400_010A => bus.tim._2.writeCntHigh(value),
-            0x0400_010C => bus.tim._3.writeCntLow(value),
+            0x0400_010C => bus.tim._3.setReload(value),
             0x0400_010E => bus.tim._3.writeCntHigh(value),
             0x0400_0110 => {}, // Not Used
 
