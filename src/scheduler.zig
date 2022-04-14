@@ -51,6 +51,7 @@ pub const Scheduler = struct {
                         3 => cpu.bus.tim._3.handleOverflow(cpu, late),
                     }
                 },
+                .SampleAudio => cpu.bus.apu.sampleAudio(late),
                 .HBlank => cpu.bus.ppu.handleHBlankEnd(cpu, late), // The end of a HBlank
                 .VBlank => cpu.bus.ppu.handleHDrawEnd(cpu, late), // The end of a VBlank
             }
@@ -102,4 +103,5 @@ pub const EventKind = union(enum) {
     VBlank,
     Draw,
     TimerOverflow: u2,
+    SampleAudio,
 };

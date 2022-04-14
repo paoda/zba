@@ -41,7 +41,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
         .pak = try GamePak.init(alloc, paths.rom, paths.save),
         .bios = try Bios.init(alloc, paths.bios),
         .ppu = try Ppu.init(alloc, sched),
-        .apu = Apu.init(),
+        .apu = Apu.init(sched),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
         .dma = DmaControllers.init(),

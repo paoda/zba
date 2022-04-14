@@ -595,20 +595,20 @@ pub const ChannelVolumeControl = extern union {
 /// Read / Write
 pub const DmaSoundControl = extern union {
     ch_vol: Bitfield(u16, 0, 2),
-    sa_vol: Bit(u16, 2),
-    sb_vol: Bit(u16, 3),
+    chA_vol: Bit(u16, 2),
+    chB_vol: Bit(u16, 3),
 
-    sa_right_enable: Bit(u16, 8),
-    sa_left_enable: Bit(u16, 9),
-    sa_timer: Bit(u16, 10),
+    chA_right: Bit(u16, 8),
+    chA_left: Bit(u16, 9),
+    chA_timer: Bit(u16, 10),
     /// Write only?
-    sa_reset: Bit(u16, 11),
+    chA_reset: Bit(u16, 11),
 
-    sb_right_enable: Bit(u16, 12),
-    sb_left_enable: Bit(u16, 13),
-    sb_timer: Bit(u16, 14),
+    chB_right: Bit(u16, 12),
+    chB_left: Bit(u16, 13),
+    chB_timer: Bit(u16, 14),
     /// Write only?
-    sb_reset: Bit(u16, 15),
+    chB_reset: Bit(u16, 15),
     raw: u16,
 };
 

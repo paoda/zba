@@ -242,9 +242,9 @@ fn initAudio() SDL.SDL_AudioDeviceID {
     var have: SDL.SDL_AudioSpec = undefined;
     var want = std.mem.zeroes(SDL.SDL_AudioSpec);
     want.freq = 32768;
-    want.format = SDL.AUDIO_S8;
+    want.format = SDL.AUDIO_F32;
     want.channels = 2;
-    want.samples = 0x200;
+    want.samples = 0x100;
     want.callback = null;
 
     const dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);

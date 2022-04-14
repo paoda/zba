@@ -1,13 +1,18 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const io = @import("bus/io.zig");
+
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Scheduler = @import("scheduler.zig").Scheduler;
 
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 const AudioDeviceId = SDL.SDL_AudioDeviceID;
 
 const intToBytes = @import("util.zig").intToBytes;
 const log = std.log.scoped(.APU);
+
+const sample_rate = 32768;
+const sample_ticks = 280896 * 60 / sample_rate;
 
 pub const Apu = struct {
     const Self = @This();
@@ -25,9 +30,10 @@ pub const Apu = struct {
     cnt: io.SoundControl,
 
     dev: ?AudioDeviceId,
+    sched: *Scheduler,
 
-    pub fn init() Self {
-        return .{
+    pub fn init(sched: *Scheduler) Self {
+        const apu: Self = .{
             .ch1 = ToneSweep.init(),
             .ch2 = Tone.init(),
             .ch3 = Wave.init(),
@@ -41,7 +47,11 @@ pub const Apu = struct {
             .bias = .{ .raw = 0x0200 },
 
             .dev = null,
+            .sched = sched,
         };
+        sched.push(.SampleAudio, sched.now() + sample_ticks);
+
+        return apu;
     }
 
     pub fn attachAudioDevice(self: *Self, dev: AudioDeviceId) void {
@@ -53,8 +63,8 @@ pub const Apu = struct {
 
         // Reinitializing instead of resetting is fine because
         // the FIFOs I'm using are stack allocated and 0x20 bytes big
-        if (new.sa_reset.read()) self.chA.fifo = SoundFifo.init();
-        if (new.sb_reset.read()) self.chB.fifo = SoundFifo.init();
+        if (new.chA_reset.read()) self.chA.fifo = SoundFifo.init();
+        if (new.chB_reset.read()) self.chB.fifo = SoundFifo.init();
 
         self.dma_cnt = new;
     }
@@ -75,19 +85,35 @@ pub const Apu = struct {
         self.bias.raw = (@as(u16, byte) << 8) | (self.bias.raw & 0xFF);
     }
 
-    pub fn handleTimerOverflow(self: *Self, kind: DmaSoundKind, cpu: *Arm7tdmi) void {
+    pub fn sampleAudio(self: *Self, late: u64) void {
+        const chA = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() else self.chA.amplitude() / 2;
+        const chA_left = if (self.dma_cnt.chA_left.read()) chA else 0;
+        const chA_right = if (self.dma_cnt.chA_right.read()) chA else 0;
+
+        const chB = if (self.dma_cnt.chB_vol.read()) self.chB.amplitude() else self.chB.amplitude() / 2;
+        const chB_left = if (self.dma_cnt.chB_left.read()) chB else 0;
+        const chB_right = if (self.dma_cnt.chB_right.read()) chB else 0;
+
+        const left = (chA_left + chB_left) / 2;
+        const right = (chA_right + chB_right) / 2;
+
+        if (self.dev) |dev| _ = SDL.SDL_QueueAudio(dev, &[2]f32{ left, right }, 2 * @sizeOf(f32));
+
+        self.sched.push(.SampleAudio, self.sched.now() + sample_ticks - late);
+    }
+
+    pub fn handleTimerOverflow(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {
         if (!self.cnt.apu_enable.read()) return;
 
-        const samples = switch (kind) {
-            .A => blk: {
-                break :blk self.chA.handleTimerOverflow(cpu, self.dma_cnt);
-            },
-            .B => blk: {
-                break :blk self.chB.handleTimerOverflow(cpu, self.dma_cnt);
-            },
-        };
+        if (@boolToInt(self.dma_cnt.chA_timer.read()) == tim_id) {
+            self.chA.updateSample();
+            if (self.chA.len() <= 15) cpu.bus.dma._1.enableSoundDma(0x0400_00A0);
+        }
 
-        if (self.dev) |dev| _ = SDL.SDL_QueueAudio(dev, &samples, 2);
+        if (@boolToInt(self.dma_cnt.chB_timer.read()) == tim_id) {
+            self.chB.updateSample();
+            if (self.chB.len() <= 15) cpu.bus.dma._2.enableSoundDma(0x0400_00A4);
+        }
     }
 };
 
@@ -207,55 +233,31 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         const Self = @This();
 
         fifo: SoundFifo,
-
         kind: DmaSoundKind,
+        sample: i8,
 
         fn init() Self {
-            return .{ .fifo = SoundFifo.init(), .kind = kind };
+            return .{
+                .fifo = SoundFifo.init(),
+                .kind = kind,
+                .sample = 0,
+            };
         }
 
         pub fn push(self: *Self, value: u32) void {
             self.fifo.write(&intToBytes(u32, value)) catch {};
         }
 
-        pub fn pop(self: *Self) u8 {
-            return self.fifo.readItem() orelse 0;
-        }
-
         pub fn len(self: *const Self) usize {
             return self.fifo.readableLength();
         }
 
-        pub fn handleTimerOverflow(self: *Self, cpu: *Arm7tdmi, cnt: io.DmaSoundControl) [2]u8 {
-            const sample = self.pop();
+        pub fn updateSample(self: *Self) void {
+            if (self.fifo.readItem()) |sample| self.sample = @bitCast(i8, sample);
+        }
 
-            var left: u8 = 0;
-            var right: u8 = 0;
-            var fifo_addr: u32 = undefined;
-
-            switch (kind) {
-                .A => {
-                    const vol = @boolToInt(!cnt.sa_vol.read()); // if unset, vol is 50%
-                    if (cnt.sa_left_enable.read()) left = sample >> vol;
-                    if (cnt.sa_right_enable.read()) right = sample >> vol;
-
-                    fifo_addr = 0x0400_00A0;
-                },
-                .B => {
-                    const vol = @boolToInt(!cnt.sb_vol.read()); // if unset, vol is 50%
-                    if (cnt.sb_left_enable.read()) left = sample >> vol;
-                    if (cnt.sb_right_enable.read()) right = sample >> vol;
-
-                    fifo_addr = 0x0400_00A4;
-                },
-            }
-
-            if (self.len() <= 15) {
-                cpu.bus.dma._1.enableSoundDma(fifo_addr);
-                cpu.bus.dma._2.enableSoundDma(fifo_addr);
-            }
-
-            return .{ left, right };
+        pub fn amplitude(self: *const Self) f32 {
+            return @intToFloat(f32, self.sample) / 127.5 - (1 / 255);
         }
     };
 }
