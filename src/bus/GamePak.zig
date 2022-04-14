@@ -18,23 +18,11 @@ pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Sel
     defer file.close();
 
     const file_buf = try file.readToEndAlloc(alloc, try file.getEndPos());
-    defer alloc.free(file_buf);
-
     const title = parseTitle(file_buf);
     const kind = Backup.guessKind(file_buf) orelse .None;
 
-    const buf = try alloc.alloc(u8, 0x200_0000); // 32MiB
-
-    // GamePak addressable space has known values if there's no cartridge inserted
-    var i: usize = 0;
-    while (i < buf.len) : (i += @sizeOf(u16)) {
-        std.mem.copy(u8, buf[i..][0..2], &intToBytes(u16, @truncate(u16, i / 2)));
-    }
-
-    std.mem.copy(u8, buf[0..file_buf.len], file_buf[0..file_buf.len]); // Copy over ROM
-
     const pak = Self{
-        .buf = buf,
+        .buf = file_buf,
         .alloc = alloc,
         .title = title,
         .backup = try Backup.init(alloc, kind, title, save_path),
@@ -78,9 +66,40 @@ pub fn read(self: *const Self, comptime T: type, address: u32) T {
     const addr = address & 0x1FF_FFFF;
 
     return switch (T) {
-        u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
-        u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
-        u8 => self.buf[addr],
+        u32 => (@as(T, self.get(addr + 3)) << 24) | (@as(T, self.get(addr + 2)) << 16) | (@as(T, self.get(addr + 1)) << 8) | (@as(T, self.get(addr))),
+        u16 => (@as(T, self.get(addr + 1)) << 8) | @as(T, self.get(addr)),
+        u8 => self.get(addr),
         else => @compileError("GamePak: Unsupported read width"),
     };
+}
+
+fn get(self: *const Self, i: u32) u8 {
+    @setRuntimeSafety(false);
+
+    if (i >= self.buf.len) {
+        const lhs = i >> 1 & 0xFFFF;
+        return @truncate(u8, lhs >> 8 * @truncate(u5, i & 1));
+    }
+
+    return self.buf[i];
+}
+
+test "OOB Access" {
+    const title = .{ 'H', 'E', 'L', 'L', 'O', ' ', 'W', 'O', 'R', 'L', 'D', '!' };
+    const alloc = std.testing.allocator;
+    const pak = Self{
+        .buf = &.{},
+        .alloc = alloc,
+        .title = title,
+        .backup = try Backup.init(alloc, .None, title, null),
+    };
+
+    std.debug.assert(pak.get(0) == 0x00); // 0x0000
+    std.debug.assert(pak.get(1) == 0x00);
+
+    std.debug.assert(pak.get(2) == 0x01); // 0x0001
+    std.debug.assert(pak.get(3) == 0x00);
+
+    std.debug.assert(pak.get(4) == 0x02); // 0x0002
+    std.debug.assert(pak.get(5) == 0x00);
 }
