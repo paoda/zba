@@ -67,25 +67,12 @@ pub fn main() anyerror!void {
     log.info("Save Path: {s}", .{save_path});
 
     // Initialize SDL
-    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
+    _ = initSdl2();
     defer SDL.SDL_Quit();
-    if (status < 0) sdlPanic();
 
     // Initialize SDL Audio
-    var have: SDL.SDL_AudioSpec = undefined;
-    var want = std.mem.zeroes(SDL.SDL_AudioSpec);
-    want.freq = 32768;
-    want.format = SDL.AUDIO_S8;
-    want.channels = 2;
-    want.samples = 0x200;
-    want.callback = null;
-
-    const audio_dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
+    const audio_dev = initAudio();
     defer SDL.SDL_CloseAudioDevice(audio_dev);
-    if (audio_dev == 0) sdlPanic();
-
-    // Start Playback on the Audio evice
-    SDL.SDL_PauseAudioDevice(audio_dev, 0);
 
     // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
@@ -113,25 +100,16 @@ pub fn main() anyerror!void {
     const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
-    const title = correctTitle(cpu.bus.pak.title);
-
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
-    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{title});
+    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{correctTitle(cpu.bus.pak.title)});
 
-    var window = SDL.SDL_CreateWindow(
-        window_title.ptr,
-        SDL.SDL_WINDOWPOS_CENTERED,
-        SDL.SDL_WINDOWPOS_CENTERED,
-        gba_width * window_scale,
-        gba_height * window_scale,
-        SDL.SDL_WINDOW_SHOWN,
-    ) orelse sdlPanic();
+    const window = createWindow(window_title, gba_width, gba_height);
     defer SDL.SDL_DestroyWindow(window);
 
-    const renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
+    const renderer = createRenderer(window);
     defer SDL.SDL_DestroyRenderer(renderer);
 
-    const texture = SDL.SDL_CreateTexture(renderer, SDL.SDL_PIXELFORMAT_RGBA8888, SDL.SDL_TEXTUREACCESS_STREAMING, 240, 160) orelse sdlPanic();
+    const texture = createTexture(renderer, gba_width, gba_height);
     defer SDL.SDL_DestroyTexture(texture);
 
     // Init FPS Timer
@@ -198,15 +176,15 @@ pub fn main() anyerror!void {
     quit.store(true, .Unordered); // Terminate Emulator Thread
 }
 
-fn sdlPanic() noreturn {
-    const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
-    @panic(std.mem.sliceTo(str, 0));
-}
-
 const CliError = error{
     InsufficientOptions,
     UnneededOptions,
 };
+
+fn sdlPanic() noreturn {
+    const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
+    @panic(std.mem.sliceTo(str, 0));
+}
 
 // FIXME: Superfluous allocations?
 fn setupSavePath(alloc: std.mem.Allocator) !?[]const u8 {
@@ -226,4 +204,53 @@ fn setupSavePath(alloc: std.mem.Allocator) !?[]const u8 {
     }
 
     return save_path;
+}
+
+fn initSdl2() c_int {
+    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
+    if (status < 0) sdlPanic();
+
+    return status;
+}
+
+fn createWindow(title: []u8, width: c_int, height: c_int) *SDL.SDL_Window {
+    return SDL.SDL_CreateWindow(
+        title.ptr,
+        SDL.SDL_WINDOWPOS_CENTERED,
+        SDL.SDL_WINDOWPOS_CENTERED,
+        width * window_scale,
+        height * window_scale,
+        SDL.SDL_WINDOW_SHOWN,
+    ) orelse sdlPanic();
+}
+
+fn createRenderer(window: *SDL.SDL_Window) *SDL.SDL_Renderer {
+    return SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
+}
+
+fn createTexture(renderer: *SDL.SDL_Renderer, width: c_int, height: c_int) *SDL.SDL_Texture {
+    return SDL.SDL_CreateTexture(
+        renderer,
+        SDL.SDL_PIXELFORMAT_RGBA8888,
+        SDL.SDL_TEXTUREACCESS_STREAMING,
+        width,
+        height,
+    ) orelse sdlPanic();
+}
+
+fn initAudio() SDL.SDL_AudioDeviceID {
+    var have: SDL.SDL_AudioSpec = undefined;
+    var want = std.mem.zeroes(SDL.SDL_AudioSpec);
+    want.freq = 32768;
+    want.format = SDL.AUDIO_S8;
+    want.channels = 2;
+    want.samples = 0x200;
+    want.callback = null;
+
+    const dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
+    if (dev == 0) sdlPanic();
+
+    // Start Playback on the Audio evice
+    SDL.SDL_PauseAudioDevice(dev, 0);
+    return dev;
 }
