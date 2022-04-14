@@ -84,12 +84,31 @@ pub fn debugRead(self: *const Self, comptime T: type, address: u32) T {
 }
 
 fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
-    if (self.cpu.?.cpsr.t.read()) {
-        log.err("TODO: {} open bus read in THUMB", .{T});
-        return 0;
-    }
+    const r15 = self.cpu.?.r[15];
 
-    const word = self.debugRead(u32, self.cpu.?.r[15] + 4);
+    const word = if (self.cpu.?.cpsr.t.read()) blk: {
+        const page = @truncate(u8, r15 >> 24);
+
+        switch (page) {
+            // EWRAM, PALRAM, VRAM, and Game ROM (16-bit)
+            0x02, 0x05, 0x06, 0x08...0x0D => {
+                const halfword = self.debugRead(u16, r15 + 2);
+                break :blk @as(u32, halfword) << 16 | halfword;
+            },
+            // BIOS or OAM (32-bit)
+            0x00, 0x07 => {
+                const offset: u32 = if (address & 3 == 0b00) 2 else 0;
+                break :blk @as(u32, self.debugRead(u16, (r15 + 2) + offset)) << 16 | self.debugRead(u16, r15 + offset);
+            },
+            // IWRAM (16-bit but special)
+            0x03 => {
+                const offset: u32 = if (address & 3 == 0b00) 2 else 0;
+                break :blk @as(u32, self.debugRead(u16, (r15 + 2) - offset)) << 16 | self.debugRead(u16, r15 + offset);
+            },
+            else => unreachable,
+        }
+    } else self.debugRead(u32, r15 + 4);
+
     return @truncate(T, rotr(u32, word, 8 * (address & 3)));
 }
 
@@ -152,7 +171,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
         0x07 => self.ppu.oam.write(T, align_addr, value),
 
         // External Memory (Game Pak)
-        0x08...0x0D => {},
+        0x08...0x0D => {}, // EEPROM
         0x0E...0x0F => {
             const rotate_by = switch (T) {
                 u32 => address & 3,
@@ -163,7 +182,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
 
             self.pak.backup.write(address, @truncate(u8, rotr(T, value, 8 * rotate_by)));
         },
-        else => undWrite("Tried to write {} 0x{X:} to 0x{X:0>8}", .{ T, value, address }),
+        else => {},
     }
 }
 
