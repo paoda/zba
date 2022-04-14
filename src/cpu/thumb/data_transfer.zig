@@ -45,13 +45,11 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     },
                     0b11 => {
                         // LDRSH
-                        const value = if (address & 1 == 1) blk: {
+                        cpu.r[rd] = if (address & 1 == 1) blk: {
                             break :blk sext(8, bus.read(u8, address));
                         } else blk: {
                             break :blk sext(16, bus.read(u16, address));
                         };
-
-                        cpu.r[rd] = rotr(u32, value, 8 * (address & 1));
                     },
                 }
             } else {
