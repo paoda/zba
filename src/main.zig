@@ -5,6 +5,7 @@ const known_folders = @import("known_folders");
 
 const emu = @import("emu.zig");
 const Bus = @import("Bus.zig");
+const Apu = @import("apu.zig").Apu;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FpsAverage = @import("util.zig").FpsAverage;
@@ -19,6 +20,8 @@ const gba_width = @import("ppu.zig").width;
 const gba_height = @import("ppu.zig").height;
 const framebuf_pitch = @import("ppu.zig").framebuf_pitch;
 const expected_rate = @import("emu.zig").frame_rate;
+
+const sample_rate = @import("apu.zig").host_sample_rate;
 
 pub const enable_logging: bool = false;
 const is_binary: bool = false;
@@ -70,10 +73,6 @@ pub fn main() anyerror!void {
     _ = initSdl2();
     defer SDL.SDL_Quit();
 
-    // Initialize SDL Audio
-    const audio_dev = initAudio();
-    defer SDL.SDL_CloseAudioDevice(audio_dev);
-
     // Initialize Emulator
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
@@ -81,9 +80,11 @@ pub fn main() anyerror!void {
     const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_path };
     var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
     defer cpu.deinit();
-
-    cpu.bus.apu.attachAudioDevice(audio_dev);
     cpu.fastBoot();
+
+    // Initialize SDL Audio
+    const audio_dev = initAudio(&cpu.bus.apu);
+    defer SDL.SDL_CloseAudioDevice(audio_dev);
 
     const log_file: ?File = if (enable_logging) blk: {
         const file = try std.fs.cwd().createFile(if (is_binary) "zba.bin" else "zba.log", .{});
@@ -155,6 +156,7 @@ pub fn main() anyerror!void {
                         SDL.SDLK_s => io.keyinput.shoulder_r.set(),
                         SDL.SDLK_RETURN => io.keyinput.start.set(),
                         SDL.SDLK_RSHIFT => io.keyinput.select.set(),
+                        SDL.SDLK_i => std.debug.print("{} samples\n", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(f32))}),
                         else => {},
                     }
                 },
@@ -238,19 +240,31 @@ fn createTexture(renderer: *SDL.SDL_Renderer, width: c_int, height: c_int) *SDL.
     ) orelse sdlPanic();
 }
 
-fn initAudio() SDL.SDL_AudioDeviceID {
+fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
     var have: SDL.SDL_AudioSpec = undefined;
-    var want = std.mem.zeroes(SDL.SDL_AudioSpec);
-    want.freq = 32768;
-    want.format = SDL.AUDIO_F32;
-    want.channels = 2;
-    want.samples = 0x100;
-    want.callback = null;
+    var want: SDL.SDL_AudioSpec = .{
+        .freq = sample_rate,
+        .format = SDL.AUDIO_F32,
+        .channels = 2,
+        .samples = 0x100,
+        .callback = audioCallback,
+        .userdata = apu,
+        .silence = undefined,
+        .size = undefined,
+        .padding = undefined,
+    };
 
     const dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
     if (dev == 0) sdlPanic();
 
-    // Start Playback on the Audio evice
+    // Start Playback on the Audio device
     SDL.SDL_PauseAudioDevice(dev, 0);
     return dev;
+}
+
+export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
+    const apu = @ptrCast(*Apu, @alignCast(8, userdata));
+    const result = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+
+    if (result < 0) log.err("Audio Callback Underflow", .{});
 }

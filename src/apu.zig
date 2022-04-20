@@ -11,8 +11,7 @@ const AudioDeviceId = SDL.SDL_AudioDeviceID;
 const intToBytes = @import("util.zig").intToBytes;
 const log = std.log.scoped(.APU);
 
-const sample_rate = 32768;
-const sample_ticks = (1 << 24) / sample_rate;
+pub const host_sample_rate = 1 << 15;
 
 pub const Apu = struct {
     const Self = @This();
@@ -29,7 +28,8 @@ pub const Apu = struct {
     dma_cnt: io.DmaSoundControl,
     cnt: io.SoundControl,
 
-    dev: ?AudioDeviceId,
+    sampling_cycle: u2,
+    stream: *SDL.SDL_AudioStream,
     sched: *Scheduler,
 
     pub fn init(sched: *Scheduler) Self {
@@ -46,16 +46,14 @@ pub const Apu = struct {
             .cnt = .{ .raw = 0 },
             .bias = .{ .raw = 0x0200 },
 
-            .dev = null,
+            .sampling_cycle = 0b00,
+            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_F32, 2, 1 << 15, SDL.AUDIO_F32, 2, host_sample_rate) orelse unreachable,
             .sched = sched,
         };
-        sched.push(.SampleAudio, sched.now() + sample_ticks);
+
+        sched.push(.SampleAudio, sched.now() + apu.sampleTicks());
 
         return apu;
-    }
-
-    pub fn attachAudioDevice(self: *Self, dev: AudioDeviceId) void {
-        self.dev = dev;
     }
 
     pub fn setDmaCnt(self: *Self, value: u16) void {
@@ -97,9 +95,30 @@ pub const Apu = struct {
         const left = (chA_left + chB_left) / 2;
         const right = (chA_right + chB_right) / 2;
 
-        if (self.dev) |dev| _ = SDL.SDL_QueueAudio(dev, &[2]f32{ left, right }, 2 * @sizeOf(f32));
+        if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
+            log.warn("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
 
-        self.sched.push(.SampleAudio, self.sched.now() + sample_ticks - late);
+            // Sample Rate Changed, Create a new Resampler since i can't figure out how to change
+            // the parameters of the old one
+            const old = self.stream;
+            defer SDL.SDL_FreeAudioStream(old);
+
+            self.sampling_cycle = self.bias.sampling_cycle.read();
+            self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_F32, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_F32, 2, host_sample_rate) orelse unreachable;
+        }
+
+        while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(f32) * 2 * 0x800)) {}
+
+        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]f32{ left, right }, 2 * @sizeOf(f32));
+        self.sched.push(.SampleAudio, self.sched.now() + self.sampleTicks() - late);
+    }
+
+    inline fn sampleTicks(self: *const Self) u64 {
+        return (1 << 24) / self.sampleRate();
+    }
+
+    inline fn sampleRate(self: *const Self) u64 {
+        return @as(u64, 1) << (15 + @as(u6, self.bias.sampling_cycle.read()));
     }
 
     pub fn handleTimerOverflow(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {
