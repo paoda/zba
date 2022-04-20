@@ -12,7 +12,7 @@ const intToBytes = @import("util.zig").intToBytes;
 const log = std.log.scoped(.APU);
 
 const sample_rate = 32768;
-const sample_ticks = 280896 * 60 / sample_rate;
+const sample_ticks = (1 << 24) / sample_rate;
 
 pub const Apu = struct {
     const Self = @This();
