@@ -51,6 +51,13 @@ pub const Scheduler = struct {
                         3 => cpu.bus.tim._3.handleOverflow(cpu, late),
                     }
                 },
+                .ApuChannel => |id| {
+                    switch (id) {
+                        0 => cpu.bus.apu.ch1.channelTimerOverflow(late),
+                        else => {},
+                    }
+                },
+                .FrameSequencer => cpu.bus.apu.tickFrameSequencer(late),
                 .SampleAudio => cpu.bus.apu.sampleAudio(late),
                 .HBlank => cpu.bus.ppu.handleHBlankEnd(cpu, late), // The end of a HBlank
                 .VBlank => cpu.bus.ppu.handleHDrawEnd(cpu, late), // The end of a VBlank
@@ -104,4 +111,6 @@ pub const EventKind = union(enum) {
     Draw,
     TimerOverflow: u2,
     SampleAudio,
+    FrameSequencer,
+    ApuChannel: u2,
 };
