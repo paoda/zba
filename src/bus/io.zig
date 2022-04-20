@@ -118,7 +118,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0073 => bus.apu.ch3.vol.raw,
             0x0400_0079 => bus.apu.ch4.envelope.raw,
             0x0400_007C => bus.apu.ch4.poly.raw,
-            0x0400_0081 => @truncate(T, bus.apu.ch_vol_cnt.raw >> 8),
+            0x0400_0081 => @truncate(T, bus.apu.psg_cnt.raw >> 8),
             0x0400_0089 => @truncate(T, bus.apu.bias.raw >> 8),
 
             // Serial Communication 1
@@ -151,7 +151,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Sound
             0x0400_0080 => {
-                bus.apu.ch_vol_cnt.raw = @truncate(u16, value);
+                bus.apu.psg_cnt.raw = @truncate(u16, value);
                 bus.apu.dma_cnt.raw = @truncate(u16, value >> 16);
             },
             0x0400_00A0 => bus.apu.chA.push(value),
@@ -232,7 +232,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
-            0x0400_0080 => bus.apu.ch_vol_cnt.raw = value,
+            0x0400_0060 => bus.apu.ch1.sweep.raw = @truncate(u8, value),
+            0x0400_0062 => bus.apu.ch1.setSoundCntH(value),
+            0x0400_0064 => bus.apu.ch1.setFreq(&bus.apu.fs, value),
+            0x0400_0080 => bus.apu.psg_cnt.raw = value,
             0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
             0x0400_0088 => bus.apu.bias.raw = value,
@@ -314,7 +317,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0062 => bus.apu.ch1.duty.raw = value,
             0x0400_0063 => bus.apu.ch1.envelope.raw = value,
             0x0400_0064 => bus.apu.ch1.setFreqLow(value),
-            0x0400_0065 => bus.apu.ch1.setFreqHigh(value),
+            0x0400_0065 => bus.apu.ch1.setFreqHigh(&bus.apu.fs, value),
             0x0400_0068 => bus.apu.ch2.duty.raw = value,
             0x0400_0069 => bus.apu.ch2.envelope.raw = value,
             0x0400_006C => bus.apu.ch2.setFreqLow(value),
@@ -578,8 +581,8 @@ pub const NoiseControl = extern union {
 
 /// Read / Write
 pub const ChannelVolumeControl = extern union {
-    left_vol: Bitfield(u16, 0, 3),
-    right_vol: Bitfield(u16, 4, 3),
+    right_vol: Bitfield(u16, 0, 3),
+    left_vol: Bitfield(u16, 4, 3),
 
     ch1_right: Bit(u16, 8),
     ch2_right: Bit(u16, 9),

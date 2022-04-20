@@ -24,7 +24,8 @@ pub const Apu = struct {
     chB: DmaSound(.B),
 
     bias: io.SoundBias,
-    ch_vol_cnt: io.ChannelVolumeControl,
+    /// NR51
+    psg_cnt: io.ChannelVolumeControl,
     dma_cnt: io.DmaSoundControl,
     cnt: io.SoundControl,
 
@@ -33,6 +34,7 @@ pub const Apu = struct {
     sched: *Scheduler,
 
     fs: FrameSequencer,
+    capacitor: f32,
 
     pub fn init(sched: *Scheduler) Self {
         const apu: Self = .{
@@ -43,7 +45,7 @@ pub const Apu = struct {
             .chA = DmaSound(.A).init(),
             .chB = DmaSound(.B).init(),
 
-            .ch_vol_cnt = .{ .raw = 0 },
+            .psg_cnt = .{ .raw = 0 },
             .dma_cnt = .{ .raw = 0 },
             .cnt = .{ .raw = 0 },
             .bias = .{ .raw = 0x0200 },
@@ -52,14 +54,20 @@ pub const Apu = struct {
             .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_F32, 2, 1 << 15, SDL.AUDIO_F32, 2, host_sample_rate) orelse unreachable,
             .sched = sched,
 
+            .capacitor = 0,
             .fs = FrameSequencer.init(),
         };
 
         sched.push(.SampleAudio, sched.now() + apu.sampleTicks());
         sched.push(.{ .ApuChannel = 0 }, sched.now() + SquareWave.ticks);
-        sched.push(.FrameSequencer, sched.now() + ((1 << 24) / 1 << 15));
+        sched.push(.FrameSequencer, sched.now() + ((1 << 24) / 512));
 
         return apu;
+    }
+
+    fn reset(self: *Self) void {
+        self.ch1.reset();
+        // TODO: Reset the rest of the channels
     }
 
     pub fn setDmaCnt(self: *Self, value: u16) void {
@@ -80,11 +88,12 @@ pub const Apu = struct {
         if (value) {
             self.fs.step = 0; // Reset Frame Sequencer
 
-            // TODO: Reset Duty position for Square channels
+            // TODO: Reset Duty Position for Ch2 Square
+            self.ch1.square.pos = 0;
 
             // TODO: Reset Channel 3 offset ptr
         } else {
-            // TODO: Reset APU
+            self.reset();
         }
     }
 
@@ -102,12 +111,12 @@ pub const Apu = struct {
 
     /// NR50
     pub fn setSoundCntLLow(self: *Self, byte: u8) void {
-        self.ch_vol_cnt.raw = (self.ch_vol_cnt.raw & 0xFF00) | byte;
+        self.psg_cnt.raw = (self.psg_cnt.raw & 0xFF00) | byte;
     }
 
     /// NR51
     pub fn setSoundCntLHigh(self: *Self, byte: u8) void {
-        self.ch_vol_cnt.raw = @as(u16, byte) << 8 | (self.ch_vol_cnt.raw & 0xFF);
+        self.psg_cnt.raw = @as(u16, byte) << 8 | (self.psg_cnt.raw & 0xFF);
     }
 
     pub fn setBiasHigh(self: *Self, byte: u8) void {
@@ -117,9 +126,31 @@ pub const Apu = struct {
     pub fn sampleAudio(self: *Self, late: u64) void {
 
         // Sample Channel 1
-        const ch1_sample = self.ch1.amplitude();
-        const ch1_left = if (self.ch_vol_cnt.ch1_left.read()) ch1_sample else 0;
-        const ch1_right = if (self.ch_vol_cnt.ch1_right.read()) ch1_sample else 0;
+        const ch1_sample = self.highPassFilter(self.ch1.amplitude(), self.ch1.enabled);
+        const ch1_left = if (self.psg_cnt.ch1_left.read()) ch1_sample else 0;
+        const ch1_right = if (self.psg_cnt.ch1_right.read()) ch1_sample else 0;
+
+        const mixed_left = ch1_left;
+        const mixed_right = ch1_right;
+
+        // Apply NR50 Volume Modifications
+        const nr50_left = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) * mixed_left;
+        const nr50_right = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) * mixed_right;
+
+        // Apply SOUNDCNT_H Volume Modifications
+        const psg_left = switch (self.dma_cnt.ch_vol.read()) {
+            0b00 => nr50_left * 0.25,
+            0b01 => nr50_left * 0.5,
+            0b10 => nr50_left * 0.75,
+            0b11 => nr50_left, // Prohibited
+        };
+
+        const psg_right = switch (self.dma_cnt.ch_vol.read()) {
+            0b00 => nr50_right * 0.25,
+            0b01 => nr50_right * 0.5,
+            0b10 => nr50_right * 0.75,
+            0b11 => nr50_right, // Prohibited
+        };
 
         // Sample Dma Channels
         // const chA = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() else self.chA.amplitude() / 2;
@@ -131,10 +162,10 @@ pub const Apu = struct {
         // const chB_right = if (self.dma_cnt.chB_right.read()) chB else 0;
 
         // Mix all Channels
-        // const left = (chA_left + chB_left + ch1_left) / 3;
-        // const right = (chA_right + chB_right + ch1_right) / 3
-        const left = ch1_left;
-        const right = ch1_right;
+        // const left = (chA_left + chB_left + psg_left) / 3;
+        // const right = (chA_right + chB_right + psg_right) / 3
+        const left = psg_left;
+        const right = psg_right;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.warn("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
@@ -176,7 +207,7 @@ pub const Apu = struct {
             1, 3, 5 => {},
         }
 
-        self.sched.push(.FrameSequencer, self.sched.now() + ((1 << 24) / 1 << 15) - late);
+        self.sched.push(.FrameSequencer, self.sched.now() + ((1 << 24) / 512) - late);
     }
 
     fn tickLengths(self: *Self) void {
@@ -205,6 +236,18 @@ pub const Apu = struct {
             if (self.chB.len() <= 15) cpu.bus.dma._2.enableSoundDma(0x0400_00A4);
         }
     }
+
+    fn highPassFilter(self: *Self, sample: f32, ch_enabled: bool) f32 {
+        const charge_factor = 0.999958;
+
+        var output: f32 = 0;
+        if (ch_enabled) {
+            output = sample - self.capacitor;
+            self.capacitor = sample - output * std.math.pow(f32, charge_factor, @intToFloat(f32, (1 << 22) / self.sampleRate()));
+        }
+
+        return output;
+    }
 };
 
 const ToneSweep = struct {
@@ -221,15 +264,12 @@ const ToneSweep = struct {
 
     /// Length Functionality
     len_dev: Length,
-
     /// Sweep Functionality
     sweep_dev: Sweep,
-
     /// Envelope Functionality
     env_dev: Envelope,
-
+    /// Frequency Timer Functionality
     square: SquareWave,
-
     enabled: bool,
 
     sample: u8,
@@ -257,11 +297,11 @@ const ToneSweep = struct {
                 this.timer = if (period == 0) 8 else period;
 
                 if (this.enabled and period != 0) {
-                    const new_freq: u11 = this.calcFrequency(ch1);
+                    const new_freq = this.calcFrequency(ch1);
 
                     if (new_freq <= 0x7FF and ch1.sweep.shift.read() != 0) {
-                        ch1.freq.frequency.write(new_freq);
-                        this.shadow = new_freq;
+                        ch1.freq.frequency.write(@truncate(u11, new_freq));
+                        this.shadow = @truncate(u11, new_freq);
 
                         _ = this.calcFrequency(ch1);
                     }
@@ -269,10 +309,12 @@ const ToneSweep = struct {
             }
         }
 
-        fn calcFrequency(this: *This, ch1: *Self) u11 {
-            const shadow_shifted = this.shadow >> ch1.sweep.shift.read();
+        fn calcFrequency(this: *This, ch1: *Self) u12 {
+            const shadow = @as(u12, this.shadow);
+            const shadow_shifted = shadow >> ch1.sweep.shift.read();
             const decrease = ch1.sweep.direction.read();
-            const freq = if (decrease) this.shadow - shadow_shifted else this.shadow + shadow_shifted;
+
+            const freq = if (decrease) shadow - shadow_shifted else shadow + shadow_shifted;
 
             if (freq > 0x7FF) ch1.enabled = false;
 
@@ -296,6 +338,16 @@ const ToneSweep = struct {
         };
     }
 
+    fn reset(self: *Self) void {
+        self.sweep.raw = 0;
+        self.duty.raw = 0;
+        self.envelope.raw = 0;
+        self.freq.raw = 0;
+
+        self.sample = 0;
+        self.enabled = false;
+    }
+
     fn tickSweep(self: *Self) void {
         self.sweep_dev.tick(self);
     }
@@ -313,17 +365,23 @@ const ToneSweep = struct {
 
         self.sample = 0;
         if (!self.isDacEnabled()) return;
-        self.sample = if (self.enabled) self.square.getSample(self.duty) * self.env_dev.vol else 0;
+        self.sample = if (self.enabled) self.square.sample(self.duty) * self.env_dev.vol else 0;
     }
 
     fn amplitude(self: *const Self) f32 {
         return (@intToFloat(f32, self.sample) / 7.5) - 1.0;
     }
 
+    /// NR11, NR12
+    pub fn setSoundCntH(self: *Self, value: u16) void {
+        self.setDuty(@truncate(u8, value));
+        self.setEnvelope(@truncate(u8, value >> 8));
+    }
+
     /// NR11
     pub fn setDuty(self: *Self, value: u8) void {
         self.duty.raw = value;
-        self.len_dev.timer = 64 - self.duty.length.read();
+        self.len_dev.timer = @as(u7, self.duty.length.read() ^ 0x3F);
     }
 
     /// NR12
@@ -332,25 +390,35 @@ const ToneSweep = struct {
         if (!self.isDacEnabled()) self.enabled = false;
     }
 
+    /// NR13, NR14
+    pub fn setFreq(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.setFreqLow(@truncate(u8, value));
+        self.setFreqHigh(fs, @truncate(u8, value >> 8));
+    }
+
     /// NR13
     pub fn setFreqLow(self: *Self, byte: u8) void {
         self.freq.raw = (self.freq.raw & 0xFF00) | byte;
     }
 
     /// NR14
-    pub fn setFreqHigh(self: *Self, byte: u8) void {
+    pub fn setFreqHigh(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
+            self.enabled = true; // FIXME: is this necessary?
+
             if (self.len_dev.timer == 0) {
                 self.len_dev.timer = 64;
 
-                // FIXME: This conflicts with my GB emulator
-                new.length_enable.write(false);
+                // We unset this on the old frequency because of the obscure
+                // behaviour outside of this if statement's scope
+                self.freq.length_enable.write(false);
             }
 
-            // TODO: Reload Frequency Timer (last two bits unmodified)
+            // TODO: Reload Frequency Timer
             self.square.reloadTimer(self.freq.frequency.read());
+
             // Reload Envelope period and timer
             self.env_dev.timer = self.envelope.period.read();
             self.env_dev.vol = self.envelope.init_vol.read();
@@ -367,6 +435,7 @@ const ToneSweep = struct {
             self.enabled = self.isDacEnabled();
         }
 
+        self.square.updateLength(fs, self, new);
         self.freq = new;
     }
 
@@ -559,12 +628,16 @@ const FrameSequencer = struct {
     pub fn tick(self: *Self) void {
         self.step +%= 1;
     }
+
+    fn lengthIsNext(self: *const Self) bool {
+        return (self.step +% 1) & 1 == 0; // Steps, 0, 2, 4, and 6 clock length
+    }
 };
 
 const Length = struct {
     const Self = @This();
 
-    timer: u16,
+    timer: u7,
 
     pub fn init() Self {
         return .{ .timer = 0 };
@@ -613,9 +686,9 @@ const Envelope = struct {
                 self.timer = cnt.period.read();
 
                 if (cnt.direction.read()) {
-                    if (self.vol > 0x0) self.vol -= 1;
-                } else {
                     if (self.vol < 0xF) self.vol += 1;
+                } else {
+                    if (self.vol > 0x0) self.vol -= 1;
                 }
             }
         }
@@ -624,43 +697,57 @@ const Envelope = struct {
 
 const SquareWave = struct {
     const Self = @This();
-    const ticks: u64 = (1 << 24) / (1 << 18);
+    const ticks: u64 = (1 << 24) / (1 << 22);
 
     pos: u3,
     sched: *Scheduler,
+    timer: u12,
 
     pub fn init(sched: *Scheduler) Self {
         return .{
+            .timer = 0,
             .pos = 0,
             .sched = sched,
         };
     }
 
-    fn handleTimerOverflow(self: *Self, cnt: io.Frequency, late: u64) void {
-        const when = (2048 - @as(u64, cnt.frequency.read())) * 4;
+    /// Obscure NRx4 Behaviour
+    fn updateLength(_: *Self, fs: *const FrameSequencer, ch1: *ToneSweep, new_cnt: io.Frequency) void {
+        if (!fs.lengthIsNext() and !ch1.freq.length_enable.read() and new_cnt.length_enable.read() and ch1.len_dev.timer != 0) {
+            ch1.len_dev.timer -= 1;
 
+            if (ch1.len_dev.timer == 0 and !new_cnt.trigger.read()) ch1.enabled = false;
+        }
+    }
+
+    fn handleTimerOverflow(self: *Self, cnt: io.Frequency, late: u64) void {
+        const timer = (2048 - @as(u64, cnt.frequency.read())) * 4;
+
+        self.timer = @truncate(u12, timer);
         self.pos = (self.pos +% 1) & 7;
-        self.sched.push(.{ .ApuChannel = 0 }, when * ticks - late);
+
+        self.sched.push(.{ .ApuChannel = 0 }, self.sched.now() + timer * ticks - late);
     }
 
     fn reloadTimer(self: *Self, value: u11) void {
         self.sched.removeScheduledEvent(.{ .ApuChannel = 0 });
 
-        // TODO: Implement Obscure Behaviour
-        const when = (2048 - @as(u64, value)) * 4;
+        const tmp: u64 = (2048 - @as(u64, value)) * 4; // What Freq Timer should be assuming no weird behaviour
+        const timer = (tmp & ~@as(u64, 0x3)) | self.timer & 0x3; // Keep the last two bits from the old timer
+        self.timer = @truncate(u12, timer);
 
-        self.sched.push(.{ .ApuChannel = 0 }, when * ticks);
+        self.sched.push(.{ .ApuChannel = 0 }, self.sched.now() + timer * ticks);
     }
 
-    fn getSample(self: *const Self, cnt: io.Duty) u1 {
-        const pattern = cnt.pattern.read(); // 2^18
+    fn sample(self: *const Self, cnt: io.Duty) u1 {
+        const pattern = cnt.pattern.read();
 
         const i = self.pos ^ 7; // index of 0 should get highest bit
         const result = switch (pattern) {
-            0b00 => @as(u8, 0b00000001) >> i, // 1/8th
-            0b01 => @as(u8, 0b10000001) >> i, // 1/4th
-            0b10 => @as(u8, 0b10000111) >> i, // 1/2nd
-            0b11 => @as(u8, 0b01111110) >> i, // 3/4th
+            0b00 => @as(u8, 0b00000001) >> i, // 12.5%
+            0b01 => @as(u8, 0b00000011) >> i, // 25%
+            0b10 => @as(u8, 0b00001111) >> i, // 50%
+            0b11 => @as(u8, 0b11111100) >> i, // 75%
         };
 
         return @truncate(u1, result);
