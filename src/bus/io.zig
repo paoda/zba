@@ -1,12 +1,11 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
 const Scheduler = @import("../scheduler.zig").Scheduler;
-
-const panic_on_und_io: bool = false;
 
 const log = std.log.scoped(.@"I/O");
 
@@ -61,7 +60,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Interrupts
             0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => undRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
         },
         u16 => switch (address) {
             // Display
@@ -103,7 +102,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0202 => bus.io.irq.raw,
             0x0400_0204 => unimplementedRead("Read halfword from WAITCNT", .{}),
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => undRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
             // Display
@@ -127,7 +126,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Interrupts
             0x0400_0200 => @truncate(T, bus.io.ie.raw),
             0x0400_0300 => @enumToInt(bus.io.postflg),
-            else => undRead("Tried to read byte from 0x{X:0>8}", .{address}),
+            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
         },
         else => @compileError("I/O: Unsupported read width"),
     };
@@ -185,7 +184,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0200 => bus.io.setIrqs(value),
             0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            else => undWrite("Tried to write {} 0x{X:0>8} to 0x{X:0>8}", .{ T, value, address }),
+            else => undefinedWrite("Tried to write {} 0x{X:0>8} to 0x{X:0>8}", .{ T, value, address }),
         },
         u16 => switch (address) {
             // Display
@@ -317,7 +316,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0204 => log.debug("Wrote 0x{X:0>4} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0206, 0x0400_020A => {}, // Not Used
-            else => undWrite("Tried to write {} 0x{X:0>4} to 0x{X:0>8}", .{ T, value, address }),
+            else => undefinedWrite("Tried to write {} 0x{X:0>4} to 0x{X:0>8}", .{ T, value, address }),
         },
         u8 => switch (address) {
             // Display
@@ -362,24 +361,27 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Interrupts
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
-            else => undWrite("Tried to write 0x{X:0>2} to 0x{X:0>8}", .{ value, address }),
+            else => undefinedWrite("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
         },
         else => @compileError("I/O: Unsupported write width"),
     };
 }
 
-fn undRead(comptime format: []const u8, args: anytype) u8 {
-    if (panic_on_und_io) std.debug.panic(format, args) else log.warn(format, args);
+fn undefinedRead(comptime format: []const u8, args: anytype) u8 {
+    log.debug(format, args);
+    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
+
     return 0;
 }
 
 fn unimplementedRead(comptime format: []const u8, args: anytype) u8 {
-    log.warn(format, args);
+    log.debug(format, args);
     return 0;
 }
 
-fn undWrite(comptime format: []const u8, args: anytype) void {
-    if (panic_on_und_io) std.debug.panic(format, args) else log.warn(format, args);
+fn undefinedWrite(comptime format: []const u8, args: anytype) void {
+    log.debug(format, args);
+    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
 }
 
 /// Read / Write

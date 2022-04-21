@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const SDL = @import("sdl2");
 const clap = @import("clap");
 const known_folders = @import("known_folders");
@@ -26,6 +27,7 @@ const sample_rate = @import("apu.zig").host_sample_rate;
 pub const enable_logging: bool = false;
 const is_binary: bool = false;
 const log = std.log.scoped(.GUI);
+pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
 const correctTitle = @import("util.zig").correctTitle;
 
@@ -267,5 +269,4 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
 export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
     const apu = @ptrCast(*Apu, @alignCast(8, userdata));
     _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
-
 }
