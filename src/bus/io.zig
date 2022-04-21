@@ -232,9 +232,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw = @truncate(u8, value),
+            0x0400_0060 => bus.apu.ch1.sweep.raw = @truncate(u8, value), // Channel 1
             0x0400_0062 => bus.apu.ch1.setSoundCntH(value),
             0x0400_0064 => bus.apu.ch1.setFreq(&bus.apu.fs, value),
+            0x0400_0068 => bus.apu.ch2.setSoundCntH(value), // Channel 2
+            0x0400_006C => bus.apu.ch2.setFreq(&bus.apu.fs, value),
             0x0400_0080 => bus.apu.psg_cnt.raw = value,
             0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
@@ -313,15 +315,15 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, value) << 8) | (bus.ppu.dispstat.raw & 0xFF),
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw = value,
+            0x0400_0060 => bus.apu.ch1.sweep.raw = value, // Channel 1
             0x0400_0062 => bus.apu.ch1.duty.raw = value,
             0x0400_0063 => bus.apu.ch1.envelope.raw = value,
             0x0400_0064 => bus.apu.ch1.setFreqLow(value),
             0x0400_0065 => bus.apu.ch1.setFreqHigh(&bus.apu.fs, value),
-            0x0400_0068 => bus.apu.ch2.duty.raw = value,
+            0x0400_0068 => bus.apu.ch2.duty.raw = value, // Channel 2
             0x0400_0069 => bus.apu.ch2.envelope.raw = value,
             0x0400_006C => bus.apu.ch2.setFreqLow(value),
-            0x0400_006D => bus.apu.ch2.setFreqHigh(value),
+            0x0400_006D => bus.apu.ch2.setFreqHigh(&bus.apu.fs, value),
             0x0400_0070 => bus.apu.ch3.select.raw = value,
             0x0400_0072 => bus.apu.ch3.length = value,
             0x0400_0073 => bus.apu.ch3.vol.raw = value,
