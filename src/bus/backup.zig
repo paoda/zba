@@ -86,7 +86,7 @@ pub const Backup = struct {
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
 
-                log.err("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
+                log.debug("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
             },
             else => return SaveError.UnsupportedBackupKind,
         }

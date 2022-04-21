@@ -111,13 +111,6 @@ fn DmaController(comptime id: u2) type {
             self.writeCntHigh(@truncate(u16, word >> 16));
         }
 
-        pub inline fn check(self: *Self, bus: *Bus) bool {
-            if (!self.active) return false; // FIXME: Check CNT register?
-
-            self.step(bus);
-            return true;
-        }
-
         pub fn step(self: *Self, bus: *Bus) bool {
             if (!self.active) return false;
 

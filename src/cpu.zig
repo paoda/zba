@@ -253,12 +253,12 @@ pub const Arm7tdmi = struct {
 
     pub fn step(self: *Self) void {
         if (self.cpsr.t.read()) {
-            const opcode = self.thumbFetch();
+            const opcode = self.fetch(u16);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             thumb_lut[thumbIdx(opcode)](self, &self.bus, opcode);
         } else {
-            const opcode = self.fetch();
+            const opcode = self.fetch(u32);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
@@ -272,12 +272,12 @@ pub const Arm7tdmi = struct {
 
         if (should_handle != 0) {
             self.bus.io.haltcnt = .Execute;
-            // log.info("An Interrupt was Fired!", .{});
+            // log.debug("An Interrupt was Fired!", .{});
 
             // Either IME is not true or I in CPSR is true
             // Don't handle interrupts
             if (!self.bus.io.ime or self.cpsr.i.read()) return;
-            // log.info("An interrupt was Handled!", .{});
+            // log.debug("An interrupt was Handled!", .{});
 
             // retAddr.gba says r15 on it's own is off by -04h in both ARM and THUMB mode
             const r15 = self.r[15] + 4;
@@ -293,14 +293,11 @@ pub const Arm7tdmi = struct {
         }
     }
 
-    fn thumbFetch(self: *Self) u16 {
-        defer self.r[15] += 2;
-        return self.bus.read(u16, self.r[15]);
-    }
+    inline fn fetch(self: *Self, comptime T: type) T {
+        comptime std.debug.assert(T == u32 or T == u16); // Opcode may be 32-bit (ARM) or 16-bit (THUMB)
+        defer self.r[15] += if (T == u32) 4 else 2;
 
-    fn fetch(self: *Self) u32 {
-        defer self.r[15] += 4;
-        return self.bus.read(u32, self.r[15]);
+        return self.bus.read(T, self.r[15]);
     }
 
     pub fn fakePC(self: *const Self) u32 {

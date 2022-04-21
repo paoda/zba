@@ -65,9 +65,9 @@ pub fn main() anyerror!void {
     };
 
     // Determine Save Directory
-    const save_path = try setupSavePath(alloc);
-    defer if (save_path) |path| alloc.free(path);
-    log.info("Save Path: {s}", .{save_path});
+    const save_dir = try setupSavePath(alloc);
+    defer if (save_dir) |path| alloc.free(path);
+    log.info("Found save directory: {s}", .{save_dir});
 
     // Initialize SDL
     _ = initSdl2();
@@ -77,7 +77,7 @@ pub fn main() anyerror!void {
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
-    const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_path };
+    const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_dir };
     var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
     defer cpu.deinit();
 
@@ -266,7 +266,6 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
 
 export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
     const apu = @ptrCast(*Apu, @alignCast(8, userdata));
-    const result = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+    _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
 
-    if (result < 0) log.err("Audio Callback Underflow", .{});
 }

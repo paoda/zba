@@ -645,43 +645,43 @@ const Sprite = struct {
         };
     }
 
-    inline fn x(self: *const Self) u9 {
+    fn x(self: *const Self) u9 {
         return self.attr1.x.read();
     }
 
-    inline fn y(self: *const Self) u8 {
+    fn y(self: *const Self) u8 {
         return self.attr0.y.read();
     }
 
-    inline fn is_8bpp(self: *const Self) bool {
+    fn is_8bpp(self: *const Self) bool {
         return self.attr0.is_8bpp.read();
     }
 
-    inline fn shape(self: *const Self) u2 {
+    fn shape(self: *const Self) u2 {
         return self.attr0.shape.read();
     }
 
-    inline fn size(self: *const Self) u2 {
+    fn size(self: *const Self) u2 {
         return self.attr1.size.read();
     }
 
-    inline fn tile_id(self: *const Self) u10 {
+    fn tile_id(self: *const Self) u10 {
         return self.attr2.tile_id.read();
     }
 
-    inline fn pal_bank(self: *const Self) u4 {
+    fn pal_bank(self: *const Self) u4 {
         return self.attr2.pal_bank.read();
     }
 
-    inline fn h_flip(self: *const Self) bool {
+    fn h_flip(self: *const Self) bool {
         return self.attr1.h_flip.read();
     }
 
-    inline fn v_flip(self: *const Self) bool {
+    fn v_flip(self: *const Self) bool {
         return self.attr1.v_flip.read();
     }
 
-    inline fn priority(self: *const Self) u2 {
+    fn priority(self: *const Self) u2 {
         return self.attr2.rel_prio.read();
     }
 };

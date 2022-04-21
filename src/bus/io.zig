@@ -179,11 +179,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_010C => bus.tim._3.writeCnt(value),
 
             // Serial Communication 1
-            0x0400_0120 => log.warn("Wrote 0x{X:0>8} to SIODATA32", .{value}),
+            0x0400_0120 => log.debug("Wrote 0x{X:0>8} to SIODATA32", .{value}),
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
-            0x0400_0204 => log.warn("Wrote 0x{X:0>8} to WAITCNT", .{value}),
+            0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             else => undWrite("Tried to write {} 0x{X:0>8} to 0x{X:0>8}", .{ T, value, address }),
         },
@@ -204,32 +204,32 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_001A => bus.ppu.bg[2].vofs.raw = value,
             0x0400_001C => bus.ppu.bg[3].hofs.raw = value,
             0x0400_001E => bus.ppu.bg[3].vofs.raw = value,
-            0x0400_0020 => log.warn("Wrote 0x{X:0>4} to BG2PA", .{value}),
-            0x0400_0022 => log.warn("Wrote 0x{X:0>4} to BG2PB", .{value}),
-            0x0400_0024 => log.warn("Wrote 0x{X:0>4} to BG2PC", .{value}),
-            0x0400_0026 => log.warn("Wrote 0x{X:0>4} to BG2PD", .{value}),
-            0x0400_0028 => log.warn("Wrote 0x{X:0>4} to BG2X_L", .{value}),
-            0x0400_002A => log.warn("Wrote 0x{X:0>4} to BG2X_H", .{value}),
-            0x0400_002C => log.warn("Wrote 0x{X:0>4} to BG2Y_L", .{value}),
-            0x0400_002E => log.warn("Wrote 0x{X:0>4} to BG2Y_H", .{value}),
-            0x0400_0030 => log.warn("Wrote 0x{X:0>4} to BG3PA", .{value}),
-            0x0400_0032 => log.warn("Wrote 0x{X:0>4} to BG3PB", .{value}),
-            0x0400_0034 => log.warn("Wrote 0x{X:0>4} to BG3PC", .{value}),
-            0x0400_0036 => log.warn("Wrote 0x{X:0>4} to BG3PD", .{value}),
-            0x0400_0038 => log.warn("Wrote 0x{X:0>4} to BG3X_L", .{value}),
-            0x0400_003A => log.warn("Wrote 0x{X:0>4} to BG3X_H", .{value}),
-            0x0400_003C => log.warn("Wrote 0x{X:0>4} to BG3Y_L", .{value}),
-            0x0400_003E => log.warn("Wrote 0x{X:0>4} to BG3Y_H", .{value}),
-            0x0400_0040 => log.warn("Wrote 0x{X:0>4} to WIN0H", .{value}),
-            0x0400_0042 => log.warn("Wrote 0x{X:0>4} to WIN1H", .{value}),
-            0x0400_0044 => log.warn("Wrote 0x{X:0>4} to WIN0V", .{value}),
-            0x0400_0046 => log.warn("Wrote 0x{X:0>4} to WIN1V", .{value}),
-            0x0400_0048 => log.warn("Wrote 0x{X:0>4} to WININ", .{value}),
-            0x0400_004A => log.warn("Wrote 0x{X:0>4} to WINOUT", .{value}),
-            0x0400_004C => log.warn("Wrote 0x{X:0>4} to MOSAIC", .{value}),
-            0x0400_0050 => log.warn("Wrote 0x{X:0>4} to BLDCNT", .{value}),
-            0x0400_0052 => log.warn("Wrote 0x{X:0>4} to BLDALPHA", .{value}),
-            0x0400_0054 => log.warn("Wrote 0x{X:0>4} to BLDY", .{value}),
+            0x0400_0020 => log.debug("Wrote 0x{X:0>4} to BG2PA", .{value}),
+            0x0400_0022 => log.debug("Wrote 0x{X:0>4} to BG2PB", .{value}),
+            0x0400_0024 => log.debug("Wrote 0x{X:0>4} to BG2PC", .{value}),
+            0x0400_0026 => log.debug("Wrote 0x{X:0>4} to BG2PD", .{value}),
+            0x0400_0028 => log.debug("Wrote 0x{X:0>4} to BG2X_L", .{value}),
+            0x0400_002A => log.debug("Wrote 0x{X:0>4} to BG2X_H", .{value}),
+            0x0400_002C => log.debug("Wrote 0x{X:0>4} to BG2Y_L", .{value}),
+            0x0400_002E => log.debug("Wrote 0x{X:0>4} to BG2Y_H", .{value}),
+            0x0400_0030 => log.debug("Wrote 0x{X:0>4} to BG3PA", .{value}),
+            0x0400_0032 => log.debug("Wrote 0x{X:0>4} to BG3PB", .{value}),
+            0x0400_0034 => log.debug("Wrote 0x{X:0>4} to BG3PC", .{value}),
+            0x0400_0036 => log.debug("Wrote 0x{X:0>4} to BG3PD", .{value}),
+            0x0400_0038 => log.debug("Wrote 0x{X:0>4} to BG3X_L", .{value}),
+            0x0400_003A => log.debug("Wrote 0x{X:0>4} to BG3X_H", .{value}),
+            0x0400_003C => log.debug("Wrote 0x{X:0>4} to BG3Y_L", .{value}),
+            0x0400_003E => log.debug("Wrote 0x{X:0>4} to BG3Y_H", .{value}),
+            0x0400_0040 => log.debug("Wrote 0x{X:0>4} to WIN0H", .{value}),
+            0x0400_0042 => log.debug("Wrote 0x{X:0>4} to WIN1H", .{value}),
+            0x0400_0044 => log.debug("Wrote 0x{X:0>4} to WIN0V", .{value}),
+            0x0400_0046 => log.debug("Wrote 0x{X:0>4} to WIN1V", .{value}),
+            0x0400_0048 => log.debug("Wrote 0x{X:0>4} to WININ", .{value}),
+            0x0400_004A => log.debug("Wrote 0x{X:0>4} to WINOUT", .{value}),
+            0x0400_004C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
+            0x0400_0050 => log.debug("Wrote 0x{X:0>4} to BLDCNT", .{value}),
+            0x0400_0052 => log.debug("Wrote 0x{X:0>4} to BLDALPHA", .{value}),
+            0x0400_0054 => log.debug("Wrote 0x{X:0>4} to BLDY", .{value}),
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
@@ -294,27 +294,27 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0110 => {}, // Not Used
 
             // Serial Communication 1
-            0x0400_0120 => log.warn("Wrote 0x{X:0>4} to SIOMULTI0", .{value}),
-            0x0400_0122 => log.warn("Wrote 0x{X:0>4} to SIOMULTI1", .{value}),
-            0x0400_0124 => log.warn("Wrote 0x{X:0>4} to SIOMULTI2", .{value}),
-            0x0400_0126 => log.warn("Wrote 0x{X:0>4} to SIOMULTI3", .{value}),
-            0x0400_0128 => log.warn("Wrote 0x{X:0>4} to SIOCNT", .{value}),
-            0x0400_012A => log.warn("Wrote 0x{X:0>4} to SIOMLT_SEND", .{value}),
+            0x0400_0120 => log.debug("Wrote 0x{X:0>4} to SIOMULTI0", .{value}),
+            0x0400_0122 => log.debug("Wrote 0x{X:0>4} to SIOMULTI1", .{value}),
+            0x0400_0124 => log.debug("Wrote 0x{X:0>4} to SIOMULTI2", .{value}),
+            0x0400_0126 => log.debug("Wrote 0x{X:0>4} to SIOMULTI3", .{value}),
+            0x0400_0128 => log.debug("Wrote 0x{X:0>4} to SIOCNT", .{value}),
+            0x0400_012A => log.debug("Wrote 0x{X:0>4} to SIOMLT_SEND", .{value}),
 
             // Keypad Input
-            0x0400_0130 => log.warn("Wrote 0x{X:0>4} to KEYINPUT. Ignored", .{value}),
-            0x0400_0132 => log.warn("Wrote 0x{X:0>4} to KEYCNT", .{value}),
+            0x0400_0130 => log.debug("Wrote 0x{X:0>4} to KEYINPUT. Ignored", .{value}),
+            0x0400_0132 => log.debug("Wrote 0x{X:0>4} to KEYCNT", .{value}),
 
             // Serial Communication 2
-            0x0400_0134 => log.warn("Wrote 0x{X:0>4} to RCNT", .{value}),
-            0x0400_0140 => log.warn("Wrote 0x{X:0>4} to JOYCNT", .{value}),
-            0x0400_0158 => log.warn("Wrote 0x{X:0>4} to JOYSTAT", .{value}),
+            0x0400_0134 => log.debug("Wrote 0x{X:0>4} to RCNT", .{value}),
+            0x0400_0140 => log.debug("Wrote 0x{X:0>4} to JOYCNT", .{value}),
+            0x0400_0158 => log.debug("Wrote 0x{X:0>4} to JOYSTAT", .{value}),
             0x0400_0142, 0x0400_015A => {}, // Not Used
 
             // Interrupts
             0x0400_0200 => bus.io.ie.raw = value,
             0x0400_0202 => bus.io.irq.raw &= ~value,
-            0x0400_0204 => log.warn("Wrote 0x{X:0>4} to WAITCNT", .{value}),
+            0x0400_0204 => log.debug("Wrote 0x{X:0>4} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0206, 0x0400_020A => {}, // Not Used
             else => undWrite("Tried to write {} 0x{X:0>4} to 0x{X:0>8}", .{ T, value, address }),
@@ -354,10 +354,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // Serial Communication 1
-            0x0400_0128 => log.warn("Wrote 0x{X:0>2} to SIOCNT (low)", .{value}),
+            0x0400_0128 => log.debug("Wrote 0x{X:0>2} to SIOCNT (low)", .{value}),
 
             // Serial Communication 2
-            0x0400_0140 => log.warn("Wrote 0x{X:0>2} to JOYCNT (low)", .{value}),
+            0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT (low)", .{value}),
 
             // Interrupts
             0x0400_0208 => bus.io.ime = value & 1 == 1,

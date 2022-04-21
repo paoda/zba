@@ -35,7 +35,7 @@ pub const Scheduler = struct {
 
             switch (event.kind) {
                 .HeatDeath => {
-                    log.err("A u64 overflowered. This *actually* should never happen.", .{});
+                    log.err("u64 overflow. This *actually* should never happen.", .{});
                     unreachable;
                 },
                 .Draw => {

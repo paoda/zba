@@ -57,12 +57,12 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
 }
 
 pub fn runUnsync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Unsynchronized EmuThread has begun", .{});
+    log.info("Start unsynchronized emu thread", .{});
     while (!quit.load(.Unordered)) runFrame(sched, cpu);
 }
 
 pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Synchronized EmuThread has begun", .{});
+    log.info("Start synchronized emu thread", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
@@ -79,7 +79,7 @@ pub fn runSync(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
 }
 
 pub fn runUnsyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Unsynchronized EmuThread with FPS Tracking has begun", .{});
+    log.info("Start unsynchronized emu thread w/ fps tracking", .{});
     var fps_timer = Timer.start() catch unreachable;
 
     while (!quit.load(.Unordered)) {
@@ -89,7 +89,7 @@ pub fn runUnsyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cp
 }
 
 pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Synchronized EmuThread has begun", .{});
+    log.info("Start synchronized emu thread w/ fps tracking", .{});
     var timer = Timer.start() catch unreachable;
     var fps_timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
@@ -110,7 +110,7 @@ pub fn runSyncFps(quit: *Atomic(bool), fps: *FpsAverage, sched: *Scheduler, cpu:
 }
 
 pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Run EmuThread with spin-loop sync", .{});
+    log.info("Start synchronized emu thread using busy loop", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 

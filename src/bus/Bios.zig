@@ -31,7 +31,7 @@ pub fn deinit(self: Self) void {
 pub fn read(self: *const Self, comptime T: type, addr: usize) T {
     if (self.buf) |buf| {
         if (addr > buf.len) {
-            log.err("Tried to read {} from {X:0>8} (open bus)", .{ T, addr });
+            log.debug("Tried to read {} from {X:0>8} (open bus)", .{ T, addr });
             return 0;
         }
 
@@ -48,5 +48,5 @@ pub fn read(self: *const Self, comptime T: type, addr: usize) T {
 
 pub fn write(_: *Self, comptime T: type, addr: usize, value: T) void {
     @setCold(true);
-    log.err("Tried to write {} 0x{X:} to 0x{X:0>8} ", .{ T, value, addr });
+    log.debug("Tried to write {} 0x{X:} to 0x{X:0>8} ", .{ T, value, addr });
 }

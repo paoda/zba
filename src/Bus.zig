@@ -21,8 +21,6 @@ const log = std.log.scoped(.Bus);
 const rotr = @import("util.zig").rotr;
 const Self = @This();
 
-const panic_on_und_bus: bool = false;
-
 pak: GamePak,
 bios: Bios,
 ppu: Ppu,
@@ -73,7 +71,7 @@ pub fn handleDMATransfers(self: *Self) void {
     }
 }
 
-fn isDmaRunning(self: *const Self) bool {
+inline fn isDmaRunning(self: *const Self) bool {
     return self.dma._0.active or
         self.dma._1.active or
         self.dma._2.active or
@@ -197,13 +195,4 @@ fn alignAddress(comptime T: type, address: u32) u32 {
         u8 => address,
         else => @compileError("Bus: Invalid read/write type"),
     };
-}
-
-fn undRead(comptime format: []const u8, args: anytype) u8 {
-    if (panic_on_und_bus) std.debug.panic(format, args) else log.warn(format, args);
-    return 0;
-}
-
-fn undWrite(comptime format: []const u8, args: anytype) void {
-    if (panic_on_und_bus) std.debug.panic(format, args) else log.warn(format, args);
 }

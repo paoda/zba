@@ -192,7 +192,7 @@ pub const Apu = struct {
         const right = (chA_right + chB_right + (psg_right * 0.05)) / 3;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
-            log.warn("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
+            log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
 
             // Sample Rate Changed, Create a new Resampler since i can't figure out how to change
             // the parameters of the old one
@@ -203,17 +203,17 @@ pub const Apu = struct {
             self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_F32, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_F32, 2, host_sample_rate) orelse unreachable;
         }
 
-        while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(f32) * 2 * 0x800)) {}
+        // while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(f32) * 2 * 0x800)) {}
 
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]f32{ left, right }, 2 * @sizeOf(f32));
         self.sched.push(.SampleAudio, self.sched.now() + self.sampleTicks() - late);
     }
 
-    inline fn sampleTicks(self: *const Self) u64 {
+    fn sampleTicks(self: *const Self) u64 {
         return (1 << 24) / self.sampleRate();
     }
 
-    inline fn sampleRate(self: *const Self) u64 {
+    fn sampleRate(self: *const Self) u64 {
         return @as(u64, 1) << (15 + @as(u6, self.bias.sampling_cycle.read()));
     }
 
@@ -1046,7 +1046,7 @@ const WaveDevice = struct {
             u8 => {
                 self.buf[base + addr - 0x0400_0090] = value;
             },
-            else => log.err("Unhandled {} write to Ch3 Wave RAM", .{T}),
+            else => @compileError("Ch3 WAVERAM: Unsupported write width"),
         }
     }
 };
