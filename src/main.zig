@@ -102,7 +102,7 @@ pub fn main() anyerror!void {
     var emu_rate = FpsAverage.init();
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .UnlimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
