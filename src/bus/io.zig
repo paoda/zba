@@ -236,11 +236,17 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0060 => bus.apu.ch1.sweep.raw = @truncate(u8, value), // Channel 1
             0x0400_0062 => bus.apu.ch1.setSoundCntH(value),
             0x0400_0064 => bus.apu.ch1.setFreq(&bus.apu.fs, value),
+
             0x0400_0068 => bus.apu.ch2.setSoundCntH(value), // Channel 2
             0x0400_006C => bus.apu.ch2.setFreq(&bus.apu.fs, value),
+
             0x0400_0070 => bus.apu.ch3.setWaveSelect(@truncate(u8, value)), // Channel 3
             0x0400_0072 => bus.apu.ch3.setSoundCntH(value),
             0x0400_0074 => bus.apu.ch3.setFreq(&bus.apu.fs, value),
+
+            0x0400_0078 => bus.apu.ch4.setSoundCntL(value), // Channel 4
+            0x0400_007C => bus.apu.ch4.setSoundCntH(&bus.apu.fs, value),
+
             0x0400_0080 => bus.apu.psg_cnt.raw = value,
             0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
@@ -324,19 +330,23 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0063 => bus.apu.ch1.envelope.raw = value,
             0x0400_0064 => bus.apu.ch1.setFreqLow(value),
             0x0400_0065 => bus.apu.ch1.setFreqHigh(&bus.apu.fs, value),
+
             0x0400_0068 => bus.apu.ch2.duty.raw = value, // Channel 2
             0x0400_0069 => bus.apu.ch2.envelope.raw = value,
             0x0400_006C => bus.apu.ch2.setFreqLow(value),
             0x0400_006D => bus.apu.ch2.setFreqHigh(&bus.apu.fs, value),
+
             0x0400_0070 => bus.apu.ch3.setWaveSelect(value), // Channel 3
             0x0400_0072 => bus.apu.ch3.setLength(value),
             0x0400_0073 => bus.apu.ch3.vol.raw = value,
             0x0400_0074 => bus.apu.ch3.setFreqLow(value),
             0x0400_0075 => bus.apu.ch3.setFreqHigh(&bus.apu.fs, value),
-            0x0400_0078 => bus.apu.ch4.len = @truncate(u6, value),
-            0x0400_0079 => bus.apu.ch4.envelope.raw = value,
+
+            0x0400_0078 => bus.apu.ch4.setLength(value), // Channel 4
+            0x0400_0079 => bus.apu.ch4.setEnvelope(value),
             0x0400_007C => bus.apu.ch4.poly.raw = value,
-            0x0400_007D => bus.apu.ch4.cnt.raw = value,
+            0x0400_007D => bus.apu.ch4.setCnt(&bus.apu.fs, value),
+
             0x0400_0080 => bus.apu.setSoundCntLLow(value),
             0x0400_0081 => bus.apu.setSoundCntLHigh(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),

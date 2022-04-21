@@ -41,7 +41,7 @@ pub const Apu = struct {
             .ch1 = ToneSweep.init(sched),
             .ch2 = Tone.init(sched),
             .ch3 = Wave.init(sched),
-            .ch4 = Noise.init(),
+            .ch4 = Noise.init(sched),
             .chA = DmaSound(.A).init(),
             .chB = DmaSound(.B).init(),
 
@@ -61,7 +61,8 @@ pub const Apu = struct {
         sched.push(.SampleAudio, sched.now() + apu.sampleTicks());
         sched.push(.{ .ApuChannel = 0 }, sched.now() + SquareWave.ticks); // Channel 1
         sched.push(.{ .ApuChannel = 1 }, sched.now() + SquareWave.ticks); // Channel 2
-        sched.push(.{ .ApuChannel = 2 }, sched.now() + WaveDevice.ticks); // Channel 2
+        sched.push(.{ .ApuChannel = 2 }, sched.now() + WaveDevice.ticks); // Channel 3
+        sched.push(.{ .ApuChannel = 3 }, sched.now() + Noise.ticks); // Channel 4
         sched.push(.FrameSequencer, sched.now() + ((1 << 24) / 512));
 
         return apu;
@@ -70,7 +71,8 @@ pub const Apu = struct {
     fn reset(self: *Self) void {
         self.ch1.reset();
         self.ch2.reset();
-        // TODO: Reset the rest of the channels
+        self.ch3.reset();
+        self.ch4.reset();
     }
 
     pub fn setDmaCnt(self: *Self, value: u16) void {
@@ -145,11 +147,17 @@ pub const Apu = struct {
         const ch3_left = if (self.psg_cnt.ch3_left.read()) ch3_sample else 0;
         const ch3_right = if (self.psg_cnt.ch3_right.read()) ch3_sample else 0;
 
-        const mixed_left = ch1_left + ch2_left + ch3_left / 3;
-        const mixed_right = ch1_right + ch2_right + ch3_right / 3;
+        // Sample Channel 4
+        const ch4_sample = self.highPassFilter(self.ch4.amplitude(), self.ch4.enabled);
+        const ch4_left = if (self.psg_cnt.ch4_left.read()) ch4_sample else 0;
+        const ch4_right = if (self.psg_cnt.ch4_right.read()) ch4_sample else 0;
 
-        // const mixed_left = ch3_left;
-        // const mixed_right = ch3_right;
+        const mixed_left = ch1_left + ch2_left + ch3_left + ch4_left / 4;
+        const mixed_right = ch1_right + ch2_right + ch3_right + ch4_right / 4;
+
+        // // For Debugging Purposes
+        // const mixed_left = ch4_left;
+        // const mixed_right = ch4_right;
 
         // Apply NR50 Volume Modifications
         const nr50_left = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) * mixed_left;
@@ -180,8 +188,8 @@ pub const Apu = struct {
         const chB_right = if (self.dma_cnt.chB_right.read()) chB else 0;
 
         // Mix all Channels
-        const left = (chA_left + chB_left + (psg_left * 0.1)) / 3;
-        const right = (chA_right + chB_right + (psg_right * 0.1)) / 3;
+        const left = (chA_left + chB_left + (psg_left * 0.05)) / 3;
+        const right = (chA_right + chB_right + (psg_right * 0.05)) / 3;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.warn("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
@@ -397,7 +405,7 @@ const ToneSweep = struct {
     /// NR11
     pub fn setDuty(self: *Self, value: u8) void {
         self.duty.raw = value;
-        self.len_dev.timer = @intCast(u7, 64 - value);
+        self.len_dev.timer = @as(u7, 64) - @truncate(u6, value);
     }
 
     /// NR12
@@ -532,7 +540,7 @@ const Tone = struct {
     /// NR21
     pub fn setDuty(self: *Self, value: u8) void {
         self.duty.raw = value;
-        self.len_dev.timer = @intCast(u7, 64 - value);
+        self.len_dev.timer = @as(u7, 64) - @truncate(u6, value);
     }
 
     /// NR22
@@ -620,6 +628,16 @@ const Wave = struct {
         };
     }
 
+    fn reset(self: *Self) void {
+        self.select.raw = 0;
+        self.length = 0;
+        self.vol.raw = 0;
+        self.freq.raw = 0;
+
+        self.sample = 0;
+        self.enabled = false;
+    }
+
     pub fn tickLength(self: *Self) void {
         self.len_dev.tick(self.freq, &self.enabled);
     }
@@ -695,6 +713,7 @@ const Wave = struct {
 
 const Noise = struct {
     const Self = @This();
+    const ticks = (1 << 24) / (1 << 22);
 
     /// Write-only
     /// NR41
@@ -712,9 +731,13 @@ const Noise = struct {
     /// Envelope Functionality
     env_dev: EnvelopeDevice,
 
-    enabled: bool,
+    // Linear Feedback Shift Register
+    lfsr: Lfsr,
 
-    fn init() Self {
+    enabled: bool,
+    sample: u8,
+
+    fn init(sched: *Scheduler) Self {
         return .{
             .len = 0,
             .envelope = .{ .raw = 0 },
@@ -724,7 +747,20 @@ const Noise = struct {
 
             .len_dev = LengthDevice.init(),
             .env_dev = EnvelopeDevice.init(),
+            .lfsr = Lfsr.init(sched),
+
+            .sample = 0,
         };
+    }
+
+    fn reset(self: *Self) void {
+        self.len = 0;
+        self.envelope.raw = 0;
+        self.poly.raw = 0;
+        self.cnt.raw = 0;
+
+        self.sample = 0;
+        self.enabled = false;
     }
 
     pub fn tickLength(self: *Self) void {
@@ -733,6 +769,77 @@ const Noise = struct {
 
     pub fn tickEnvelope(self: *Self) void {
         self.env_dev.tick(self.envelope);
+    }
+
+    /// NR41
+    pub fn setLength(self: *Self, len: u8) void {
+        self.len = @truncate(u6, len);
+        self.len_dev.timer = @as(u7, 64) - @truncate(u6, len);
+    }
+
+    /// NR42
+    pub fn setEnvelope(self: *Self, value: u8) void {
+        self.envelope.raw = value;
+        if (!self.isDacEnabled()) self.enabled = false;
+    }
+
+    /// NR41, NR42
+    pub fn setSoundCntL(self: *Self, value: u16) void {
+        self.setLength(@truncate(u8, value));
+        self.setEnvelope(@truncate(u8, value >> 8));
+    }
+
+    /// NR43, NR44
+    pub fn setSoundCntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.poly.raw = @truncate(u8, value);
+        self.setCnt(fs, @truncate(u8, value >> 8));
+    }
+
+    /// NR44
+    pub fn setCnt(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+        var new: io.NoiseControl = .{ .raw = byte };
+
+        if (new.trigger.read()) {
+            self.enabled = true; // FIXME: Same as ch1, ch2, is this necessary?
+
+            if (self.len_dev.timer == 0) {
+                self.len_dev.timer = 64;
+
+                // We unset this on the old frequency because of the obscure
+                // behaviour outside of this if statement's scope
+                // FIXME: This wasn't in my ch4 GB implementation
+                self.cnt.length_enable.write(false);
+            }
+
+            // Update The Frequency Timer
+            // self.lfsr.reloadTimer(self.freq.frequency.read()); // TODO: Do we do something here?
+            self.lfsr.shift = 0x7FFF;
+
+            // Update Envelope and Volume
+            self.env_dev.timer = self.envelope.period.read();
+            self.env_dev.vol = self.envelope.init_vol.read();
+
+            self.enabled = self.isDacEnabled();
+        }
+
+        self.lfsr.updateLength(fs, self, new);
+        self.cnt = new;
+    }
+
+    pub fn channelTimerOverflow(self: *Self, late: u64) void {
+        self.lfsr.handleTimerOverflow(self.poly, late);
+
+        self.sample = 0;
+        if (!self.isDacEnabled()) return;
+        self.sample = if (self.enabled) self.lfsr.sample() * self.env_dev.vol else 0;
+    }
+
+    fn amplitude(self: *const Self) f32 {
+        return (@intToFloat(f32, self.sample) / 7.5) - 1.0;
+    }
+
+    fn isDacEnabled(self: *const Self) bool {
+        return self.envelope.raw & 0xF8 != 0x00;
     }
 };
 
@@ -1011,5 +1118,54 @@ const SquareWave = struct {
         };
 
         return @truncate(u1, result);
+    }
+};
+
+// Linear Feedback Shift Register
+const Lfsr = struct {
+    const Self = @This();
+    const ticks = (1 << 24) / (1 << 22);
+
+    shift: u15,
+    timer: u16,
+
+    sched: *Scheduler,
+
+    pub fn init(sched: *Scheduler) Self {
+        return .{
+            .shift = 0,
+            .timer = 0,
+            .sched = sched,
+        };
+    }
+
+    fn sample(self: *const Self) u1 {
+        return @truncate(u1, ~self.shift);
+    }
+
+    fn updateLength(_: *const Self, fs: *const FrameSequencer, ch4: *Noise, new_cnt: io.NoiseControl) void {
+        if (!fs.lengthIsNext() and !ch4.cnt.length_enable.read() and new_cnt.length_enable.read() and ch4.len_dev.timer != 0) {
+            ch4.len_dev.timer -= 1;
+
+            if (ch4.len_dev.timer == 0 and !new_cnt.trigger.read()) ch4.enabled = false;
+        }
+    }
+
+    fn handleTimerOverflow(self: *Self, poly: io.PolyCounter, late: u64) void {
+        const div = Self.divisor(poly.div_ratio.read());
+        const timer = @as(u64, div << poly.shift.read());
+
+        const tmp = (self.shift & 1) ^ ((self.shift & 2) >> 1);
+        self.shift = (self.shift >> 1) | (tmp << 14);
+
+        if (poly.width.read())
+            self.shift = (self.shift & ~@as(u15, 0x40)) | tmp << 6;
+
+        self.sched.push(.{ .ApuChannel = 3 }, self.sched.now() + timer * ticks - late);
+    }
+
+    fn divisor(code: u3) u16 {
+        if (code == 0) return 8;
+        return @as(u16, code) << 4;
     }
 };
