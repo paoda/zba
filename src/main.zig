@@ -80,6 +80,8 @@ pub fn main() anyerror!void {
     const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_path };
     var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
     defer cpu.deinit();
+
+    cpu.bus.attach(&cpu);
     cpu.fastBoot();
 
     // Initialize SDL Audio

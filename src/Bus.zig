@@ -60,6 +60,10 @@ pub fn deinit(self: Self) void {
     self.ppu.deinit();
 }
 
+pub fn attach(self: *Self, cpu: *Arm7tdmi) void {
+    self.cpu = cpu;
+}
+
 pub fn handleDMATransfers(self: *Self) void {
     while (self.isDmaRunning()) {
         if (self.dma._1.step(self)) continue;

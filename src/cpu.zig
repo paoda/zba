@@ -80,7 +80,7 @@ pub const Arm7tdmi = struct {
     binary_log: bool,
 
     pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
-        var cpu: Arm7tdmi = .{
+        return Self{
             .r = [_]u32{0x00} ** 16,
             .sched = sched,
             .bus = try Bus.init(alloc, sched, paths),
@@ -93,8 +93,6 @@ pub const Arm7tdmi = struct {
             .log_buf = undefined,
             .binary_log = false,
         };
-        cpu.bus.cpu = &cpu;
-        return cpu;
     }
 
     pub fn deinit(self: Self) void {
