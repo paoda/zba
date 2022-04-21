@@ -40,7 +40,7 @@ pub const Apu = struct {
         const apu: Self = .{
             .ch1 = ToneSweep.init(sched),
             .ch2 = Tone.init(sched),
-            .ch3 = Wave.init(),
+            .ch3 = Wave.init(sched),
             .ch4 = Noise.init(),
             .chA = DmaSound(.A).init(),
             .chB = DmaSound(.B).init(),
@@ -61,6 +61,7 @@ pub const Apu = struct {
         sched.push(.SampleAudio, sched.now() + apu.sampleTicks());
         sched.push(.{ .ApuChannel = 0 }, sched.now() + SquareWave.ticks); // Channel 1
         sched.push(.{ .ApuChannel = 1 }, sched.now() + SquareWave.ticks); // Channel 2
+        sched.push(.{ .ApuChannel = 2 }, sched.now() + WaveDevice.ticks); // Channel 2
         sched.push(.FrameSequencer, sched.now() + ((1 << 24) / 512));
 
         return apu;
@@ -68,6 +69,7 @@ pub const Apu = struct {
 
     fn reset(self: *Self) void {
         self.ch1.reset();
+        self.ch2.reset();
         // TODO: Reset the rest of the channels
     }
 
@@ -89,10 +91,12 @@ pub const Apu = struct {
         if (value) {
             self.fs.step = 0; // Reset Frame Sequencer
 
-            // TODO: Reset Duty Position for Ch2 Square
+            // Reset Square Wave Offsets
             self.ch1.square.pos = 0;
+            self.ch2.square.pos = 0;
 
-            // TODO: Reset Channel 3 offset ptr
+            // Reset Wave Device Offsets
+            self.ch3.wave_dev.offset = 0;
         } else {
             self.reset();
         }
@@ -136,8 +140,16 @@ pub const Apu = struct {
         const ch2_left = if (self.psg_cnt.ch2_left.read()) ch2_sample else 0;
         const ch2_right = if (self.psg_cnt.ch2_right.read()) ch2_sample else 0;
 
-        const mixed_left = ch1_left + ch2_left / 2.0;
-        const mixed_right = ch1_right + ch2_right / 2.0;
+        // Sample Channel 3
+        const ch3_sample = self.highPassFilter(self.ch3.amplitude(), self.ch3.enabled);
+        const ch3_left = if (self.psg_cnt.ch3_left.read()) ch3_sample else 0;
+        const ch3_right = if (self.psg_cnt.ch3_right.read()) ch3_sample else 0;
+
+        const mixed_left = ch1_left + ch2_left + ch3_left / 3;
+        const mixed_right = ch1_right + ch2_right + ch3_right / 3;
+
+        // const mixed_left = ch3_left;
+        // const mixed_right = ch3_right;
 
         // Apply NR50 Volume Modifications
         const nr50_left = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) * mixed_left;
@@ -168,10 +180,8 @@ pub const Apu = struct {
         const chB_right = if (self.dma_cnt.chB_right.read()) chB else 0;
 
         // Mix all Channels
-        const left = (chA_left + chB_left + psg_left) / 3;
-        const right = (chA_right + chB_right + psg_right) / 3;
-        // const left = psg_left;
-        // const right = psg_right;
+        const left = (chA_left + chB_left + (psg_left * 0.1)) / 3;
+        const right = (chA_right + chB_right + (psg_right * 0.1)) / 3;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.warn("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
@@ -269,18 +279,18 @@ const ToneSweep = struct {
     freq: io.Frequency,
 
     /// Length Functionality
-    len_dev: Length,
+    len_dev: LengthDevice,
     /// Sweep Functionality
-    sweep_dev: Sweep,
+    sweep_dev: SweepDevice,
     /// Envelope Functionality
-    env_dev: Envelope,
+    env_dev: EnvelopeDevice,
     /// Frequency Timer Functionality
     square: SquareWave,
     enabled: bool,
 
     sample: u8,
 
-    const Sweep = struct {
+    const SweepDevice = struct {
         const This = @This();
 
         timer: u8,
@@ -338,9 +348,9 @@ const ToneSweep = struct {
             .enabled = false,
 
             .square = SquareWave.init(sched),
-            .len_dev = Length.init(),
-            .sweep_dev = Sweep.init(),
-            .env_dev = Envelope.init(),
+            .len_dev = LengthDevice.init(),
+            .sweep_dev = SweepDevice.init(),
+            .env_dev = EnvelopeDevice.init(),
         };
     }
 
@@ -387,7 +397,7 @@ const ToneSweep = struct {
     /// NR11
     pub fn setDuty(self: *Self, value: u8) void {
         self.duty.raw = value;
-        self.len_dev.timer = @truncate(u7, 64 - value);
+        self.len_dev.timer = @intCast(u7, 64 - value);
     }
 
     /// NR12
@@ -460,9 +470,9 @@ const Tone = struct {
     freq: io.Frequency,
 
     /// Length Functionarlity
-    len_dev: Length,
+    len_dev: LengthDevice,
     /// Envelope Functionality
-    env_dev: Envelope,
+    env_dev: EnvelopeDevice,
     /// FrequencyTimer Functionality
     square: SquareWave,
 
@@ -477,8 +487,8 @@ const Tone = struct {
             .enabled = false,
 
             .square = SquareWave.init(sched),
-            .len_dev = Length.init(),
-            .env_dev = Envelope.init(),
+            .len_dev = LengthDevice.init(),
+            .env_dev = EnvelopeDevice.init(),
 
             .sample = 0,
         };
@@ -522,7 +532,7 @@ const Tone = struct {
     /// NR21
     pub fn setDuty(self: *Self, value: u8) void {
         self.duty.raw = value;
-        self.len_dev.timer = @truncate(u7, 64 - value);
+        self.len_dev.timer = @intCast(u7, 64 - value);
     }
 
     /// NR22
@@ -590,19 +600,23 @@ const Wave = struct {
     freq: io.Frequency,
 
     /// Length Functionarlity
-    len_dev: Length,
+    len_dev: LengthDevice,
+    wave_dev: WaveDevice,
 
     enabled: bool,
+    sample: u8,
 
-    fn init() Self {
+    fn init(sched: *Scheduler) Self {
         return .{
             .select = .{ .raw = 0 },
             .vol = .{ .raw = 0 },
             .freq = .{ .raw = 0 },
             .length = 0,
 
-            .len_dev = Length.init(),
+            .len_dev = LengthDevice.init(),
+            .wave_dev = WaveDevice.init(sched),
             .enabled = false,
+            .sample = 0,
         };
     }
 
@@ -610,12 +624,72 @@ const Wave = struct {
         self.len_dev.tick(self.freq, &self.enabled);
     }
 
+    /// NR30
+    pub fn setWaveSelect(self: *Self, value: u8) void {
+        self.select.raw = value;
+        if (!self.select.enabled.read()) self.enabled = false;
+    }
+
+    /// NR31, NR32
+    pub fn setSoundCntH(self: *Self, value: u16) void {
+        self.setLength(@truncate(u8, value));
+        self.vol.raw = (@truncate(u8, value >> 8));
+    }
+
+    /// NR31
+    pub fn setLength(self: *Self, len: u8) void {
+        self.length = len;
+        self.len_dev.timer = 256 - @as(u9, len);
+    }
+
+    /// NR33, NR34
+    pub fn setFreq(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.setFreqLow(@truncate(u8, value));
+        self.setFreqHigh(fs, @truncate(u8, value >> 8));
+    }
+
+    /// NR33
     pub fn setFreqLow(self: *Self, byte: u8) void {
         self.freq.raw = (self.freq.raw & 0xFF00) | byte;
     }
 
-    pub fn setFreqHigh(self: *Self, byte: u8) void {
-        self.freq.raw = @as(u16, byte) << 8 | (self.freq.raw & 0xFF);
+    /// NR34
+    pub fn setFreqHigh(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+        var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
+
+        if (new.trigger.read()) {
+            self.enabled = true; // FIXME: Same as ch1, ch2, is this necessary?
+
+            if (self.len_dev.timer == 0) {
+                self.len_dev.timer = 256;
+
+                // We unset this on the old frequency because of the obscure
+                // behaviour outside of this if statement's scope
+                // FIXME: This wasn't in my ch3 GB implementation
+                self.freq.length_enable.write(false);
+            }
+
+            // Update The Frequency Timer
+            self.wave_dev.reloadTimer(self.freq.frequency.read());
+            self.wave_dev.offset = 0;
+
+            self.enabled = self.select.enabled.read();
+        }
+
+        self.wave_dev.updateLength(fs, self, new);
+        self.freq = new;
+    }
+
+    pub fn channelTimerOverflow(self: *Self, late: u64) void {
+        self.wave_dev.handleTimerOverflow(self.freq, self.select, late);
+
+        self.sample = 0;
+        if (!self.select.enabled.read()) return;
+        self.sample = if (self.enabled) self.wave_dev.sample(self.select) >> self.wave_dev.shift(self.vol) else 0;
+    }
+
+    fn amplitude(self: *const Self) f32 {
+        return (@intToFloat(f32, self.sample) / 7.5) - 1.0;
     }
 };
 
@@ -633,10 +707,10 @@ const Noise = struct {
     cnt: io.NoiseControl,
 
     /// Length Functionarlity
-    len_dev: Length,
+    len_dev: LengthDevice,
 
     /// Envelope Functionality
-    env_dev: Envelope,
+    env_dev: EnvelopeDevice,
 
     enabled: bool,
 
@@ -648,8 +722,8 @@ const Noise = struct {
             .cnt = .{ .raw = 0 },
             .enabled = false,
 
-            .len_dev = Length.init(),
-            .env_dev = Envelope.init(),
+            .len_dev = LengthDevice.init(),
+            .env_dev = EnvelopeDevice.init(),
         };
     }
 
@@ -719,10 +793,10 @@ const FrameSequencer = struct {
     }
 };
 
-const Length = struct {
+const LengthDevice = struct {
     const Self = @This();
 
-    timer: u7,
+    timer: u9,
 
     pub fn init() Self {
         return .{ .timer = 0 };
@@ -751,7 +825,7 @@ const Length = struct {
     }
 };
 
-const Envelope = struct {
+const EnvelopeDevice = struct {
     const Self = @This();
 
     /// Period Timer
@@ -776,6 +850,96 @@ const Envelope = struct {
                     if (self.vol > 0x0) self.vol -= 1;
                 }
             }
+        }
+    }
+};
+
+const WaveDevice = struct {
+    const Self = @This();
+    const wave_len = 0x20;
+    const ticks = (1 << 24) / (1 << 22);
+
+    buf: [wave_len]u8,
+    timer: u16,
+    offset: u12,
+
+    sched: *Scheduler,
+
+    pub fn init(sched: *Scheduler) Self {
+        return .{
+            .buf = [_]u8{0x00} ** wave_len,
+            .timer = 0,
+            .offset = 0,
+            .sched = sched,
+        };
+    }
+
+    fn reloadTimer(self: *Self, value: u11) void {
+        self.sched.removeScheduledEvent(.{ .ApuChannel = 2 });
+        const timer = (2048 - @as(u64, value)) * 4;
+        self.timer = @truncate(u11, timer);
+
+        self.sched.push(.{ .ApuChannel = 2 }, self.sched.now() + timer * ticks);
+    }
+
+    fn handleTimerOverflow(self: *Self, cnt_freq: io.Frequency, cnt_sel: io.WaveSelect, late: u64) void {
+        const timer = (2048 - @as(u64, cnt_freq.frequency.read())) * 2;
+
+        self.timer = @truncate(u12, timer);
+
+        if (cnt_sel.dimension.read()) {
+            self.offset = (self.offset + 1) % 0x40; // 0x20 bytes (both banks), which contain 2 samples each
+        } else {
+            self.offset = (self.offset + 1) % 0x20; // 0x10 bytes, which contain 2 samples each
+        }
+
+        self.sched.push(.{ .ApuChannel = 2 }, self.sched.now() + timer * ticks - late);
+    }
+
+    fn sample(self: *const Self, cnt: io.WaveSelect) u4 {
+        const base = if (cnt.bank.read()) @as(u32, 0x10) else 0;
+
+        const value = self.buf[base + self.offset / 2];
+        return if (self.offset & 1 == 0) @truncate(u4, value >> 4) else @truncate(u4, value);
+    }
+
+    fn shift(_: *const Self, cnt: io.WaveVolume) u2 {
+        return switch (cnt.kind.read()) {
+            0b00 => 3, // Mute / Zero
+            0b01 => 0, // 100% Volume
+            0b10 => 1, // 50% Volume
+            0b11 => 2, // 25% Volume
+        };
+    }
+
+    /// Obscure NRx4 Behaviour
+    fn updateLength(_: *Self, fs: *const FrameSequencer, ch3: *Wave, new_cnt: io.Frequency) void {
+        if (!fs.lengthIsNext() and !ch3.freq.length_enable.read() and new_cnt.length_enable.read() and ch3.len_dev.timer != 0) {
+            ch3.len_dev.timer -= 1;
+
+            if (ch3.len_dev.timer == 0 and !new_cnt.trigger.read()) ch3.enabled = false;
+        }
+    }
+
+    pub fn write(self: *Self, comptime T: type, cnt: io.WaveSelect, addr: u32, value: T) void {
+        // TODO: Handle writes when Channel 3 is disabled
+        const base = if (!cnt.bank.read()) @as(u32, 0x10) else 0; // Write to the Opposite Bank in Use
+
+        switch (T) {
+            u32 => {
+                self.buf[base + addr - 0x0400_0090 + 3] = @truncate(u8, value >> 24);
+                self.buf[base + addr - 0x0400_0090 + 2] = @truncate(u8, value >> 16);
+                self.buf[base + addr - 0x0400_0090 + 1] = @truncate(u8, value >> 8);
+                self.buf[base + addr - 0x0400_0090] = @truncate(u8, value);
+            },
+            u16 => {
+                self.buf[base + addr - 0x0400_0090 + 1] = @truncate(u8, value >> 8);
+                self.buf[base + addr - 0x0400_0090] = @truncate(u8, value);
+            },
+            u8 => {
+                self.buf[base + addr - 0x0400_0090] = value;
+            },
+            else => log.err("Unhandled {} write to Ch3 Wave RAM", .{T}),
         }
     }
 };

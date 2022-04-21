@@ -156,6 +156,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             },
             0x0400_00A0 => bus.apu.chA.push(value),
             0x0400_00A4 => bus.apu.chB.push(value),
+            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // DMA Transfers
             0x0400_00B0 => bus.dma._0.writeSad(value),
@@ -237,11 +238,14 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0064 => bus.apu.ch1.setFreq(&bus.apu.fs, value),
             0x0400_0068 => bus.apu.ch2.setSoundCntH(value), // Channel 2
             0x0400_006C => bus.apu.ch2.setFreq(&bus.apu.fs, value),
+            0x0400_0070 => bus.apu.ch3.setWaveSelect(@truncate(u8, value)), // Channel 3
+            0x0400_0072 => bus.apu.ch3.setSoundCntH(value),
+            0x0400_0074 => bus.apu.ch3.setFreq(&bus.apu.fs, value),
             0x0400_0080 => bus.apu.psg_cnt.raw = value,
             0x0400_0082 => bus.apu.setDmaCnt(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
             0x0400_0088 => bus.apu.bias.raw = value,
-            0x0400_0090...0x0400_009F => log.warn("Wrote 0x{X:0>4} to WAVE_RAM", .{value}),
+            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // Dma Transfers
             0x0400_00B0 => bus.dma._0.writeSad(bus.dma._0.sad & 0xFFFF_0000 | value),
@@ -324,11 +328,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0069 => bus.apu.ch2.envelope.raw = value,
             0x0400_006C => bus.apu.ch2.setFreqLow(value),
             0x0400_006D => bus.apu.ch2.setFreqHigh(&bus.apu.fs, value),
-            0x0400_0070 => bus.apu.ch3.select.raw = value,
-            0x0400_0072 => bus.apu.ch3.length = value,
+            0x0400_0070 => bus.apu.ch3.setWaveSelect(value), // Channel 3
+            0x0400_0072 => bus.apu.ch3.setLength(value),
             0x0400_0073 => bus.apu.ch3.vol.raw = value,
             0x0400_0074 => bus.apu.ch3.setFreqLow(value),
-            0x0400_0075 => bus.apu.ch3.setFreqHigh(value),
+            0x0400_0075 => bus.apu.ch3.setFreqHigh(&bus.apu.fs, value),
             0x0400_0078 => bus.apu.ch4.len = @truncate(u6, value),
             0x0400_0079 => bus.apu.ch4.envelope.raw = value,
             0x0400_007C => bus.apu.ch4.poly.raw = value,
@@ -337,6 +341,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0081 => bus.apu.setSoundCntLHigh(value),
             0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
             0x0400_0089 => bus.apu.setBiasHigh(value),
+            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // Serial Communication 1
             0x0400_0128 => log.warn("Wrote 0x{X:0>2} to SIOCNT (low)", .{value}),

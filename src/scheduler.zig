@@ -55,6 +55,7 @@ pub const Scheduler = struct {
                     switch (id) {
                         0 => cpu.bus.apu.ch1.channelTimerOverflow(late),
                         1 => cpu.bus.apu.ch2.channelTimerOverflow(late),
+                        2 => cpu.bus.apu.ch3.channelTimerOverflow(late),
                         else => {},
                     }
                 },
