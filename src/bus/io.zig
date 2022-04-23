@@ -57,6 +57,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0108 => @as(T, bus.tim._2.cnt.raw) << 16 | bus.tim._2.counter(),
             0x0400_010C => @as(T, bus.tim._3.cnt.raw) << 16 | bus.tim._3.counter(),
 
+            // Keypad Input
+            0x0400_0130 => unimplementedRead("Read {} from KEYINPUT", .{T}),
+
             // Interrupts
             0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
@@ -92,15 +95,18 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_010E => bus.tim._3.cnt.raw,
 
             // Serial Communication 1
-            0x0400_0128 => unimplementedRead("Read halfword from SIOCNT", .{}),
+            0x0400_0128 => unimplementedRead("Read {} from SIOCNT", .{T}),
 
             // Keypad Input
             0x0400_0130 => bus.io.keyinput.raw,
 
+            // Serial Communication 2
+            0x0400_0134 => unimplementedRead("Read {} from RCNT", .{T}),
+
             // Interrupts
             0x0400_0200 => bus.io.ie.raw,
             0x0400_0202 => bus.io.irq.raw,
-            0x0400_0204 => unimplementedRead("Read halfword from WAITCNT", .{}),
+            0x0400_0204 => unimplementedRead("Read {} from WAITCNT", .{T}),
             0x0400_0208 => @boolToInt(bus.io.ime),
             else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
         },
@@ -121,7 +127,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0089 => @truncate(T, bus.apu.bias.raw >> 8),
 
             // Serial Communication 1
-            0x0400_0128 => unimplementedRead("Read (low) byte from SIOCNT", .{}),
+            0x0400_0128 => unimplementedRead("Read {} from SIOCNT_L", .{T}),
 
             // Interrupts
             0x0400_0200 => @truncate(T, bus.io.ie.raw),
@@ -147,15 +153,31 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0014 => bus.ppu.setBgOffsets(1, value),
             0x0400_0018 => bus.ppu.setBgOffsets(2, value),
             0x0400_001C => bus.ppu.setBgOffsets(3, value),
+            0x0400_0020 => log.debug("Wrote 0x{X:0>8} to BG2PA and BG2PB", .{value}),
+            0x0400_0024 => log.debug("Wrote 0x{X:0>8} to BG2PC and BG2PD", .{value}),
+            0x0400_0028 => log.debug("Wrote 0x{X:0>8} to BG2X", .{value}),
+            0x0400_002C => log.debug("Wrote 0x{X:0>8} to BG2Y", .{value}),
+            0x0400_0030 => log.debug("Wrote 0x{X:0>8} to BG3PA and BG3PB", .{value}),
+            0x0400_0034 => log.debug("Wrote 0x{X:0>8} to BG3PC and BG3PD", .{value}),
+            0x0400_0038 => log.debug("Wrote 0x{X:0>8} to BG3X", .{value}),
+            0x0400_003C => log.debug("Wrote 0x{X:0>8} to BG3Y", .{value}),
+            0x0400_0040 => log.debug("Wrote 0x{X:0>8} to WIN0H and WIN1H", .{value}),
+            0x0400_0044 => log.debug("Wrote 0x{X:0>8} to WIN0V and WIN1V", .{value}),
+            0x0400_0048 => log.debug("Wrote 0x{X:0>8} to WININ and WINOUT", .{value}),
+            0x0400_004C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
+            0x0400_0050 => log.debug("Wrote 0x{X:0>8} to BLDCNT and BLDALPHA", .{value}),
+            0x0400_0054 => log.debug("Wrote 0x{X:0>8} to BLDY", .{value}),
+            0x0400_0058...0x0400_005C => {}, // Unused
 
             // Sound
             0x0400_0080 => {
                 bus.apu.psg_cnt.raw = @truncate(u16, value);
                 bus.apu.dma_cnt.raw = @truncate(u16, value >> 16);
             },
+            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
             0x0400_00A0 => bus.apu.chA.push(value),
             0x0400_00A4 => bus.apu.chB.push(value),
-            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
+            0x0400_00A8, 0x0400_00AC => {}, // Unused
 
             // DMA Transfers
             0x0400_00B0 => bus.dma._0.writeSad(value),
@@ -170,20 +192,36 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00D4 => bus.dma._3.writeSad(value),
             0x0400_00D8 => bus.dma._3.writeDad(value),
             0x0400_00DC => bus.dma._3.writeCnt(value),
+            0x0400_00E0...0x0400_00FC => {}, // Unused
 
             // Timers
             0x0400_0100 => bus.tim._0.writeCnt(value),
             0x0400_0104 => bus.tim._1.writeCnt(value),
             0x0400_0108 => bus.tim._2.writeCnt(value),
             0x0400_010C => bus.tim._3.writeCnt(value),
+            0x0400_0110...0x0400_011C => {}, // Unused
 
             // Serial Communication 1
-            0x0400_0120 => log.debug("Wrote 0x{X:0>8} to SIODATA32", .{value}),
+            0x0400_0120 => log.debug("Wrote 0x{X:0>8} to SIODATA32/(SIOMULTI0 and SIOMULTI1)", .{value}),
+            0x0400_0124 => log.debug("Wrote 0x{X:0>8} to SIOMULTI2 and SIOMULTI3", .{value}),
+            0x0400_0128 => log.debug("Wrote 0x{X:0>8} to SIOCNT and SIOMLT_SEND/SIODATA8", .{value}),
+            0x0400_012C => {}, // Unused
+
+            // Keypad Input
+            0x0400_0130 => log.debug("Wrote 0x{X:0>8} to KEYINPUT and KEYCNT", .{value}),
+
+            // Serial Communication 2
+            0x0400_0140 => log.debug("Wrote 0x{X:0>8} to JOYCNT", .{value}),
+            0x0400_0150 => log.debug("Wrote 0x{X:0>8} to JOY_RECV", .{value}),
+            0x0400_0154 => log.debug("Wrote 0x{X:0>8} to JOY_TRANS", .{value}),
+            0x0400_0158 => log.debug("Wrote 0x{X:0>8} to JOYSTAT (?)", .{value}),
+            0x0400_0144...0x0400_014C, 0x0400_015C => {}, // Unused
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
             0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
+            0x0400_020C...0x0400_021C => {}, // Unused
             else => undefinedWrite("Tried to write {} 0x{X:0>8} to 0x{X:0>8}", .{ T, value, address }),
         },
         u16 => switch (address) {
@@ -290,7 +328,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_010A => bus.tim._2.writeCntHigh(value),
             0x0400_010C => bus.tim._3.setReload(value),
             0x0400_010E => bus.tim._3.writeCntHigh(value),
-            0x0400_0110 => {}, // Not Used
+            0x0400_0114 => {}, // TODO: Gyakuten Saiban writes 0x8000 to 0x0400_0114
+            0x0400_0110 => {}, // Not Used,
 
             // Serial Communication 1
             0x0400_0120 => log.debug("Wrote 0x{X:0>4} to SIOMULTI0", .{value}),
@@ -322,6 +361,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Display
             0x0400_0004 => bus.ppu.dispstat.raw = (bus.ppu.dispstat.raw & 0xFF00) | value,
             0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, value) << 8) | (bus.ppu.dispstat.raw & 0xFF),
+            0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
 
             // Sound
             0x0400_0060 => bus.apu.ch1.sweep.raw = value, // Channel 1
@@ -353,14 +393,17 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // Serial Communication 1
-            0x0400_0128 => log.debug("Wrote 0x{X:0>2} to SIOCNT (low)", .{value}),
+            0x0400_0120 => log.debug("Wrote 0x{X:0>2} to SIODATA32_L_L", .{value}),
+            0x0400_0128 => log.debug("Wrote 0x{X:0>2} to SIOCNT_L", .{value}),
 
             // Serial Communication 2
-            0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT (low)", .{value}),
+            0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT_L", .{value}),
 
             // Interrupts
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
+
+            0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),
             else => undefinedWrite("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
         },
         else => @compileError("I/O: Unsupported write width"),
