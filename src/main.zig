@@ -16,7 +16,7 @@ const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
 const File = std.fs.File;
 
-const window_scale = 3;
+const window_scale = 4;
 const gba_width = @import("ppu.zig").width;
 const gba_height = @import("ppu.zig").height;
 const framebuf_pitch = @import("ppu.zig").framebuf_pitch;
