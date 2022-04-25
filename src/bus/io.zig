@@ -124,6 +124,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0079 => bus.apu.ch4.envelope.raw,
             0x0400_007C => bus.apu.ch4.poly.raw,
             0x0400_0081 => @truncate(T, bus.apu.psg_cnt.raw >> 8),
+            0x0400_0084 => bus.apu.soundCntX(),
             0x0400_0089 => @truncate(T, bus.apu.bias.raw >> 8),
 
             // Serial Communication 1

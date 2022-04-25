@@ -105,13 +105,13 @@ pub const Apu = struct {
     }
 
     /// NR52
-    pub fn soundCntX(self: *const Self) u32 {
-        const apu_enable = @boolToInt(self.cnt.apu_enable.read());
+    pub fn soundCntX(self: *const Self) u8 {
+        const apu_enable: u8 = @boolToInt(self.cnt.apu_enable.read());
 
-        const ch1_enable = @boolToInt(self.ch1.enabled);
-        const ch2_enable = @boolToInt(self.ch2.enabled);
-        const ch3_enable = @boolToInt(self.ch3.enabled);
-        const ch4_enable = @boolToInt(self.ch4.enabled);
+        const ch1_enable: u8 = @boolToInt(self.ch1.enabled);
+        const ch2_enable: u8 = @boolToInt(self.ch2.enabled);
+        const ch3_enable: u8 = @boolToInt(self.ch3.enabled);
+        const ch4_enable: u8 = @boolToInt(self.ch4.enabled);
 
         return apu_enable << 7 | ch4_enable << 3 | ch3_enable << 2 | ch2_enable << 1 | ch1_enable;
     }
