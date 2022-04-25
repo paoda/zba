@@ -4,6 +4,7 @@ const log = std.log.scoped(.Backup);
 
 const correctTitle = @import("../util.zig").correctTitle;
 const safeTitle = @import("../util.zig").safeTitle;
+const intToBytes = @import("../util.zig").intToBytes;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -23,8 +24,8 @@ pub const Backup = struct {
     title: [12]u8,
     save_path: ?[]const u8,
 
-    // TODO: Implement EEPROM
     flash: Flash,
+    eeprom: Eeprom,
 
     pub fn init(alloc: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
         log.info("Kind: {}", .{kind});
@@ -33,8 +34,7 @@ pub const Backup = struct {
             .Sram => 0x8000, // 32K
             .Flash => 0x10000, // 64K
             .Flash1M => 0x20000, // 128K
-            .Eeprom => 0x2000, // FIXME: We assume 8K here
-            .None => 0,
+            .None, .Eeprom => 0, // EEPROM is handled upon first Read Request to it
         };
 
         const buf = try alloc.alloc(u8, buf_size);
@@ -47,6 +47,7 @@ pub const Backup = struct {
             .title = title,
             .save_path = path,
             .flash = Flash.init(),
+            .eeprom = Eeprom.init(alloc),
         };
 
         if (backup.save_path) |p| backup.loadSaveFromDisk(p) catch |e| log.err("Failed to load save: {}", .{e});
@@ -86,9 +87,20 @@ pub const Backup = struct {
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
 
-                log.debug("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
+                log.err("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
             },
-            else => return SaveError.UnsupportedBackupKind,
+            .Eeprom => {
+                if (file_buf.len == 0x200 or file_buf.len == 0x2000) {
+                    self.eeprom.kind = if (file_buf.len == 0x200) .Small else .Large;
+
+                    self.buf = try self.alloc.alloc(u8, file_buf.len);
+                    std.mem.copy(u8, self.buf, file_buf);
+                    return log.info("Loaded Save from {s}", .{file_path});
+                }
+
+                log.err("EEPROM can either be 0x200 bytes or 0x2000 byes, but {s} was {X:} bytes", .{ file_path, file_buf.len, });
+            },
+            .None => return SaveError.UnsupportedBackupKind,
         }
     }
 
@@ -109,7 +121,7 @@ pub const Backup = struct {
         defer self.alloc.free(file_path);
 
         switch (self.kind) {
-            .Sram, .Flash, .Flash1M => {
+            .Sram, .Flash, .Flash1M, .Eeprom => {
                 const file = try std.fs.createFileAbsolute(file_path, .{});
                 defer file.close();
 
@@ -142,9 +154,8 @@ pub const Backup = struct {
 
                 return self.flash.read(self.buf, addr);
             },
-            .Eeprom => return self.buf[addr],
             .Sram => return self.buf[addr & 0x7FFF], // 32K SRAM chip is mirrored
-            .None => return 0xFF,
+            .None, .Eeprom => return 0xFF,
         }
     }
 
@@ -175,9 +186,8 @@ pub const Backup = struct {
                     else => {},
                 }
             },
-            .Eeprom => self.buf[addr] = byte,
             .Sram => self.buf[addr & 0x7FFF] = byte,
-            .None => {},
+            .None, .Eeprom => {},
         }
     }
 };
@@ -274,4 +284,268 @@ const FlashState = enum {
     Ready,
     Set,
     Command,
+};
+
+const Eeprom = struct {
+    const Self = @This();
+
+    addr: u14,
+
+    kind: Kind,
+    state: State,
+    writer: Writer,
+    reader: Reader,
+
+    alloc: Allocator,
+
+    const Kind = enum {
+        Unknown,
+        Small, // 512B
+        Large, // 8KB
+    };
+
+    const State = enum {
+        Ready,
+        Read,
+        Write,
+        WriteTransfer,
+        RequestEnd,
+    };
+
+    fn init(alloc: Allocator) Self {
+        return .{
+            .kind = .Unknown,
+            .state = .Ready,
+            .writer = Writer.init(),
+            .reader = Reader.init(),
+            .addr = 0,
+            .alloc = alloc,
+        };
+    }
+
+    pub fn read(self: *const Self) u1 {
+        // Here I throw away the const qualifier which is bad and dumb but here's why.
+        // This is one of the few (as of when I write this, **only**) places that mutate
+        // some value upon access. Before this I've been able to have all read-related functions
+        // present a *const Self parameter with no issues.
+        //
+        // I don't think it's worth throwing away all the good that *const Self brings across the entire
+        // memory bus because reading from the EEPROM increments an internal counter which isn't even
+        // visible to neither the cartridge nor any other component of the emulator.
+        //
+        // By throwing away const, we can increment self.read_proc.i which has a range of 0 -> 67. This is
+        // a small enough scope (and a well defined one at that) so that this transgression isn't the worst, I think.
+        const self_mut = @intToPtr(*Self, @ptrToInt(self));
+        return self_mut.reader.read();
+    }
+
+    pub fn write(self: *Self, word_count: u16, buf: *[]u8, bit: u1) void {
+        if (self.guessKind(word_count)) |found| {
+            log.info("EEPROM Kind: {}", .{found});
+            self.kind = found;
+
+            // buf.len will not equal zero when a save file was found and loaded.
+            // Right now, we assume that the save file is of the correct size which
+            // isn't necessarily true, since we can't trust anything a user can influence
+            // TODO: use ?[]u8 instead of a 0-sized slice?
+            if (buf.len == 0) {
+                const len: usize = switch (found) {
+                    .Small => 0x200,
+                    .Large => 0x2000,
+                    else => unreachable,
+                };
+
+                buf.* = self.alloc.alloc(u8, len) catch |e| {
+                    log.err("Failed to resize EEPROM buf to {} bytes", .{len});
+                    std.debug.panic("EEPROM entered irrecoverable state {}", .{e});
+                };
+                std.mem.set(u8, buf.*, 0xFF);
+            }
+        }
+
+        if (self.state == .RequestEnd) {
+            // std.debug.assert(bit == 0); FIXME: This invariant is violated
+            self.state = .Ready;
+            return;
+        }
+
+        switch (self.state) {
+            .Ready => self.writer.requestWrite(bit),
+            .Read, .Write => self.writer.addressWrite(self.kind, bit),
+            .WriteTransfer => self.writer.dataWrite(bit),
+            .RequestEnd => unreachable, // We return early just above this block
+        }
+
+        self.tick(buf.*);
+    }
+
+    fn guessKind(self: *const Self, word_count: u16) ?Kind {
+        if (self.kind != .Unknown or self.state != .Read) return null;
+
+        return switch (word_count) {
+            17 => .Large,
+            9 => .Small,
+            else => blk: {
+                log.err("Unexpected length of DMA3 Transfer upon initial EEPROM read: {}", .{word_count});
+                break :blk null;
+            },
+        };
+    }
+
+    fn tick(self: *Self, buf: []u8) void {
+        switch (self.state) {
+            .Ready => {
+                if (self.writer.len() == 2) {
+                    const req = @intCast(u2, self.writer.finish());
+                    switch (req) {
+                        0b11 => self.state = .Read,
+                        0b10 => self.state = .Write,
+                        else => log.err("Unknown EEPROM Request 0b{b:0>2}", .{req}),
+                    }
+                }
+            },
+            .Read => {
+                switch (self.kind) {
+                    .Large => {
+                        if (self.writer.len() == 14) {
+                            const addr = @intCast(u10, self.writer.finish());
+
+                            // TODO: Bit Verbose eh?
+                            const value_buf = buf[addr..][0..8];
+                            const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
+
+                            self.reader.configure(value);
+                            self.state = .RequestEnd;
+                        }
+                    },
+                    .Small => {
+                        if (self.writer.len() == 6) {
+                            const addr = @intCast(u6, self.writer.finish());
+
+                            // TODO: Bit Verbose eh?, also duplicate code
+                            const value_buf = buf[addr..][0..8];
+                            const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
+
+                            self.reader.configure(value);
+                            self.state = .RequestEnd;
+                        }
+                    },
+                    else => log.err("Unable to calculate EEPROM read address. EEPROM size UNKNOWN", .{}),
+                }
+            },
+            .Write => {
+                switch (self.kind) {
+                    .Large => {
+                        if (self.writer.len() == 14) {
+                            self.addr = @intCast(u10, self.writer.finish());
+                            self.state = .WriteTransfer;
+                        }
+                    },
+                    .Small => {
+                        if (self.writer.len() == 6) {
+                            self.addr = @intCast(u6, self.writer.finish());
+                            self.state = .WriteTransfer;
+                        }
+                    },
+                    else => log.err("Unable to calculate EEPROM write address. EEPROM size UNKNOWN", .{}),
+                }
+            },
+            .WriteTransfer => {
+                if (self.writer.len() == 64) {
+                    std.mem.copy(u8, buf[self.addr..][0..8], &intToBytes(u64, self.writer.finish()));
+                    self.state = .RequestEnd;
+                }
+            },
+            .RequestEnd => unreachable, // We return early in write() if state is .RequestEnd
+        }
+    }
+
+    const Reader = struct {
+        const This = @This();
+
+        data: u64,
+        i: u8,
+        enabled: bool,
+
+        fn init() This {
+            return .{
+                .data = 0,
+                .i = 0,
+                .enabled = false,
+            };
+        }
+
+        fn configure(self: *This, value: u64) void {
+            self.data = value;
+            self.i = 0;
+            self.enabled = true;
+        }
+
+        fn read(self: *This) u1 {
+            if (!self.enabled) return 1;
+
+            const bit = if (self.i < 4) blk: {
+                break :blk 0;
+            } else blk: {
+                const idx = @intCast(u6, 63 - (self.i - 4));
+                break :blk @truncate(u1, self.data >> idx);
+            };
+
+            self.i = (self.i + 1) % (64 + 4);
+            if (self.i == 0) self.enabled = false;
+
+            return bit;
+        }
+    };
+
+    const Writer = struct {
+        const This = @This();
+
+        data: u64,
+        i: u8,
+
+        fn init() This {
+            return .{ .data = 0, .i = 0 };
+        }
+
+        fn requestWrite(self: *This, bit: u1) void {
+            const idx = @intCast(u1, 1 - self.i);
+            self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
+            self.i += 1;
+        }
+
+        fn addressWrite(self: *This, kind: Eeprom.Kind, bit: u1) void {
+            if (kind == .Unknown) return;
+
+            const size: u4 = switch (kind) {
+                .Large => 13,
+                .Small => 5,
+                .Unknown => unreachable,
+            };
+
+            const idx = @intCast(u4, size - self.i);
+            self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
+            self.i += 1;
+        }
+
+        fn dataWrite(self: *This, bit: u1) void {
+            const idx = @intCast(u6, 63 - self.i);
+            self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
+            self.i += 1;
+        }
+
+        fn len(self: *const This) u8 {
+            return self.i;
+        }
+
+        fn finish(self: *This) u64 {
+            defer self.reset();
+            return self.data;
+        }
+
+        fn reset(self: *This) void {
+            self.i = 0;
+            self.data = 0;
+        }
+    };
 };

@@ -173,7 +173,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
         0x07 => self.ppu.oam.write(T, align_addr, value),
 
         // External Memory (Game Pak)
-        0x08...0x0D => {}, // EEPROM
+        0x08...0x0D => self.pak.write(T, self.dma._3.word_count, align_addr, value),
         0x0E...0x0F => {
             const rotate_by = switch (T) {
                 u32 => address & 3,

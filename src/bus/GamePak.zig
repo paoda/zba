@@ -56,6 +56,10 @@ fn lookupMaker(slice: *const [2]u8) ?[]const u8 {
     };
 }
 
+inline fn isLarge(self: *const Self) bool {
+    return self.buf.len > 0x100_0000;
+}
+
 pub fn deinit(self: Self) void {
     self.alloc.free(self.buf);
     self.backup.deinit();
@@ -64,12 +68,52 @@ pub fn deinit(self: Self) void {
 pub fn read(self: *const Self, comptime T: type, address: u32) T {
     const addr = address & 0x1FF_FFFF;
 
+    if (self.backup.kind == .Eeprom) {
+        if (self.isLarge()) {
+            // Addresses 0x1FF_FF00 to 0x1FF_FFFF are reserved from EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Large ROM (Size is greater than 16MB)
+            if (addr > 0x1FF_FEFF)
+                return self.backup.eeprom.read();
+        } else {
+            // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Small ROM (less than 16MB)
+            if (@truncate(u8, address >> 24) == 0x0D)
+                return self.backup.eeprom.read();
+        }
+    }
+
     return switch (T) {
         u32 => (@as(T, self.get(addr + 3)) << 24) | (@as(T, self.get(addr + 2)) << 16) | (@as(T, self.get(addr + 1)) << 8) | (@as(T, self.get(addr))),
         u16 => (@as(T, self.get(addr + 1)) << 8) | @as(T, self.get(addr)),
         u8 => self.get(addr),
         else => @compileError("GamePak: Unsupported read width"),
     };
+}
+
+pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value: T) void {
+    const addr = address & 0x1FF_FFFF;
+
+    if (self.backup.kind == .Eeprom) {
+        const bit = @truncate(u1, value);
+
+        if (self.isLarge()) {
+            // Addresses 0x1FF_FF00 to 0x1FF_FFFF are reserved from EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Large ROM (Size is greater than 16MB)
+            if (addr > 0x1FF_FEFF)
+                return self.backup.eeprom.write(word_count, &self.backup.buf, bit);
+        } else {
+            // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Small ROM (less than 16MB)
+            if (@truncate(u8, address >> 24) == 0x0D)
+                return self.backup.eeprom.write(word_count, &self.backup.buf, bit);
+        }
+    }
+
+    log.err("Wrote {} {X:} to 0x{X:0>8}", .{ T, value, address });
 }
 
 fn get(self: *const Self, i: u32) u8 {
