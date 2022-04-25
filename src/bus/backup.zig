@@ -364,7 +364,7 @@ const Eeprom = struct {
         }
 
         if (self.state == .RequestEnd) {
-            // std.debug.assert(bit == 0); FIXME: This invariant is violated
+            if (bit != 0) log.err("Request did not end in 0u1. EEPROM parsing invariant violated", .{});
             self.state = .Ready;
             return;
         }
@@ -411,7 +411,7 @@ const Eeprom = struct {
                             const addr = @intCast(u10, self.writer.finish());
 
                             // TODO: Bit Verbose eh?
-                            const value_buf = buf[addr..][0..8];
+                            const value_buf = buf[@as(u13, addr) * 8..][0..8];
                             const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
 
                             self.reader.configure(value);
@@ -423,7 +423,7 @@ const Eeprom = struct {
                             const addr = @intCast(u6, self.writer.finish());
 
                             // TODO: Bit Verbose eh?, also duplicate code
-                            const value_buf = buf[addr..][0..8];
+                            const value_buf = buf[@as(u13, addr) * 8..][0..8];
                             const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
 
                             self.reader.configure(value);
@@ -452,7 +452,7 @@ const Eeprom = struct {
             },
             .WriteTransfer => {
                 if (self.writer.len() == 64) {
-                    std.mem.copy(u8, buf[self.addr..][0..8], &intToBytes(u64, self.writer.finish()));
+                    std.mem.copy(u8, buf[self.addr * 8..][0..8], &intToBytes(u64, self.writer.finish()));
                     self.state = .RequestEnd;
                 }
             },
