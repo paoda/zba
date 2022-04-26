@@ -2,13 +2,30 @@
 An in-progress Gameboy Advance Emulator written in Zig ⚡!
 
 ## Tests 
-- [jsmolka GBA Test Collection](https://github.com/jsmolka/gba-tests)
+- [ ] [jsmolka GBA Test Collection](https://github.com/jsmolka/gba-tests)
     - [x] `arm.gba` and `thumb.gba`
     - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
     - [x] `hello.gba`, `shades.gba`, and `stripes.gba`
     - [x] `memory.gba`
     - [ ] `bios.gba`
     - [ ] `nes.gba`
+- [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
+    - [x] `eeprom-test`
+    - [ ] `flash-test`
+    - [x] `midikey2freq`
+    - [ ] `swi-tests-random`
+- [ ] [destoer's GBA Tests](https://github.com/destoer/gba_tests)
+    - [ ] `cond_invalid.gba`
+    - [x] `dma_priority.gba`
+    - [x] `hello_world.gba`
+    - [x] `if_ack.gba`
+    - [ ] `line_timing.gba`
+    - [ ] `lyc_midline.gba`
+    - [ ] `window_midframe.gba`
+- [ ] [ladystarbreeze's GBA Test Collection]
+    - [x] `retAddr.gba`
+    - [x] `helloWorld.gba`
+    - [ ] `helloAudio.gba`
 - [x] [`armwrestler-gba-fixed.gba`](https://github.com/destoer/armwrestler-gba-fixed)
 - [x] [FuzzARM](https://github.com/DenSinH/FuzzARM)
 
