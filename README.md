@@ -19,7 +19,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [0.10.0-dev.1741+d2681d253](https://github.com/ziglang/zig/tree/d2681d253)
+Most recently built on Zig [0.10.0-dev.1933+5f2d0d414](https://github.com/ziglang/zig/tree/5f2d0d414)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
