@@ -29,7 +29,7 @@ const is_binary: bool = false;
 const log = std.log.scoped(.GUI);
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
-const correctTitle = @import("util.zig").correctTitle;
+const asString = @import("util.zig").asString;
 
 pub fn main() anyerror!void {
     // Allocator for Emulator + CLI
@@ -106,7 +106,7 @@ pub fn main() anyerror!void {
     defer emu_thread.join();
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
-    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{correctTitle(cpu.bus.pak.title)});
+    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{asString(cpu.bus.pak.title)});
 
     const window = createWindow(window_title, gba_width, gba_height);
     defer SDL.SDL_DestroyWindow(window);

@@ -2,8 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
-const correctTitle = @import("../util.zig").correctTitle;
-const safeTitle = @import("../util.zig").safeTitle;
+const escape = @import("../util.zig").escape;
+const asString = @import("../util.zig").asString;
 const intToBytes = @import("../util.zig").intToBytes;
 
 const backup_kinds = [5]Needle{
@@ -76,6 +76,11 @@ pub const Backup = struct {
         const file_path = try self.getSaveFilePath(path);
         defer self.alloc.free(file_path);
 
+        // FIXME: Don't rely on this lol
+        if (std.mem.eql(u8, file_path[file_path.len - 12 .. file_path.len], "untitled.sav")) {
+            return log.err("ROM header lacks title, no save loaded", .{});
+        }
+
         const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
         const file_buf = try file.readToEndAlloc(self.alloc, try file.getEndPos());
         defer self.alloc.free(file_buf);
@@ -98,7 +103,10 @@ pub const Backup = struct {
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
 
-                log.err("EEPROM can either be 0x200 bytes or 0x2000 byes, but {s} was {X:} bytes", .{ file_path, file_buf.len, });
+                log.err("EEPROM can either be 0x200 bytes or 0x2000 byes, but {s} was {X:} bytes", .{
+                    file_path,
+                    file_buf.len,
+                });
             },
             .None => return SaveError.UnsupportedBackupKind,
         }
@@ -112,8 +120,10 @@ pub const Backup = struct {
     }
 
     fn getSaveFilename(self: *const Self) ![]const u8 {
-        const title = correctTitle(safeTitle(self.title));
-        return try std.mem.concat(self.alloc, u8, &[_][]const u8{ title, ".sav" });
+        const title = asString(escape(self.title));
+        const name = if (title.len != 0) title else "untitled";
+
+        return try std.mem.concat(self.alloc, u8, &[_][]const u8{ name, ".sav" });
     }
 
     fn writeSaveToDisk(self: Self, path: []const u8) !void {
@@ -411,7 +421,7 @@ const Eeprom = struct {
                             const addr = @intCast(u10, self.writer.finish());
 
                             // TODO: Bit Verbose eh?
-                            const value_buf = buf[@as(u13, addr) * 8..][0..8];
+                            const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
                             const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
 
                             self.reader.configure(value);
@@ -423,7 +433,7 @@ const Eeprom = struct {
                             const addr = @intCast(u6, self.writer.finish());
 
                             // TODO: Bit Verbose eh?, also duplicate code
-                            const value_buf = buf[@as(u13, addr) * 8..][0..8];
+                            const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
                             const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
 
                             self.reader.configure(value);
@@ -452,7 +462,7 @@ const Eeprom = struct {
             },
             .WriteTransfer => {
                 if (self.writer.len() == 64) {
-                    std.mem.copy(u8, buf[self.addr * 8..][0..8], &intToBytes(u64, self.writer.finish()));
+                    std.mem.copy(u8, buf[self.addr * 8 ..][0..8], &intToBytes(u64, self.writer.finish()));
                     self.state = .RequestEnd;
                 }
             },
