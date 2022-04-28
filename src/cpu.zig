@@ -418,9 +418,10 @@ pub const Arm7tdmi = struct {
         if (self.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const tmp_opcode = self.bus.read(u32, self.r[15] - 2);
-                const be_opcode = tmp_opcode << 16 | tmp_opcode >> 16;
-                log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, be_opcode });
+                const other_half = self.bus.debugRead(u16, self.r[15]);
+                const bl_opcode = @as(u32, opcode) << 16 | other_half;
+
+                log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, bl_opcode });
             } else {
                 log_str = try std.fmt.bufPrint(&buf, thumb_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, opcode });
             }
