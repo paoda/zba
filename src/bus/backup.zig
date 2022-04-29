@@ -374,7 +374,7 @@ const Eeprom = struct {
         }
 
         if (self.state == .RequestEnd) {
-            if (bit != 0) log.err("Request did not end in 0u1. EEPROM parsing invariant violated", .{});
+            if (bit != 0) log.debug("EEPROM Request did not end in 0u1. TODO: is this ok?", .{});
             self.state = .Ready;
             return;
         }

@@ -175,7 +175,7 @@ pub fn main() anyerror!void {
         SDL.SDL_RenderPresent(renderer);
 
         const actual = emu_rate.calc();
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:0>3.2}fps, {d:0>3.2}%] ", .{ window_title, actual, actual * 100 / expected_rate }) catch unreachable;
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:.1}fps, {d:0>6.2}%] ", .{ window_title, actual, actual * 100 / expected_rate }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
