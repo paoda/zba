@@ -57,6 +57,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0108 => @as(T, bus.tim._2.cnt.raw) << 16 | bus.tim._2.counter(),
             0x0400_010C => @as(T, bus.tim._3.cnt.raw) << 16 | bus.tim._3.counter(),
 
+            // Serial Communication 1
+            0x0400_0128 => unimplementedRead("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
+
             // Keypad Input
             0x0400_0130 => unimplementedRead("Read {} from KEYINPUT", .{T}),
 

@@ -131,24 +131,30 @@ pub const Apu = struct {
     }
 
     pub fn sampleAudio(self: *Self, late: u64) void {
+        // zig fmt: off
+        const any_ch_enabled = self.ch1.enabled
+            or self.ch2.enabled
+            or self.ch3.enabled
+            or self.ch4.enabled;
+        // zig fmt: on
 
         // Sample Channel 1
-        const ch1_sample = self.highPassFilter(self.ch1.amplitude(), self.ch1.enabled);
+        const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled);
         const ch1_left = if (self.psg_cnt.ch1_left.read()) ch1_sample else 0;
         const ch1_right = if (self.psg_cnt.ch1_right.read()) ch1_sample else 0;
 
         // Sample Channel 2
-        const ch2_sample = self.highPassFilter(self.ch2.amplitude(), self.ch2.enabled);
+        const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled);
         const ch2_left = if (self.psg_cnt.ch2_left.read()) ch2_sample else 0;
         const ch2_right = if (self.psg_cnt.ch2_right.read()) ch2_sample else 0;
 
         // Sample Channel 3
-        const ch3_sample = self.highPassFilter(self.ch3.amplitude(), self.ch3.enabled);
+        const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled);
         const ch3_left = if (self.psg_cnt.ch3_left.read()) ch3_sample else 0;
         const ch3_right = if (self.psg_cnt.ch3_right.read()) ch3_sample else 0;
 
         // Sample Channel 4
-        const ch4_sample = self.highPassFilter(self.ch4.amplitude(), self.ch4.enabled);
+        const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled);
         const ch4_left = if (self.psg_cnt.ch4_left.read()) ch4_sample else 0;
         const ch4_right = if (self.psg_cnt.ch4_right.read()) ch4_sample else 0;
 
@@ -190,6 +196,9 @@ pub const Apu = struct {
         // Mix all Channels
         const left = (chA_left + chB_left + (psg_left * 0.05)) / 3;
         const right = (chA_right + chB_right + (psg_right * 0.05)) / 3;
+
+        // const left = psg_left * 0.1;
+        // const right = psg_right * 0.1;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
@@ -261,16 +270,15 @@ pub const Apu = struct {
         }
     }
 
-    fn highPassFilter(self: *Self, sample: f32, ch_enabled: bool) f32 {
-        const charge_factor = 0.999958;
+    fn highPass(self: *Self, sample: f32, enabled: bool) f32 {
+        return if (enabled) blk: {
+            const out = sample - self.capacitor;
+            const charge_factor =
+                std.math.pow(f32, 0.999958, @intToFloat(f32, (1 << 22) / self.sampleRate()));
 
-        var output: f32 = 0;
-        if (ch_enabled) {
-            output = sample - self.capacitor;
-            self.capacitor = sample - output * std.math.pow(f32, charge_factor, @intToFloat(f32, (1 << 22) / self.sampleRate()));
-        }
-
-        return output;
+            self.capacitor = sample - out * charge_factor;
+            break :blk out;
+        } else 0.0;
     }
 };
 
@@ -377,7 +385,7 @@ const ToneSweep = struct {
     }
 
     pub fn tickLength(self: *Self) void {
-        self.len_dev.tick(self.freq, &self.enabled);
+        self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
     }
 
     pub fn tickEnvelope(self: *Self) void {
@@ -430,20 +438,19 @@ const ToneSweep = struct {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
-            self.enabled = true; // FIXME: is this necessary?
+            self.enabled = true;
 
             if (self.len_dev.timer == 0) {
-                self.len_dev.timer = 64;
-
-                // We unset this on the old frequency because of the obscure
-                // behaviour outside of this if statement's scope
-                self.freq.length_enable.write(false);
+                self.len_dev.timer =
+                    if (!fs.isLengthNext() and new.length_enable.read()) 63 else 64;
             }
 
             self.square.reloadTimer(.Ch1, self.freq.frequency.read());
 
             // Reload Envelope period and timer
             self.env_dev.timer = self.envelope.period.read();
+            if (fs.isEnvelopeNext() and self.env_dev.timer != 0b111) self.env_dev.timer += 1;
+
             self.env_dev.vol = self.envelope.init_vol.read();
 
             // Sweep Trigger Behaviour
@@ -512,7 +519,7 @@ const Tone = struct {
     }
 
     pub fn tickLength(self: *Self) void {
-        self.len_dev.tick(self.freq, &self.enabled);
+        self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
     }
 
     pub fn tickEnvelope(self: *Self) void {
@@ -565,21 +572,19 @@ const Tone = struct {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
-            self.enabled = true; // Same as ch1, is this necessary?
+            self.enabled = true;
 
             if (self.len_dev.timer == 0) {
-                self.len_dev.timer = 64;
-
-                // We unset this on the old frequency because of the obscure
-                // behaviour outside of this if statement's scope
-                // FIXME: This wasn't in my ch2 GB implementation
-                self.freq.length_enable.write(false);
+                self.len_dev.timer =
+                    if (!fs.isLengthNext() and new.length_enable.read()) 63 else 64;
             }
 
             self.square.reloadTimer(.Ch2, self.freq.frequency.read());
 
             // Reload Envelope period and timer
             self.env_dev.timer = self.envelope.period.read();
+            if (fs.isEnvelopeNext() and self.env_dev.timer != 0b111) self.env_dev.timer += 1;
+
             self.env_dev.vol = self.envelope.init_vol.read();
 
             self.enabled = self.isDacEnabled();
@@ -639,7 +644,7 @@ const Wave = struct {
     }
 
     pub fn tickLength(self: *Self) void {
-        self.len_dev.tick(self.freq, &self.enabled);
+        self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
     }
 
     /// NR30
@@ -676,15 +681,11 @@ const Wave = struct {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
-            self.enabled = true; // FIXME: Same as ch1, ch2, is this necessary?
+            self.enabled = true;
 
             if (self.len_dev.timer == 0) {
-                self.len_dev.timer = 256;
-
-                // We unset this on the old frequency because of the obscure
-                // behaviour outside of this if statement's scope
-                // FIXME: This wasn't in my ch3 GB implementation
-                self.freq.length_enable.write(false);
+                self.len_dev.timer =
+                    if (!fs.isLengthNext() and new.length_enable.read()) 255 else 256;
             }
 
             // Update The Frequency Timer
@@ -764,7 +765,7 @@ const Noise = struct {
     }
 
     pub fn tickLength(self: *Self) void {
-        self.len_dev.ch4Tick(self.cnt, &self.enabled);
+        self.len_dev.tick(self.cnt.length_enable.read(), &self.enabled);
     }
 
     pub fn tickEnvelope(self: *Self) void {
@@ -800,23 +801,21 @@ const Noise = struct {
         var new: io.NoiseControl = .{ .raw = byte };
 
         if (new.trigger.read()) {
-            self.enabled = true; // FIXME: Same as ch1, ch2, is this necessary?
+            self.enabled = true;
 
             if (self.len_dev.timer == 0) {
-                self.len_dev.timer = 64;
-
-                // We unset this on the old frequency because of the obscure
-                // behaviour outside of this if statement's scope
-                // FIXME: This wasn't in my ch4 GB implementation
-                self.cnt.length_enable.write(false);
+                self.len_dev.timer =
+                    if (!fs.isLengthNext() and new.length_enable.read()) 63 else 64;
             }
 
             // Update The Frequency Timer
-            // self.lfsr.reloadTimer(self.freq.frequency.read()); // TODO: Do we do something here?
+            self.lfsr.reloadTimer(self.poly);
             self.lfsr.shift = 0x7FFF;
 
             // Update Envelope and Volume
             self.env_dev.timer = self.envelope.period.read();
+            if (fs.isEnvelopeNext() and self.env_dev.timer != 0b111) self.env_dev.timer += 1;
+
             self.env_dev.vol = self.envelope.init_vol.read();
 
             self.enabled = self.isDacEnabled();
@@ -895,8 +894,12 @@ const FrameSequencer = struct {
         self.step +%= 1;
     }
 
-    fn lengthIsNext(self: *const Self) bool {
+    fn isLengthNext(self: *const Self) bool {
         return (self.step +% 1) & 1 == 0; // Steps, 0, 2, 4, and 6 clock length
+    }
+
+    fn isEnvelopeNext(self: *const Self) bool {
+        return (self.step +% 1) == 7;
     }
 };
 
@@ -909,24 +912,13 @@ const LengthDevice = struct {
         return .{ .timer = 0 };
     }
 
-    fn tick(self: *Self, freq: io.Frequency, ch_enabled: *bool) void {
-        const len_enable = freq.length_enable.read();
-
-        if (len_enable and self.timer > 0) {
+    fn tick(self: *Self, length_enable: bool, ch_enabled: *bool) void {
+        if (length_enable) {
+            if (self.timer == 0) return;
             self.timer -= 1;
 
-            // if length timer is now 0
-            if (self.timer == 0) ch_enabled.* = false;
-        }
-    }
-
-    fn ch4Tick(self: *Self, cnt: io.NoiseControl, ch_enabled: *bool) void {
-        const len_enable = cnt.length_enable.read();
-
-        if (len_enable and self.timer > 0) {
-            self.timer -= 1;
-
-            // if length timer is now 0
+            // By returning early if timer == 0, this is only
+            // true if timer == 0 because of the decrement we just did
             if (self.timer == 0) ch_enabled.* = false;
         }
     }
@@ -1019,12 +1011,18 @@ const WaveDevice = struct {
         };
     }
 
-    /// Obscure NRx4 Behaviour
-    fn updateLength(_: *Self, fs: *const FrameSequencer, ch3: *Wave, new_cnt: io.Frequency) void {
-        if (!fs.lengthIsNext() and !ch3.freq.length_enable.read() and new_cnt.length_enable.read() and ch3.len_dev.timer != 0) {
-            ch3.len_dev.timer -= 1;
+    fn updateLength(_: *Self, fs: *const FrameSequencer, ch3: *Wave, new: io.Frequency) void {
+        // Write to NRx4 when FS's next step is not one that clocks the length counter
+        if (!fs.isLengthNext()) {
+            // If length_enable was disabled but is now enabled and length timer is not 0 already,
+            // decrement the length timer
 
-            if (ch3.len_dev.timer == 0 and !new_cnt.trigger.read()) ch3.enabled = false;
+            if (!ch3.freq.length_enable.read() and new.length_enable.read() and ch3.len_dev.timer != 0) {
+                ch3.len_dev.timer -= 1;
+
+                // If Length Timer is now 0 and trigger is clear, disable the channel
+                if (ch3.len_dev.timer == 0 and !new.trigger.read()) ch3.enabled = false;
+            }
         }
     }
 
@@ -1069,21 +1067,33 @@ const SquareWave = struct {
 
     const ChannelKind = enum { Ch1, Ch2 };
 
-    /// Obscure NRx4 Behaviour
-    fn updateToneSweepLength(_: *Self, fs: *const FrameSequencer, ch1: *ToneSweep, new_cnt: io.Frequency) void {
-        if (!fs.lengthIsNext() and !ch1.freq.length_enable.read() and new_cnt.length_enable.read() and ch1.len_dev.timer != 0) {
-            ch1.len_dev.timer -= 1;
+    fn updateToneSweepLength(_: *Self, fs: *const FrameSequencer, ch1: *ToneSweep, new: io.Frequency) void {
+        // Write to NRx4 when FS's next step is not one that clocks the length counter
+        if (!fs.isLengthNext()) {
+            // If length_enable was disabled but is now enabled and length timer is not 0 already,
+            // decrement the length timer
 
-            if (ch1.len_dev.timer == 0 and !new_cnt.trigger.read()) ch1.enabled = false;
+            if (!ch1.freq.length_enable.read() and new.length_enable.read() and ch1.len_dev.timer != 0) {
+                ch1.len_dev.timer -= 1;
+
+                // If Length Timer is now 0 and trigger is clear, disable the channel
+                if (ch1.len_dev.timer == 0 and !new.trigger.read()) ch1.enabled = false;
+            }
         }
     }
 
-    /// Obscure NRx4 Behaviour
-    fn updateToneLength(_: *Self, fs: *const FrameSequencer, ch2: *Tone, new_cnt: io.Frequency) void {
-        if (!fs.lengthIsNext() and !ch2.freq.length_enable.read() and new_cnt.length_enable.read() and ch2.len_dev.timer != 0) {
-            ch2.len_dev.timer -= 1;
+    fn updateToneLength(_: *Self, fs: *const FrameSequencer, ch2: *Tone, new: io.Frequency) void {
+        // Write to NRx4 when FS's next step is not one that clocks the length counter
+        if (!fs.isLengthNext()) {
+            // If length_enable was disabled but is now enabled and length timer is not 0 already,
+            // decrement the length timer
 
-            if (ch2.len_dev.timer == 0 and !new_cnt.trigger.read()) ch2.enabled = false;
+            if (!ch2.freq.length_enable.read() and new.length_enable.read() and ch2.len_dev.timer != 0) {
+                ch2.len_dev.timer -= 1;
+
+                // If Length Timer is now 0 and trigger is clear, disable the channel
+                if (ch2.len_dev.timer == 0 and !new.trigger.read()) ch2.enabled = false;
+            }
         }
     }
 
@@ -1091,7 +1101,7 @@ const SquareWave = struct {
         const timer = (2048 - @as(u64, cnt.frequency.read())) * 4;
 
         self.timer = @truncate(u12, timer);
-        self.pos = (self.pos +% 1) & 7;
+        self.pos +%= 1;
 
         self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, self.sched.now() + timer * ticks - late);
     }
@@ -1143,12 +1153,28 @@ const Lfsr = struct {
         return @truncate(u1, ~self.shift);
     }
 
-    fn updateLength(_: *const Self, fs: *const FrameSequencer, ch4: *Noise, new_cnt: io.NoiseControl) void {
-        if (!fs.lengthIsNext() and !ch4.cnt.length_enable.read() and new_cnt.length_enable.read() and ch4.len_dev.timer != 0) {
-            ch4.len_dev.timer -= 1;
+    fn updateLength(_: *Self, fs: *const FrameSequencer, ch4: *Noise, new: io.NoiseControl) void {
+        // Write to NRx4 when FS's next step is not one that clocks the length counter
+        if (!fs.isLengthNext()) {
+            // If length_enable was disabled but is now enabled and length timer is not 0 already,
+            // decrement the length timer
 
-            if (ch4.len_dev.timer == 0 and !new_cnt.trigger.read()) ch4.enabled = false;
+            if (!ch4.cnt.length_enable.read() and new.length_enable.read() and ch4.len_dev.timer != 0) {
+                ch4.len_dev.timer -= 1;
+
+                // If Length Timer is now 0 and trigger is clear, disable the channel
+                if (ch4.len_dev.timer == 0 and !new.trigger.read()) ch4.enabled = false;
+            }
         }
+    }
+
+    fn reloadTimer(self: *Self, poly: io.PolyCounter) void {
+        self.sched.removeScheduledEvent(.{ .ApuChannel = 3 });
+
+        const div = Self.divisor(poly.div_ratio.read());
+        const timer = @as(u64, div << poly.shift.read());
+
+        self.sched.push(.{ .ApuChannel = 3 }, self.sched.now() + timer * ticks);
     }
 
     fn handleTimerOverflow(self: *Self, poly: io.PolyCounter, late: u64) void {
