@@ -281,31 +281,30 @@ pub const Ppu = struct {
                 const fb_base = framebuf_pitch * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
-                var i: usize = 0;
-                while (i < 4) : (i += 1) {
-                    // Draw Sprites Here
-                    self.drawSprites(@truncate(u2, i));
-                    if (i == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
-                    if (i == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
-                    if (i == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
-                    if (i == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3);
+                var layer: usize = 0;
+                while (layer < 4) : (layer += 1) {
+                    self.drawSprites(@truncate(u2, layer));
+                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
+                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
+                    if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
+                    if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3);
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline_buf) |maybe_px, j| {
+                for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf[fb_base + j * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
 
-                // Reset Scanline Buffer
+                // Reset Current Scanline Pixel Buffer and list of fetched sprites
+                // in prep for next scanline
                 std.mem.set(?u16, &self.scanline_buf, null);
-                // Reset List of Sprites
                 std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x3 => {
-                const fb_base = framebuf_pitch * @as(usize, scanline);
                 const vram_base = width * @sizeOf(u16) * @as(usize, scanline);
+                const fb_base = framebuf_pitch * @as(usize, scanline);
 
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
@@ -314,14 +313,29 @@ pub const Ppu = struct {
                 }
             },
             0x4 => {
-                const select = self.dispcnt.frame_select.read();
+                const sel = self.dispcnt.frame_select.read();
+                const vram_base = width * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
                 const fb_base = framebuf_pitch * @as(usize, scanline);
-                const vram_base = width * @as(usize, scanline) + if (select) 0xA000 else @as(usize, 0);
 
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
-                    const pal_id = @as(u16, byte) * @sizeOf(u16);
-                    const bgr555 = self.palette.read(u16, pal_id);
+                    const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                }
+            },
+            0x5 => {
+                const m5_width = 160;
+                const m5_height = 128;
+
+                const sel = self.dispcnt.frame_select.read();
+                const vram_base = m5_width * @sizeOf(u16) * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
+                const fb_base = framebuf_pitch * @as(usize, scanline);
+
+                var i: usize = 0;
+                while (i < width) : (i += 1) {
+                    // If we're outside of the bounds of mode 5, draw the background colour
+                    const bgr555 =
+                        if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
 
                     std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
