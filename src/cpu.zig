@@ -459,7 +459,7 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
         0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.v.read()), // GT - Greater than
         0xD => cpsr.z.read() or (cpsr.n.read() != cpsr.v.read()), // LE - Less than or equal
         0xE => true, // AL - Always
-        0xF => std.debug.panic("[CPU/Cond] 0xF is a reserved condition field", .{}),
+        0xF => false, // NV - Never (reserved in ARMv3 and up, but seems to have not changed?)
     };
 }
 

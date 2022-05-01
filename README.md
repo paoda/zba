@@ -15,7 +15,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [x] `midikey2freq`
     - [ ] `swi-tests-random`
 - [ ] [destoer's GBA Tests](https://github.com/destoer/gba_tests)
-    - [ ] `cond_invalid.gba`
+    - [x] `cond_invalid.gba`
     - [x] `dma_priority.gba`
     - [x] `hello_world.gba`
     - [x] `if_ack.gba`
