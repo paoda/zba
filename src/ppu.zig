@@ -135,7 +135,7 @@ pub const Ppu = struct {
             if (maybe_sprites) |sprite| {
                 // Move on to the next sprite If its of a different priority
                 if (sprite.priority() != prio) continue :sprite_loop;
-                if (sprite.attr0.rot_scaling.read()) continue :sprite_loop; // TODO: Affine Sprites
+                if (sprite.attr0.is_affine.read()) continue :sprite_loop; // TODO: Affine Sprites
 
                 var i: u9 = 0;
                 px_loop: while (i < sprite.width) : (i += 1) {
@@ -747,10 +747,44 @@ const Sprite = struct {
     }
 };
 
+const AffineSprite = struct {
+    const Self = @This();
+
+    attr0: AffineAttr0,
+    attr1: AffineAttr1,
+    attr2: Attr2,
+
+    width: u8,
+    height: u8,
+
+    fn init(attr0: AffineAttr0, attr1: AffineAttr1, attr2: Attr2) Self {
+        const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
+
+        return .{
+            .attr0 = attr0,
+            .attr1 = attr1,
+            .attr2 = attr2,
+            .width = d[0],
+            .height = d[1],
+        };
+    }
+};
+
 const Attr0 = extern union {
     y: Bitfield(u16, 0, 8),
-    rot_scaling: Bit(u16, 8), // This SBZ
+    is_affine: Bit(u16, 8), // This SBZ
     disabled: Bit(u16, 9),
+    mode: Bitfield(u16, 10, 2),
+    mosaic: Bit(u16, 12),
+    is_8bpp: Bit(u16, 13),
+    shape: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+const AffineAttr0 = extern union {
+    y: Bitfield(u16, 0, 8),
+    rot_scaling: Bit(u16, 8), // This SB1
+    double_size: Bit(u16, 9),
     mode: Bitfield(u16, 10, 2),
     mosaic: Bit(u16, 12),
     is_8bpp: Bit(u16, 13),
@@ -762,6 +796,13 @@ const Attr1 = extern union {
     x: Bitfield(u16, 0, 9),
     h_flip: Bit(u16, 12),
     v_flip: Bit(u16, 13),
+    size: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+const AffineAttr1 = extern union {
+    x: Bitfield(u16, 0, 9),
+    aff_sel: Bitfield(u16, 9, 5),
     size: Bitfield(u16, 14, 2),
     raw: u16,
 };
