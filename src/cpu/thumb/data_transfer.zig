@@ -25,7 +25,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
             const rb = opcode >> 3 & 0x7;
             const rd = opcode & 0x7;
 
-            const address = cpu.r[rb] + cpu.r[ro];
+            const address = cpu.r[rb] +% cpu.r[ro];
 
             if (T) {
                 // Format 8

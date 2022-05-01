@@ -135,6 +135,7 @@ pub const Ppu = struct {
             if (maybe_sprites) |sprite| {
                 // Move on to the next sprite If its of a different priority
                 if (sprite.priority() != prio) continue :sprite_loop;
+                if (sprite.attr0.rot_scaling.read()) continue :sprite_loop; // TODO: Affine Sprites
 
                 var i: u9 = 0;
                 px_loop: while (i < sprite.width) : (i += 1) {
@@ -288,6 +289,52 @@ pub const Ppu = struct {
                     if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
                     if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3);
+                }
+
+                // Copy Drawn Scanline to Frame Buffer
+                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline_buf) |maybe_px, i| {
+                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                }
+
+                // Reset Current Scanline Pixel Buffer and list of fetched sprites
+                // in prep for next scanline
+                std.mem.set(?u16, &self.scanline_buf, null);
+                std.mem.set(?Sprite, &self.scanline_sprites, null);
+            },
+            0x1 => {
+                const fb_base = framebuf_pitch * @as(usize, scanline);
+                if (obj_enable) self.fetchSprites();
+
+                var layer: usize = 0;
+                while (layer < 4) : (layer += 1) {
+                    self.drawSprites(@truncate(u2, layer));
+                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
+                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
+                    // TODO: Implement Affine BG2
+                }
+
+                // Copy Drawn Scanline to Frame Buffer
+                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline_buf) |maybe_px, i| {
+                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                }
+
+                // Reset Current Scanline Pixel Buffer and list of fetched sprites
+                // in prep for next scanline
+                std.mem.set(?u16, &self.scanline_buf, null);
+                std.mem.set(?Sprite, &self.scanline_sprites, null);
+            },
+            0x2 => {
+                const fb_base = framebuf_pitch * @as(usize, scanline);
+                if (obj_enable) self.fetchSprites();
+
+                var layer: usize = 0;
+                while (layer < 4) : (layer += 1) {
+                    self.drawSprites(@truncate(u2, layer));
+                    // TODO: Implement Affine BG2, BG3
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
