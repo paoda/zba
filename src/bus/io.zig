@@ -77,6 +77,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000A => bus.ppu.bg[1].cnt.raw,
             0x0400_000C => bus.ppu.bg[2].cnt.raw,
             0x0400_000E => bus.ppu.bg[3].cnt.raw,
+            0x0400_004C => unimplementedRead("Read {} from MOSAIC", .{T}),
 
             // Sound
             0x0400_0088 => bus.apu.bias.raw,
@@ -117,7 +118,12 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Display
             0x0400_0000 => @truncate(T, bus.ppu.dispcnt.raw),
             0x0400_0004 => @truncate(T, bus.ppu.dispstat.raw),
+            0x0400_0005 => @truncate(T, bus.ppu.dispcnt.raw >> 8),
             0x0400_0006 => @truncate(T, bus.ppu.vcount.raw),
+            0x0400_0008 => @truncate(T, bus.ppu.bg[0].cnt.raw),
+            0x0400_0009 => @truncate(T, bus.ppu.bg[0].cnt.raw >> 8),
+            0x0400_000A => @truncate(T, bus.ppu.bg[1].cnt.raw),
+            0x0400_000B => @truncate(T, bus.ppu.bg[1].cnt.raw >> 8),
 
             // Sound
             0x0400_0060 => bus.apu.ch1.sweep.raw,
@@ -132,6 +138,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT_L", .{T}),
+
+            // Serial Communication 2
+            0x0400_0135 => unimplementedRead("Read {} from RCNT_H", .{T}),
 
             // Interrupts
             0x0400_0200 => @truncate(T, bus.io.ie.raw),
@@ -365,6 +374,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Display
             0x0400_0004 => bus.ppu.dispstat.raw = (bus.ppu.dispstat.raw & 0xFF00) | value,
             0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, value) << 8) | (bus.ppu.dispstat.raw & 0xFF),
+            0x0400_0008 => bus.ppu.bg[0].cnt.raw = (bus.ppu.bg[0].cnt.raw & 0xFF00) | value,
+            0x0400_0009 => bus.ppu.bg[0].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[0].cnt.raw & 0xFF),
+            0x0400_000A => bus.ppu.bg[1].cnt.raw = (bus.ppu.bg[1].cnt.raw & 0xFF00) | value,
+            0x0400_000B => bus.ppu.bg[1].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[1].cnt.raw & 0xFF),
             0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
 
             // Sound
@@ -401,6 +414,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0128 => log.debug("Wrote 0x{X:0>2} to SIOCNT_L", .{value}),
 
             // Serial Communication 2
+            0x0400_0135 => log.debug("Wrote 0x{X:0>2} to RCNT_H", .{value}),
             0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT_L", .{value}),
 
             // Interrupts
