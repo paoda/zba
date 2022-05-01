@@ -266,6 +266,7 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
     return dev;
 }
 
+// FIXME: Sometimes, we hear garbage upon program start. Why?
 export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
     const apu = @ptrCast(*Apu, @alignCast(8, userdata));
     _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);

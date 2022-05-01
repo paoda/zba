@@ -24,12 +24,15 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
                     // MSR
                     const field_mask = @truncate(u4, opcode >> 16 & 0xF);
                     const rm_idx = opcode & 0xF;
-                    const right = if (I) rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) << 1) else cpu.r[rm_idx];
+                    const right = if (I) rotr(u32, opcode & 0xFF, (opcode >> 8 & 0xF) * 2) else cpu.r[rm_idx];
 
                     if (R and !cpu.hasSPSR()) log.err("Tried to write to SPSR in User/System Mode", .{});
 
                     if (R) {
-                        if (cpu.isPrivileged()) cpu.spsr.raw = fieldMask(&cpu.spsr, field_mask, right);
+                        // arm.gba seems to expect the SPSR to do somethign in SYS mode,
+                        // so we just assume that despite writing to the SPSR in USR or SYS mode
+                        // being UNPREDICTABLE, it just magically has a working SPSR somehow
+                        cpu.spsr.raw = fieldMask(&cpu.spsr, field_mask, right);
                     } else {
                         if (cpu.isPrivileged()) cpu.setCpsr(fieldMask(&cpu.cpsr, field_mask, right));
                     }
@@ -41,6 +44,8 @@ pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrF
 }
 
 fn fieldMask(psr: *const PSR, field_mask: u4, right: u32) u32 {
+    // This bitwise ORs bits 3 and 0 of the field mask into a u2
+    // We do this because we only care about bits 7:0 and 31:28 of the CPSR
     const bits = @truncate(u2, (field_mask >> 2 & 0x2) | (field_mask & 1));
 
     const mask: u32 = switch (bits) {

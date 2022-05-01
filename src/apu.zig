@@ -30,6 +30,8 @@ pub const Apu = struct {
     cnt: io.SoundControl,
 
     sampling_cycle: u2,
+
+    // TODO: Research whether we can have Atomic Pointers
     stream: *SDL.SDL_AudioStream,
     sched: *Scheduler,
 
