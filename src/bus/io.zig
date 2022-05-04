@@ -63,6 +63,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Keypad Input
             0x0400_0130 => unimplementedRead("Read {} from KEYINPUT", .{T}),
 
+            // Serial Communication 2
+            0x0400_0150 => unimplementedRead("Read {} from JOY_RECV", .{T}),
+
             // Interrupts
             0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
@@ -138,6 +141,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT_L", .{T}),
+
+            // Keypad Input
+            0x0400_0130 => unimplementedRead("read {} from KEYINPUT_L", .{T}),
 
             // Serial Communication 2
             0x0400_0135 => unimplementedRead("Read {} from RCNT_H", .{T}),
@@ -418,7 +424,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT_L", .{value}),
 
             // Interrupts
+            0x0400_0202 => bus.io.irq.raw &= ~@as(u16, value),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
+            0x0400_0300 => bus.io.postflg = std.meta.intToEnum(PostFlag, value & 1) catch unreachable,
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
 
             0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),
