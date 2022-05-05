@@ -113,18 +113,29 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
         }
     }
 
-    log.err("Wrote {} {X:} to 0x{X:0>8}", .{ T, value, address });
+    switch (T) {
+        u32 => switch (address) {
+            0x0800_00C4 => log.err("Wrote {} 0x{X:} to I/O Port Data and Direction", .{ T, value }),
+            0x0800_00C6 => log.err("Wrote {} 0x{X:} to I/O Port Direction and Control", .{ T, value }),
+            else => {},
+        },
+        u16 => switch (address) {
+            0x0800_00C4 => log.err("Wrote {} 0x{X:} to I/O Port Data", .{ T, value }),
+            0x0800_00C6 => log.err("Wrote {} 0x{X:} to I/O Port Direction", .{ T, value }),
+            0x0800_00C8 => log.err("Wrote {} 0x{X:} to I/O Port Control", .{ T, value }),
+            else => {},
+        },
+        u8 => log.warn("Wrote {} 0x{X:} to 0x{X:0>8}, Ignored.", .{ T, value, address }),
+        else => @compileError("GamePak: Unsupported write width"),
+    }
 }
 
 fn get(self: *const Self, i: u32) u8 {
     @setRuntimeSafety(false);
+    if (i < self.buf.len) return self.buf[i];
 
-    if (i >= self.buf.len) {
-        const lhs = i >> 1 & 0xFFFF;
-        return @truncate(u8, lhs >> 8 * @truncate(u5, i & 1));
-    }
-
-    return self.buf[i];
+    const lhs = i >> 1 & 0xFFFF;
+    return @truncate(u8, lhs >> 8 * @truncate(u5, i & 1));
 }
 
 test "OOB Access" {

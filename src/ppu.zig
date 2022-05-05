@@ -600,8 +600,12 @@ const Vram = struct {
     }
 
     fn mirror(address: usize) usize {
-        const addr = address & 0x1FFFF; // repeated in steps of 128KiB
-        return if (addr >= 0x18000) addr & 0x7FFF else addr; // 64K + 32K + 32K (abcc)
+        // Mirrored in steps of 128K (64K + 32K + 32K) (abcc)
+        const addr = address & 0x1FFFF;
+
+        // If the address is within 96K we don't do anything,
+        // otherwise we want to mirror the last 32K (addresses between 64K and 96K)
+        return if (addr < vram_size) addr else 0x10000 + (addr & 0x7FFF);
     }
 };
 
