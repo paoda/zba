@@ -46,10 +46,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0006 => @as(T, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
 
             // DMA Transfers
-            0x0400_00B8 => @as(T, bus.dma._0.cnt.raw) << 16,
-            0x0400_00C4 => @as(T, bus.dma._1.cnt.raw) << 16,
-            0x0400_00D0 => @as(T, bus.dma._1.cnt.raw) << 16,
-            0x0400_00DC => @as(T, bus.dma._3.cnt.raw) << 16,
+            0x0400_00B8 => @as(T, bus.dma[0].cnt.raw) << 16,
+            0x0400_00C4 => @as(T, bus.dma[1].cnt.raw) << 16,
+            0x0400_00D0 => @as(T, bus.dma[1].cnt.raw) << 16,
+            0x0400_00DC => @as(T, bus.dma[3].cnt.raw) << 16,
 
             // Timers
             0x0400_0100 => @as(T, bus.tim._0.cnt.raw) << 16 | bus.tim._0.counter(),
@@ -86,10 +86,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0088 => bus.apu.bias.raw,
 
             // DMA Transfers
-            0x0400_00BA => bus.dma._0.cnt.raw,
-            0x0400_00C6 => bus.dma._1.cnt.raw,
-            0x0400_00D2 => bus.dma._2.cnt.raw,
-            0x0400_00DE => bus.dma._3.cnt.raw,
+            0x0400_00BA => bus.dma[0].cnt.raw,
+            0x0400_00C6 => bus.dma[1].cnt.raw,
+            0x0400_00D2 => bus.dma[2].cnt.raw,
+            0x0400_00DE => bus.dma[3].cnt.raw,
 
             // Timers
             0x0400_0100 => bus.tim._0.counter(),
@@ -199,18 +199,18 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00A8, 0x0400_00AC => {}, // Unused
 
             // DMA Transfers
-            0x0400_00B0 => bus.dma._0.writeSad(value),
-            0x0400_00B4 => bus.dma._0.writeDad(value),
-            0x0400_00B8 => bus.dma._0.writeCnt(value),
-            0x0400_00BC => bus.dma._1.writeSad(value),
-            0x0400_00C0 => bus.dma._1.writeDad(value),
-            0x0400_00C4 => bus.dma._1.writeCnt(value),
-            0x0400_00C8 => bus.dma._2.writeSad(value),
-            0x0400_00CC => bus.dma._2.writeDad(value),
-            0x0400_00D0 => bus.dma._2.writeCnt(value),
-            0x0400_00D4 => bus.dma._3.writeSad(value),
-            0x0400_00D8 => bus.dma._3.writeDad(value),
-            0x0400_00DC => bus.dma._3.writeCnt(value),
+            0x0400_00B0 => bus.dma[0].writeSad(value),
+            0x0400_00B4 => bus.dma[0].writeDad(value),
+            0x0400_00B8 => bus.dma[0].writeCnt(value),
+            0x0400_00BC => bus.dma[1].writeSad(value),
+            0x0400_00C0 => bus.dma[1].writeDad(value),
+            0x0400_00C4 => bus.dma[1].writeCnt(value),
+            0x0400_00C8 => bus.dma[2].writeSad(value),
+            0x0400_00CC => bus.dma[2].writeDad(value),
+            0x0400_00D0 => bus.dma[2].writeCnt(value),
+            0x0400_00D4 => bus.dma[3].writeSad(value),
+            0x0400_00D8 => bus.dma[3].writeDad(value),
+            0x0400_00DC => bus.dma[3].writeCnt(value),
             0x0400_00E0...0x0400_00FC => {}, // Unused
 
             // Timers
@@ -310,33 +310,33 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
 
             // Dma Transfers
-            0x0400_00B0 => bus.dma._0.writeSad(bus.dma._0.sad & 0xFFFF_0000 | value),
-            0x0400_00B2 => bus.dma._0.writeSad(bus.dma._0.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00B4 => bus.dma._0.writeDad(bus.dma._0.dad & 0xFFFF_0000 | value),
-            0x0400_00B6 => bus.dma._0.writeDad(bus.dma._0.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00B8 => bus.dma._0.writeWordCount(value),
-            0x0400_00BA => bus.dma._0.writeCntHigh(value),
+            0x0400_00B0 => bus.dma[0].writeSad(bus.dma[0].sad & 0xFFFF_0000 | value),
+            0x0400_00B2 => bus.dma[0].writeSad(bus.dma[0].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00B4 => bus.dma[0].writeDad(bus.dma[0].dad & 0xFFFF_0000 | value),
+            0x0400_00B6 => bus.dma[0].writeDad(bus.dma[0].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00B8 => bus.dma[0].writeWordCount(value),
+            0x0400_00BA => bus.dma[0].writeCntHigh(value),
 
-            0x0400_00BC => bus.dma._1.writeSad(bus.dma._1.sad & 0xFFFF_0000 | value),
-            0x0400_00BE => bus.dma._1.writeSad(bus.dma._1.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00C0 => bus.dma._1.writeDad(bus.dma._1.dad & 0xFFFF_0000 | value),
-            0x0400_00C2 => bus.dma._1.writeDad(bus.dma._1.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00C4 => bus.dma._1.writeWordCount(value),
-            0x0400_00C6 => bus.dma._1.writeCntHigh(value),
+            0x0400_00BC => bus.dma[1].writeSad(bus.dma[1].sad & 0xFFFF_0000 | value),
+            0x0400_00BE => bus.dma[1].writeSad(bus.dma[1].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00C0 => bus.dma[1].writeDad(bus.dma[1].dad & 0xFFFF_0000 | value),
+            0x0400_00C2 => bus.dma[1].writeDad(bus.dma[1].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00C4 => bus.dma[1].writeWordCount(value),
+            0x0400_00C6 => bus.dma[1].writeCntHigh(value),
 
-            0x0400_00C8 => bus.dma._2.writeSad(bus.dma._2.sad & 0xFFFF_0000 | value),
-            0x0400_00CA => bus.dma._2.writeSad(bus.dma._2.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00CC => bus.dma._2.writeDad(bus.dma._2.dad & 0xFFFF_0000 | value),
-            0x0400_00CE => bus.dma._2.writeDad(bus.dma._2.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00D0 => bus.dma._2.writeWordCount(value),
-            0x0400_00D2 => bus.dma._2.writeCntHigh(value),
+            0x0400_00C8 => bus.dma[2].writeSad(bus.dma[2].sad & 0xFFFF_0000 | value),
+            0x0400_00CA => bus.dma[2].writeSad(bus.dma[2].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00CC => bus.dma[2].writeDad(bus.dma[2].dad & 0xFFFF_0000 | value),
+            0x0400_00CE => bus.dma[2].writeDad(bus.dma[2].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00D0 => bus.dma[2].writeWordCount(value),
+            0x0400_00D2 => bus.dma[2].writeCntHigh(value),
 
-            0x0400_00D4 => bus.dma._3.writeSad(bus.dma._3.sad & 0xFFFF_0000 | value),
-            0x0400_00D6 => bus.dma._3.writeSad(bus.dma._3.sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00D8 => bus.dma._3.writeDad(bus.dma._3.dad & 0xFFFF_0000 | value),
-            0x0400_00DA => bus.dma._3.writeDad(bus.dma._3.dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00DC => bus.dma._3.writeWordCount(value),
-            0x0400_00DE => bus.dma._3.writeCntHigh(value),
+            0x0400_00D4 => bus.dma[3].writeSad(bus.dma[3].sad & 0xFFFF_0000 | value),
+            0x0400_00D6 => bus.dma[3].writeSad(bus.dma[3].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00D8 => bus.dma[3].writeDad(bus.dma[3].dad & 0xFFFF_0000 | value),
+            0x0400_00DA => bus.dma[3].writeDad(bus.dma[3].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_00DC => bus.dma[3].writeWordCount(value),
+            0x0400_00DE => bus.dma[3].writeCntHigh(value),
 
             // Timers
             0x0400_0100 => bus.tim._0.setReload(value),

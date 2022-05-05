@@ -9,7 +9,7 @@ const Io = @import("bus/io.zig").Io;
 const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
 const Apu = @import("apu.zig").Apu;
-const DmaControllers = @import("bus/dma.zig").DmaControllers;
+const DmaTuple = @import("bus/dma.zig").DmaTuple;
 const Timers = @import("bus/timer.zig").Timers;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
@@ -18,6 +18,7 @@ const io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 
+const createDmaTuple = @import("bus/dma.zig").create;
 const rotr = @import("util.zig").rotr;
 const Self = @This();
 
@@ -25,7 +26,7 @@ pak: GamePak,
 bios: Bios,
 ppu: Ppu,
 apu: Apu,
-dma: DmaControllers,
+dma: DmaTuple,
 tim: Timers,
 iwram: Iwram,
 ewram: Ewram,
@@ -42,7 +43,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
         .apu = Apu.init(sched),
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
-        .dma = DmaControllers.init(),
+        .dma = createDmaTuple(),
         .tim = Timers.init(sched),
         .io = Io.init(),
         .cpu = null,
@@ -64,18 +65,18 @@ pub fn attach(self: *Self, cpu: *Arm7tdmi) void {
 
 pub fn handleDMATransfers(self: *Self) void {
     while (self.isDmaRunning()) {
-        if (self.dma._1.step(self)) continue;
-        if (self.dma._0.step(self)) continue;
-        if (self.dma._2.step(self)) continue;
-        if (self.dma._3.step(self)) continue;
+        if (self.dma[1].step(self)) continue;
+        if (self.dma[0].step(self)) continue;
+        if (self.dma[2].step(self)) continue;
+        if (self.dma[3].step(self)) continue;
     }
 }
 
 inline fn isDmaRunning(self: *const Self) bool {
-    return self.dma._0.active or
-        self.dma._1.active or
-        self.dma._2.active or
-        self.dma._3.active;
+    return self.dma[0].active or
+        self.dma[1].active or
+        self.dma[2].active or
+        self.dma[3].active;
 }
 
 pub fn debugRead(self: *const Self, comptime T: type, address: u32) T {
@@ -173,7 +174,7 @@ pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
         0x07 => self.ppu.oam.write(T, align_addr, value),
 
         // External Memory (Game Pak)
-        0x08...0x0D => self.pak.write(T, self.dma._3.word_count, align_addr, value),
+        0x08...0x0D => self.pak.write(T, self.dma[3].word_count, align_addr, value),
         0x0E...0x0F => {
             const rotate_by = switch (T) {
                 u32 => address & 3,
