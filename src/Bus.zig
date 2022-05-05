@@ -10,7 +10,7 @@ const Iwram = @import("bus/Iwram.zig");
 const Ppu = @import("ppu.zig").Ppu;
 const Apu = @import("apu.zig").Apu;
 const DmaTuple = @import("bus/dma.zig").DmaTuple;
-const Timers = @import("bus/timer.zig").Timers;
+const TimerTuple = @import("bus/timer.zig").TimerTuple;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
 
@@ -19,6 +19,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 
 const createDmaTuple = @import("bus/dma.zig").create;
+const createTimerTuple = @import("bus/timer.zig").create;
 const rotr = @import("util.zig").rotr;
 const Self = @This();
 
@@ -27,7 +28,7 @@ bios: Bios,
 ppu: Ppu,
 apu: Apu,
 dma: DmaTuple,
-tim: Timers,
+tim: TimerTuple,
 iwram: Iwram,
 ewram: Ewram,
 io: Io,
@@ -44,7 +45,7 @@ pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
         .iwram = try Iwram.init(alloc),
         .ewram = try Ewram.init(alloc),
         .dma = createDmaTuple(),
-        .tim = Timers.init(sched),
+        .tim = createTimerTuple(sched),
         .io = Io.init(),
         .cpu = null,
         .sched = sched,

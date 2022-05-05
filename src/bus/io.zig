@@ -52,10 +52,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00DC => @as(T, bus.dma[3].cnt.raw) << 16,
 
             // Timers
-            0x0400_0100 => @as(T, bus.tim._0.cnt.raw) << 16 | bus.tim._0.counter(),
-            0x0400_0104 => @as(T, bus.tim._1.cnt.raw) << 16 | bus.tim._1.counter(),
-            0x0400_0108 => @as(T, bus.tim._2.cnt.raw) << 16 | bus.tim._2.counter(),
-            0x0400_010C => @as(T, bus.tim._3.cnt.raw) << 16 | bus.tim._3.counter(),
+            0x0400_0100 => @as(T, bus.tim[0].cnt.raw) << 16 | bus.tim[0].counter(),
+            0x0400_0104 => @as(T, bus.tim[1].cnt.raw) << 16 | bus.tim[1].counter(),
+            0x0400_0108 => @as(T, bus.tim[2].cnt.raw) << 16 | bus.tim[2].counter(),
+            0x0400_010C => @as(T, bus.tim[3].cnt.raw) << 16 | bus.tim[3].counter(),
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
@@ -92,14 +92,14 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00DE => bus.dma[3].cnt.raw,
 
             // Timers
-            0x0400_0100 => bus.tim._0.counter(),
-            0x0400_0102 => bus.tim._0.cnt.raw,
-            0x0400_0104 => bus.tim._1.counter(),
-            0x0400_0106 => bus.tim._1.cnt.raw,
-            0x0400_0108 => bus.tim._2.counter(),
-            0x0400_010A => bus.tim._2.cnt.raw,
-            0x0400_010C => bus.tim._3.counter(),
-            0x0400_010E => bus.tim._3.cnt.raw,
+            0x0400_0100 => bus.tim[0].counter(),
+            0x0400_0102 => bus.tim[0].cnt.raw,
+            0x0400_0104 => bus.tim[1].counter(),
+            0x0400_0106 => bus.tim[1].cnt.raw,
+            0x0400_0108 => bus.tim[2].counter(),
+            0x0400_010A => bus.tim[2].cnt.raw,
+            0x0400_010C => bus.tim[3].counter(),
+            0x0400_010E => bus.tim[3].cnt.raw,
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT", .{T}),
@@ -214,10 +214,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00E0...0x0400_00FC => {}, // Unused
 
             // Timers
-            0x0400_0100 => bus.tim._0.writeCnt(value),
-            0x0400_0104 => bus.tim._1.writeCnt(value),
-            0x0400_0108 => bus.tim._2.writeCnt(value),
-            0x0400_010C => bus.tim._3.writeCnt(value),
+            0x0400_0100 => bus.tim[0].writeCnt(value),
+            0x0400_0104 => bus.tim[1].writeCnt(value),
+            0x0400_0108 => bus.tim[2].writeCnt(value),
+            0x0400_010C => bus.tim[3].writeCnt(value),
             0x0400_0110...0x0400_011C => {}, // Unused
 
             // Serial Communication 1
@@ -339,14 +339,14 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00DE => bus.dma[3].writeCntHigh(value),
 
             // Timers
-            0x0400_0100 => bus.tim._0.setReload(value),
-            0x0400_0102 => bus.tim._0.writeCntHigh(value),
-            0x0400_0104 => bus.tim._1.setReload(value),
-            0x0400_0106 => bus.tim._1.writeCntHigh(value),
-            0x0400_0108 => bus.tim._2.setReload(value),
-            0x0400_010A => bus.tim._2.writeCntHigh(value),
-            0x0400_010C => bus.tim._3.setReload(value),
-            0x0400_010E => bus.tim._3.writeCntHigh(value),
+            0x0400_0100 => bus.tim[0].setReload(value),
+            0x0400_0102 => bus.tim[0].writeCntHigh(value),
+            0x0400_0104 => bus.tim[1].setReload(value),
+            0x0400_0106 => bus.tim[1].writeCntHigh(value),
+            0x0400_0108 => bus.tim[2].setReload(value),
+            0x0400_010A => bus.tim[2].writeCntHigh(value),
+            0x0400_010C => bus.tim[3].setReload(value),
+            0x0400_010E => bus.tim[3].writeCntHigh(value),
             0x0400_0114 => {}, // TODO: Gyakuten Saiban writes 0x8000 to 0x0400_0114
             0x0400_0110 => {}, // Not Used,
 

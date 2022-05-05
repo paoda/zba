@@ -6,25 +6,12 @@ const Scheduler = @import("../scheduler.zig").Scheduler;
 const Event = @import("../scheduler.zig").Event;
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
+pub const TimerTuple = std.meta.Tuple(&[_]type{ Timer(0), Timer(1), Timer(2), Timer(3) });
 const log = std.log.scoped(.Timer);
 
-pub const Timers = struct {
-    const Self = @This();
-
-    _0: Timer(0),
-    _1: Timer(1),
-    _2: Timer(2),
-    _3: Timer(3),
-
-    pub fn init(sched: *Scheduler) Self {
-        return .{
-            ._0 = Timer(0).init(sched),
-            ._1 = Timer(1).init(sched),
-            ._2 = Timer(2).init(sched),
-            ._3 = Timer(3).init(sched),
-        };
-    }
-};
+pub fn create(sched: *Scheduler) TimerTuple {
+    return .{ Timer(0).init(sched), Timer(1).init(sched), Timer(2).init(sched), Timer(3).init(sched) };
+}
 
 fn Timer(comptime id: u2) type {
     return struct {
@@ -94,7 +81,6 @@ fn Timer(comptime id: u2) type {
         pub fn handleOverflow(self: *Self, cpu: *Arm7tdmi, late: u64) void {
             // Fire IRQ if enabled
             const io = &cpu.bus.io;
-            const tim = &cpu.bus.tim;
 
             if (self.cnt.irq.read()) {
                 switch (id) {
@@ -114,17 +100,17 @@ fn Timer(comptime id: u2) type {
 
             // Perform Cascade Behaviour
             switch (id) {
-                0 => if (tim._1.cnt.cascade.read()) {
-                    tim._1._counter +%= 1;
-                    if (tim._1._counter == 0) tim._1.handleOverflow(cpu, late);
+                0 => if (cpu.bus.tim[1].cnt.cascade.read()) {
+                    cpu.bus.tim[1]._counter +%= 1;
+                    if (cpu.bus.tim[1]._counter == 0) cpu.bus.tim[1].handleOverflow(cpu, late);
                 },
-                1 => if (tim._2.cnt.cascade.read()) {
-                    tim._2._counter +%= 1;
-                    if (tim._2._counter == 0) tim._2.handleOverflow(cpu, late);
+                1 => if (cpu.bus.tim[2].cnt.cascade.read()) {
+                    cpu.bus.tim[2]._counter +%= 1;
+                    if (cpu.bus.tim[2]._counter == 0) cpu.bus.tim[2].handleOverflow(cpu, late);
                 },
-                2 => if (tim._3.cnt.cascade.read()) {
-                    tim._3._counter +%= 1;
-                    if (tim._3._counter == 0) tim._3.handleOverflow(cpu, late);
+                2 => if (cpu.bus.tim[3].cnt.cascade.read()) {
+                    cpu.bus.tim[3]._counter +%= 1;
+                    if (cpu.bus.tim[3]._counter == 0) cpu.bus.tim[3].handleOverflow(cpu, late);
                 },
                 3 => {}, // There is no Timer for TIM3 to "cascade" to,
             }

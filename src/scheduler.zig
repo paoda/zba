@@ -45,10 +45,10 @@ pub const Scheduler = struct {
                 },
                 .TimerOverflow => |id| {
                     switch (id) {
-                        0 => cpu.bus.tim._0.handleOverflow(cpu, late),
-                        1 => cpu.bus.tim._1.handleOverflow(cpu, late),
-                        2 => cpu.bus.tim._2.handleOverflow(cpu, late),
-                        3 => cpu.bus.tim._3.handleOverflow(cpu, late),
+                        0 => cpu.bus.tim[0].handleOverflow(cpu, late),
+                        1 => cpu.bus.tim[1].handleOverflow(cpu, late),
+                        2 => cpu.bus.tim[2].handleOverflow(cpu, late),
+                        3 => cpu.bus.tim[3].handleOverflow(cpu, late),
                     }
                 },
                 .ApuChannel => |id| {
