@@ -102,11 +102,11 @@ fn DmaController(comptime id: u2) type {
         pub fn step(self: *Self, cpu: *Arm7tdmi) bool {
             if (!self.active) return false;
 
-            const sad_adj = std.meta.intToEnum(Adjustment, self.cnt.sad_adj.read()) catch unreachable;
-            const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
             const is_fifo = (self.id == 1 or self.id == 2) and self.cnt.start_timing.read() == 0b11;
+            const sad_adj = Self.adjustment(self.cnt.sad_adj.read());
+            const dad_adj = if (is_fifo) .Fixed else Self.adjustment(self.cnt.dad_adj.read());
 
-            const transfer_type = self.cnt.transfer_type.read() or is_fifo;
+            const transfer_type = is_fifo or self.cnt.transfer_type.read();
             const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
 
             if (transfer_type) {
@@ -118,18 +118,15 @@ fn DmaController(comptime id: u2) type {
             switch (sad_adj) {
                 .Increment => self._sad +%= offset,
                 .Decrement => self._sad -%= offset,
+                // TODO: Is just ignoring this ok?
+                .IncrementReload => log.err("{} is a prohibited adjustment on SAD", .{sad_adj}),
                 .Fixed => {},
-
-                // TODO: Figure out correct behaviour on Illegal Source Addr Control Type
-                .IncrementReload => std.debug.panic("panic(DmaTransfer): {} is an illegal src addr adjustment type", .{sad_adj}),
             }
 
-            if (!is_fifo) {
-                switch (dad_adj) {
-                    .Increment, .IncrementReload => self._dad +%= offset,
-                    .Decrement => self._dad -%= offset,
-                    .Fixed => {},
-                }
+            switch (dad_adj) {
+                .Increment, .IncrementReload => self._dad +%= offset,
+                .Decrement => self._dad -%= offset,
+                .Fixed => {},
             }
 
             self._word_count -= 1;
@@ -176,20 +173,27 @@ fn DmaController(comptime id: u2) type {
 
             if (self.cnt.repeat.read() and self.active) {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
-
-                const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
-                if (dad_adj == .IncrementReload) self._dad = self.dad;
+                if (Self.adjustment(self.cnt.dad_adj.read()) == .IncrementReload) self._dad = self.dad;
             }
         }
 
-        pub fn enableSoundDma(self: *Self, fifo_addr: u32) void {
+        pub fn requestSoundDma(self: *Self, fifo_addr: u32) void {
             comptime std.debug.assert(id == 1 or id == 2);
 
-            if (self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b11 and self.dad == fifo_addr) {
-                self.active = true;
+            const is_enabled = self.cnt.enabled.read();
+            const is_special = self.cnt.start_timing.read() == 0b11;
+            const is_repeating = self.cnt.repeat.read();
+            const is_fifo = self.dad == fifo_addr;
+
+            if (is_enabled and is_special and is_repeating and is_fifo) {
                 self._word_count = 4;
-                self.cnt.repeat.set();
+                self.cnt.transfer_type.set();
+                self.active = true;
             }
+        }
+
+        fn adjustment(idx: u2) Adjustment {
+            return std.meta.intToEnum(Adjustment, idx) catch unreachable;
         }
     };
 }
