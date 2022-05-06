@@ -48,7 +48,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     while (sched.tick < frame_end) {
         if (cpu.bus.io.haltcnt == .Halt) sched.tick += 1;
         if (cpu.bus.io.haltcnt == .Execute) cpu.step();
-        cpu.bus.handleDMATransfers();
+        cpu.handleDMATransfers();
 
         while (sched.tick >= sched.nextTimestamp()) {
             sched.handleEvent(cpu);

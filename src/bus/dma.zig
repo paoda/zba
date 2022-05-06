@@ -2,6 +2,7 @@ const std = @import("std");
 
 const DmaControl = @import("io.zig").DmaControl;
 const Bus = @import("../Bus.zig");
+const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
 pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
 const log = std.log.scoped(.DmaTransfer);
@@ -98,44 +99,20 @@ fn DmaController(comptime id: u2) type {
             self.writeCntHigh(@truncate(u16, word >> 16));
         }
 
-        pub fn step(self: *Self, bus: *Bus) bool {
+        pub fn step(self: *Self, cpu: *Arm7tdmi) bool {
             if (!self.active) return false;
 
             const sad_adj = std.meta.intToEnum(Adjustment, self.cnt.sad_adj.read()) catch unreachable;
             const dad_adj = std.meta.intToEnum(Adjustment, self.cnt.dad_adj.read()) catch unreachable;
             const is_fifo = (self.id == 1 or self.id == 2) and self.cnt.start_timing.read() == 0b11;
 
-            // // if (is_fifo) {
-            // //     const offset = @sizeOf(u32);
-            // //     bus.write(u32, self._dad, bus.read(u32, self._sad));
-
-            // //     // TODO: Deduplicate
-            // //     switch (sad_adj) {
-            // //         .Increment => self._sad +%= offset,
-            // //         .Decrement => self._sad -%= offset,
-            // //         .Fixed => {},
-
-            // //         // TODO: Figure out correct behaviour on Illegal Source Addr Control Type
-            // //         .IncrementReload => std.debug.panic("panic(DmaTransfer): {} is an illegal src addr adjustment type", .{sad_adj}),
-            // //     }
-
-            // //     self._fifo_word_count -= 1;
-
-            // //     if (self._fifo_word_count == 0) {
-            // //         self._fifo_word_count = 4;
-            // //         self.active = false;
-            // //     }
-
-            // //     return true;
-            // // }
-
             const transfer_type = self.cnt.transfer_type.read() or is_fifo;
             const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
 
             if (transfer_type) {
-                bus.write(u32, self._dad, bus.read(u32, self._sad));
+                cpu.bus.write(u32, self._dad, cpu.bus.read(u32, self._sad));
             } else {
-                bus.write(u16, self._dad, bus.read(u16, self._sad));
+                cpu.bus.write(u16, self._dad, cpu.bus.read(u16, self._sad));
             }
 
             switch (sad_adj) {
@@ -162,12 +139,15 @@ fn DmaController(comptime id: u2) type {
                     // If we're not repeating, Fire the IRQs and disable the DMA
                     if (self.cnt.irq.read()) {
                         switch (id) {
-                            0 => bus.io.irq.dma0.set(),
-                            1 => bus.io.irq.dma0.set(),
-                            2 => bus.io.irq.dma0.set(),
-                            3 => bus.io.irq.dma0.set(),
+                            0 => cpu.bus.io.irq.dma0.set(),
+                            1 => cpu.bus.io.irq.dma0.set(),
+                            2 => cpu.bus.io.irq.dma0.set(),
+                            3 => cpu.bus.io.irq.dma0.set(),
                         }
+
+                        cpu.handleInterrupt();
                     }
+
                     self.cnt.enabled.unset();
                 }
 

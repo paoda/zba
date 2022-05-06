@@ -267,6 +267,15 @@ pub const Arm7tdmi = struct {
         }
     }
 
+    pub fn handleDMATransfers(self: *Self) void {
+        while (self.bus.isDmaRunning()) {
+            if (self.bus.dma[1].step(self)) continue;
+            if (self.bus.dma[0].step(self)) continue;
+            if (self.bus.dma[2].step(self)) continue;
+            if (self.bus.dma[3].step(self)) continue;
+        }
+    }
+
     pub fn handleInterrupt(self: *Self) void {
         const should_handle = self.bus.io.ie.raw & self.bus.io.irq.raw;
 

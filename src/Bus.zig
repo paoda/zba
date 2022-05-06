@@ -64,16 +64,7 @@ pub fn attach(self: *Self, cpu: *Arm7tdmi) void {
     self.cpu = cpu;
 }
 
-pub fn handleDMATransfers(self: *Self) void {
-    while (self.isDmaRunning()) {
-        if (self.dma[1].step(self)) continue;
-        if (self.dma[0].step(self)) continue;
-        if (self.dma[2].step(self)) continue;
-        if (self.dma[3].step(self)) continue;
-    }
-}
-
-inline fn isDmaRunning(self: *const Self) bool {
+pub inline fn isDmaRunning(self: *const Self) bool {
     return self.dma[0].active or
         self.dma[1].active or
         self.dma[2].active or
