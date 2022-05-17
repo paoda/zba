@@ -9,7 +9,7 @@ const Bus = @import("Bus.zig");
 const Apu = @import("apu.zig").Apu;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
-const FpsAverage = @import("util.zig").FpsAverage;
+const EmulatorFps = @import("util.zig").EmulatorFps;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
@@ -99,10 +99,10 @@ pub fn main() anyerror!void {
 
     // Init Atomics
     var quit = Atomic(bool).init(false);
-    var emu_rate = FpsAverage.init();
+    var emu_rate = EmulatorFps.init();
 
     // Create Emulator Thread
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .UnlimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
@@ -123,8 +123,6 @@ pub fn main() anyerror!void {
     emu_loop: while (true) {
         var event: SDL.SDL_Event = undefined;
         while (SDL.SDL_PollEvent(&event) != 0) {
-            // Pause Emulation Thread during Input Writing
-
             switch (event.type) {
                 SDL.SDL_QUIT => break :emu_loop,
                 SDL.SDL_KEYDOWN => {
@@ -168,18 +166,17 @@ pub fn main() anyerror!void {
             }
         }
 
-        // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
+        // Emulator has an internal Double Buffer
         const buf_ptr = cpu.bus.ppu.framebuf.get(.Renderer).ptr;
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);
 
-        const actual = emu_rate.calc();
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {d:.1}fps, {d:0>6.2}%] ", .{ window_title, actual, actual * 100 / expected_rate }) catch unreachable;
+        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {}fps] ", .{ window_title, emu_rate.value() }) catch unreachable;
         SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
     }
 
-    quit.store(true, .Unordered); // Terminate Emulator Thread
+    quit.store(true, .SeqCst); // Terminate Emulator Thread
 }
 
 const CliError = error{

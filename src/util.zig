@@ -17,30 +17,36 @@ pub inline fn rotr(comptime T: type, x: T, r: anytype) T {
     return x >> ar | x << (1 +% ~ar);
 }
 
-pub const FpsAverage = struct {
+pub const EmulatorFps = struct {
     const Self = @This();
 
-    total: u64,
-    sample_count: u64,
+    fps: u32,
+    count: std.atomic.Atomic(u32),
+    timer: std.time.Timer,
 
     pub fn init() Self {
-        return .{ .total = 0, .sample_count = 1 };
+        return .{
+            .fps = 0,
+            .count = std.atomic.Atomic(u32).init(0),
+            .timer = std.time.Timer.start() catch unreachable,
+        };
     }
 
-    pub fn add(self: *Self, sample: u64) void {
-        if (self.sample_count == 600) return self.reset(sample);
-
-        self.total += sample;
-        self.sample_count += 1;
+    // TODO: Rename
+    pub fn completeFrame(self: *Self) void {
+        _ = self.count.fetchAdd(1, .Monotonic);
     }
 
-    pub fn calc(self: *const Self) f64 {
-        return @intToFloat(f64, std.time.ns_per_s) / (@intToFloat(f64, self.total) / @intToFloat(f64, self.sample_count));
-    }
+    pub fn value(self: *Self) u32 {
+        const expected = @intToFloat(f64, std.time.ns_per_s);
+        const actual = @intToFloat(f64, self.timer.read());
 
-    fn reset(self: *Self, sample: u64) void {
-        self.total = sample;
-        self.sample_count = 1;
+        if (actual >= expected) {
+            self.fps = self.count.swap(0, .SeqCst);
+            self.timer.reset();
+        }
+
+        return self.fps;
     }
 };
 
