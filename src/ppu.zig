@@ -187,14 +187,11 @@ pub const Ppu = struct {
         // When calcualting the inital address, the first entry is always 0x20 * tile_id, even if it is 8bpp
         const tile_base = char_base + (0x20 * @as(u32, tile_id)) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
 
-        // TODO: Understand more
-        var tile_offset = (tile_x / 8) * tile_len;
-        if (self.dispcnt.obj_mapping.read()) {
-            tile_offset += (tile_y / 8) * tile_len * (sprite.width / 8); // 1D Mapping
-        } else {
-            tile_offset += (tile_y / 8) * tile_len * 0x20; // 2D Mapping
-        }
+        // TODO: Finish that 2D Sprites Test ROM
+        const offset_base = (tile_x / 8) * tile_len;
+        const offset_offset = (tile_y / 8) * tile_len * if (self.dispcnt.obj_mapping.read()) sprite.width / 8 else if (is_8bpp) @as(u32, 0x10) else 0x20;
 
+        const tile_offset = offset_base + offset_offset;
         const tile = self.vram.buf[tile_base + tile_offset];
 
         const pal_id: u16 = if (!is_8bpp) blk: {

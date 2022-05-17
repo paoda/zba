@@ -84,7 +84,7 @@ pub fn main() anyerror!void {
     defer cpu.deinit();
 
     cpu.bus.attach(&cpu);
-    cpu.fastBoot();
+    // cpu.fastBoot();
 
     // Initialize SDL Audio
     const audio_dev = initAudio(&cpu.bus.apu);
