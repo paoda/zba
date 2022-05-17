@@ -140,67 +140,60 @@ pub const Apu = struct {
             or self.ch4.enabled;
         // zig fmt: on
 
+        const ch_left: u4 = self.psg_cnt.ch_left.read();
+        const ch_right: u4 = self.psg_cnt.ch_right.read();
+
+        // Apply SOUNDCNT_H Volume Modifications
+        const gba_vol: f32 = switch (self.dma_cnt.ch_vol.read()) {
+            0b00 => 0.25,
+            0b01 => 0.5,
+            0b10 => 0.75,
+            0b11 => 0.0,
+        };
+
         // Sample Channel 1
-        const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled);
-        const ch1_left = if (self.psg_cnt.ch1_left.read()) ch1_sample else 0;
-        const ch1_right = if (self.psg_cnt.ch1_right.read()) ch1_sample else 0;
+        const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled) * gba_vol;
+        const ch1_left = if (ch_left & 1 == 1) ch1_sample else 0;
+        const ch1_right = if (ch_right & 1 == 1) ch1_sample else 0;
 
         // Sample Channel 2
-        const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled);
-        const ch2_left = if (self.psg_cnt.ch2_left.read()) ch2_sample else 0;
-        const ch2_right = if (self.psg_cnt.ch2_right.read()) ch2_sample else 0;
+        const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled) * gba_vol;
+        const ch2_left = if (ch_left >> 1 & 1 == 1) ch2_sample else 0;
+        const ch2_right = if (ch_right >> 1 & 1 == 1) ch2_sample else 0;
 
         // Sample Channel 3
-        const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled);
-        const ch3_left = if (self.psg_cnt.ch3_left.read()) ch3_sample else 0;
-        const ch3_right = if (self.psg_cnt.ch3_right.read()) ch3_sample else 0;
+        const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled) * gba_vol;
+        const ch3_left = if (ch_left >> 2 & 1 == 1) ch3_sample else 0;
+        const ch3_right = if (ch_right >> 2 & 1 == 1) ch3_sample else 0;
 
         // Sample Channel 4
-        const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled);
-        const ch4_left = if (self.psg_cnt.ch4_left.read()) ch4_sample else 0;
-        const ch4_right = if (self.psg_cnt.ch4_right.read()) ch4_sample else 0;
+        const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled) * gba_vol;
+        const ch4_left = if (ch_left >> 3 == 1) ch4_sample else 0;
+        const ch4_right = if (ch_right >> 3 == 1) ch4_sample else 0;
 
         const mixed_left = ch1_left + ch2_left + ch3_left + ch4_left / 4;
         const mixed_right = ch1_right + ch2_right + ch3_right + ch4_right / 4;
 
-        // // For Debugging Purposes
-        // const mixed_left = ch4_left;
-        // const mixed_right = ch4_right;
-
+        // FIXME: Obscure behaviour?
         // Apply NR50 Volume Modifications
-        const nr50_left = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) * mixed_left;
-        const nr50_right = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) * mixed_right;
+        const left_master_vol = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) / 7;
+        const right_master_vol = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) / 7;
 
-        // Apply SOUNDCNT_H Volume Modifications
-        const psg_left = switch (self.dma_cnt.ch_vol.read()) {
-            0b00 => nr50_left * 0.25,
-            0b01 => nr50_left * 0.5,
-            0b10 => nr50_left * 0.75,
-            0b11 => nr50_left, // Prohibited
-        };
-
-        const psg_right = switch (self.dma_cnt.ch_vol.read()) {
-            0b00 => nr50_right * 0.25,
-            0b01 => nr50_right * 0.5,
-            0b10 => nr50_right * 0.75,
-            0b11 => nr50_right, // Prohibited
-        };
+        const psg_left = mixed_left * left_master_vol;
+        const psg_right = mixed_right * right_master_vol;
 
         // Sample Dma Channels
-        const chA = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() else self.chA.amplitude() / 2;
-        const chA_left = if (self.dma_cnt.chA_left.read()) chA else 0;
-        const chA_right = if (self.dma_cnt.chA_right.read()) chA else 0;
+        const chA_sample = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() * 4 else self.chA.amplitude() * 2;
+        const chA_left = if (self.dma_cnt.chA_left.read()) chA_sample else 0;
+        const chA_right = if (self.dma_cnt.chA_right.read()) chA_sample else 0;
 
-        const chB = if (self.dma_cnt.chB_vol.read()) self.chB.amplitude() else self.chB.amplitude() / 2;
-        const chB_left = if (self.dma_cnt.chB_left.read()) chB else 0;
-        const chB_right = if (self.dma_cnt.chB_right.read()) chB else 0;
+        const chB_sample = if (self.dma_cnt.chB_vol.read()) self.chB.amplitude() * 4 else self.chB.amplitude() * 2;
+        const chB_left = if (self.dma_cnt.chB_left.read()) chB_sample else 0;
+        const chB_right = if (self.dma_cnt.chB_right.read()) chB_sample else 0;
 
         // Mix all Channels
-        const left = (chA_left + chB_left + (psg_left * 0.05)) / 3;
-        const right = (chA_right + chB_right + (psg_right * 0.05)) / 3;
-
-        // const left = psg_left * 0.1;
-        // const right = psg_right * 0.1;
+        const left = (chA_left + chB_left + psg_left) / 3;
+        const right = (chA_right + chB_right + psg_right) / 3;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });

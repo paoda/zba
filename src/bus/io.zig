@@ -671,15 +671,8 @@ pub const NoiseControl = extern union {
 pub const ChannelVolumeControl = extern union {
     right_vol: Bitfield(u16, 0, 3),
     left_vol: Bitfield(u16, 4, 3),
-
-    ch1_right: Bit(u16, 8),
-    ch2_right: Bit(u16, 9),
-    ch3_right: Bit(u16, 10),
-    ch4_right: Bit(u16, 11),
-    ch1_left: Bit(u16, 12),
-    ch2_left: Bit(u16, 13),
-    ch3_left: Bit(u16, 14),
-    ch4_left: Bit(u16, 15),
+    ch_right: Bitfield(u16, 8, 4),
+    ch_left: Bitfield(u16, 12, 4),
     raw: u16,
 };
 
