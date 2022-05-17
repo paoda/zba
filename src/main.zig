@@ -169,7 +169,7 @@ pub fn main() anyerror!void {
         }
 
         // FIXME: Is it OK just to copy the Emulator's Frame Buffer to SDL?
-        const buf_ptr = cpu.bus.ppu.framebuf.ptr;
+        const buf_ptr = cpu.bus.ppu.framebuf.get(.Renderer).ptr;
         _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
         _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
         SDL.SDL_RenderPresent(renderer);

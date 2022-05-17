@@ -35,7 +35,7 @@ pub const Ppu = struct {
     palette: Palette,
     oam: Oam,
     sched: *Scheduler,
-    framebuf: []u8,
+    framebuf: FrameBuffer,
     alloc: Allocator,
 
     scanline_sprites: [128]?Sprite,
@@ -45,15 +45,15 @@ pub const Ppu = struct {
         // Queue first Hblank
         sched.push(.Draw, sched.tick + (240 * 4));
 
-        const framebuf = try alloc.alloc(u8, framebuf_pitch * height);
-        std.mem.set(u8, framebuf, 0);
+        const framebufs = try alloc.alloc(u8, (framebuf_pitch * height) * 2);
+        std.mem.set(u8, framebufs, 0);
 
         return Self{
             .vram = try Vram.init(alloc),
             .palette = try Palette.init(alloc),
             .oam = try Oam.init(alloc),
             .sched = sched,
-            .framebuf = framebuf,
+            .framebuf = FrameBuffer.init(framebufs),
             .alloc = alloc,
 
             // Registers
@@ -68,7 +68,7 @@ pub const Ppu = struct {
     }
 
     pub fn deinit(self: Self) void {
-        self.alloc.free(self.framebuf);
+        self.framebuf.deinit(self.alloc);
         self.vram.deinit();
         self.palette.deinit();
         self.oam.deinit();
@@ -295,7 +295,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -319,7 +319,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -341,7 +341,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -356,7 +356,7 @@ pub const Ppu = struct {
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
                     const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
             },
             0x4 => {
@@ -367,7 +367,7 @@ pub const Ppu = struct {
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
             },
             0x5 => {
@@ -384,7 +384,7 @@ pub const Ppu = struct {
                     const bgr555 =
                         if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
 
-                    std.mem.copy(u8, self.framebuf[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -456,6 +456,8 @@ pub const Ppu = struct {
         } else {
             // Transitioning to a Vblank
             if (scanline == 160) {
+                self.framebuf.swap(); // Swap FrameBuffers
+
                 self.dispstat.vblank.set();
 
                 if (self.dispstat.vblank_irq.read()) {
@@ -884,3 +886,43 @@ fn toRgba8888Talarubi(bgr555: u16) u32 {
 
     return @floatToInt(u32, out_r) << 24 | @floatToInt(u32, out_g) << 16 | @floatToInt(u32, out_b) << 8 | 0xFF;
 }
+
+// Double Buffering Implementation
+const FrameBuffer = struct {
+    const Self = @This();
+
+    buf: [2][]u8,
+    original: []u8,
+    current: u1,
+
+    // TODO: Rename
+    const Device = enum {
+        Emulator,
+        Renderer,
+    };
+
+    pub fn init(bufs: []u8) Self {
+        std.debug.assert(bufs.len == framebuf_pitch * height * 2);
+
+        const front = bufs[0 .. framebuf_pitch * height];
+        const back = bufs[framebuf_pitch * height ..];
+
+        return .{
+            .buf = [2][]u8{ front, back },
+            .original = bufs,
+            .current = 0,
+        };
+    }
+
+    fn deinit(self: Self, alloc: Allocator) void {
+        alloc.free(self.original);
+    }
+
+    pub fn swap(self: *Self) void {
+        self.current = ~self.current;
+    }
+
+    pub fn get(self: *Self, comptime dev: Device) []u8 {
+        return self.buf[if (dev == .Emulator) self.current else ~self.current];
+    }
+};
