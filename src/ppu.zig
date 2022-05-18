@@ -26,6 +26,7 @@ pub const Ppu = struct {
     // Registers
 
     bg: [4]Background,
+    aff: AffineBackground,
 
     dispcnt: io.DisplayControl,
     dispstat: io.DisplayStatus,
@@ -58,6 +59,7 @@ pub const Ppu = struct {
 
             // Registers
             .bg = [_]Background{Background.init()} ** 4,
+            .aff = AffineBackground.init(),
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
@@ -676,6 +678,51 @@ const Background = struct {
             .hofs = .{ .raw = 0x0000 },
             .vofs = .{ .raw = 0x0000 },
         };
+    }
+};
+
+const AffineBackground = struct {
+    const Self = @This();
+
+    bg: [2]AffineBackgroundRegisters,
+
+    fn init() Self {
+        return .{
+            .bg = [_]AffineBackgroundRegisters{AffineBackgroundRegisters.init()} ** 2,
+        };
+    }
+};
+
+const AffineBackgroundRegisters = struct {
+    const Self = @This();
+
+    x: io.BackgroundRefPoint,
+    y: io.BackgroundRefPoint,
+
+    pa: io.BackgroundRotScaleParam,
+    pb: io.BackgroundRotScaleParam,
+    pc: io.BackgroundRotScaleParam,
+    pd: io.BackgroundRotScaleParam,
+
+    fn init() Self {
+        return .{
+            .x = .{ .raw = 0 },
+            .y = .{ .raw = 0 },
+            .pa = .{ .raw = 0 },
+            .pb = .{ .raw = 0 },
+            .pc = .{ .raw = 0 },
+            .pd = .{ .raw = 0 },
+        };
+    }
+
+    pub fn writePaPb(self: *Self, value: u32) void {
+        self.pa.raw = @truncate(u16, value);
+        self.pb.raw = @truncate(u16, value >> 16);
+    }
+
+    pub fn writePcPd(self: *Self, value: u32) void {
+        self.pc.raw = @truncate(u16, value);
+        self.pd.raw = @truncate(u16, value >> 16);
     }
 };
 
