@@ -16,7 +16,7 @@ pub const Scheduler = struct {
 
     pub fn init(alloc: Allocator) Self {
         var sched = Self{ .tick = 0, .queue = PriorityQueue(Event, void, lessThan).init(alloc, {}) };
-        sched.push(.HeatDeath, std.math.maxInt(u64));
+        sched.queue.add(.{ .kind = .HeatDeath, .tick = std.math.maxInt(u64) }) catch unreachable;
 
         return sched;
     }
@@ -87,7 +87,7 @@ pub const Scheduler = struct {
     }
 
     pub fn push(self: *Self, kind: EventKind, end: u64) void {
-        self.queue.add(.{ .kind = kind, .tick = end }) catch unreachable;
+        self.queue.add(.{ .kind = kind, .tick = self.now() + end }) catch unreachable;
     }
 
     pub fn nextTimestamp(self: *Self) u64 {

@@ -44,7 +44,7 @@ pub const Ppu = struct {
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
-        sched.push(.Draw, sched.tick + (240 * 4));
+        sched.push(.Draw, 240 * 4);
 
         const framebufs = try alloc.alloc(u8, (framebuf_pitch * height) * 2);
         std.mem.set(u8, framebufs, 0);
@@ -429,7 +429,7 @@ pub const Ppu = struct {
         pollBlankingDma(&cpu.bus, .HBlank);
 
         self.dispstat.hblank.set();
-        self.sched.push(.HBlank, self.sched.now() + (68 * 4) - late);
+        self.sched.push(.HBlank, 68 * 4 -| late);
     }
 
     pub fn handleHBlankEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
@@ -451,7 +451,7 @@ pub const Ppu = struct {
 
         if (scanline < 160) {
             // Transitioning to another Draw
-            self.sched.push(.Draw, self.sched.now() + (240 * 4) - late);
+            self.sched.push(.Draw, 240 * 4 -| late);
         } else {
             // Transitioning to a Vblank
             if (scanline == 160) {
@@ -469,7 +469,7 @@ pub const Ppu = struct {
             }
 
             if (scanline == 227) self.dispstat.vblank.unset();
-            self.sched.push(.VBlank, self.sched.now() + (240 * 4) - late);
+            self.sched.push(.VBlank, 240 * 4 -| late);
         }
     }
 };

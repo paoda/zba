@@ -126,7 +126,7 @@ fn Timer(comptime id: u2) type {
             const when = (@as(u64, 0x10000) - self._counter) * self.frequency();
 
             self._start_timestamp = self.sched.now();
-            self.sched.push(.{ .TimerOverflow = id }, self.sched.now() + when - late);
+            self.sched.push(.{ .TimerOverflow = id }, when -| late);
         }
 
         fn frequency(self: *const Self) u16 {

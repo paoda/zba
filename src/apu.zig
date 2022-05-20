@@ -60,12 +60,12 @@ pub const Apu = struct {
             .fs = FrameSequencer.init(),
         };
 
-        sched.push(.SampleAudio, sched.now() + apu.sampleTicks());
-        sched.push(.{ .ApuChannel = 0 }, sched.now() + SquareWave.ticks); // Channel 1
-        sched.push(.{ .ApuChannel = 1 }, sched.now() + SquareWave.ticks); // Channel 2
-        sched.push(.{ .ApuChannel = 2 }, sched.now() + WaveDevice.ticks); // Channel 3
-        sched.push(.{ .ApuChannel = 3 }, sched.now() + Noise.ticks); // Channel 4
-        sched.push(.FrameSequencer, sched.now() + ((1 << 24) / 512));
+        sched.push(.SampleAudio, apu.sampleTicks());
+        sched.push(.{ .ApuChannel = 0 }, SquareWave.tickInterval); // Channel 1
+        sched.push(.{ .ApuChannel = 1 }, SquareWave.tickInterval); // Channel 2
+        sched.push(.{ .ApuChannel = 2 }, WaveDevice.tickInterval); // Channel 3
+        sched.push(.{ .ApuChannel = 3 }, Lfsr.tickInterval); // Channel 4
+        sched.push(.FrameSequencer, ((1 << 24) / 512));
 
         return apu;
     }
@@ -143,6 +143,11 @@ pub const Apu = struct {
         const ch_left: u4 = self.psg_cnt.ch_left.read();
         const ch_right: u4 = self.psg_cnt.ch_right.read();
 
+        // FIXME: Obscure behaviour?
+        // Apply NR50 Volume Modifications
+        const left_master_vol = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) / 7.0;
+        const right_master_vol = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) / 7.0;
+
         // Apply SOUNDCNT_H Volume Modifications
         const gba_vol: f32 = switch (self.dma_cnt.ch_vol.read()) {
             0b00 => 0.25,
@@ -152,35 +157,27 @@ pub const Apu = struct {
         };
 
         // Sample Channel 1
-        const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled) * gba_vol;
+        const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled);
         const ch1_left = if (ch_left & 1 == 1) ch1_sample else 0;
         const ch1_right = if (ch_right & 1 == 1) ch1_sample else 0;
 
         // Sample Channel 2
-        const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled) * gba_vol;
+        const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled);
         const ch2_left = if (ch_left >> 1 & 1 == 1) ch2_sample else 0;
         const ch2_right = if (ch_right >> 1 & 1 == 1) ch2_sample else 0;
 
         // Sample Channel 3
-        const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled) * gba_vol;
+        const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled);
         const ch3_left = if (ch_left >> 2 & 1 == 1) ch3_sample else 0;
         const ch3_right = if (ch_right >> 2 & 1 == 1) ch3_sample else 0;
 
         // Sample Channel 4
-        const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled) * gba_vol;
+        const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled);
         const ch4_left = if (ch_left >> 3 == 1) ch4_sample else 0;
         const ch4_right = if (ch_right >> 3 == 1) ch4_sample else 0;
 
-        const mixed_left = ch1_left + ch2_left + ch3_left + ch4_left / 4;
-        const mixed_right = ch1_right + ch2_right + ch3_right + ch4_right / 4;
-
-        // FIXME: Obscure behaviour?
-        // Apply NR50 Volume Modifications
-        const left_master_vol = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) / 7;
-        const right_master_vol = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) / 7;
-
-        const psg_left = mixed_left * left_master_vol;
-        const psg_right = mixed_right * right_master_vol;
+        const psg_left = (ch1_left + ch2_left + ch3_left + ch4_left) * left_master_vol * gba_vol;
+        const psg_right = (ch1_right + ch2_right + ch3_right + ch4_right) * right_master_vol * gba_vol;
 
         // Sample Dma Channels
         const chA_sample = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() * 4 else self.chA.amplitude() * 2;
@@ -192,8 +189,8 @@ pub const Apu = struct {
         const chB_right = if (self.dma_cnt.chB_right.read()) chB_sample else 0;
 
         // Mix all Channels
-        const left = (chA_left + chB_left + psg_left) / 3;
-        const right = (chA_right + chB_right + psg_right) / 3;
+        const left = (chA_left + chB_left + psg_left) / 6.0;
+        const right = (chA_right + chB_right + psg_right) / 6.0;
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
             log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
@@ -210,7 +207,7 @@ pub const Apu = struct {
         while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(f32) * 2 * 0x800)) {}
 
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]f32{ left, right }, 2 * @sizeOf(f32));
-        self.sched.push(.SampleAudio, self.sched.now() + self.sampleTicks() - late);
+        self.sched.push(.SampleAudio, self.sampleTicks() -| late);
     }
 
     fn sampleTicks(self: *const Self) u64 {
@@ -235,7 +232,7 @@ pub const Apu = struct {
             1, 3, 5 => {},
         }
 
-        self.sched.push(.FrameSequencer, self.sched.now() + ((1 << 24) / 512) - late);
+        self.sched.push(.FrameSequencer, ((1 << 24) / 512) -| late);
     }
 
     fn tickLengths(self: *Self) void {
@@ -709,7 +706,6 @@ const Wave = struct {
 
 const Noise = struct {
     const Self = @This();
-    const ticks = (1 << 24) / (1 << 22);
 
     /// Write-only
     /// NR41
@@ -854,7 +850,7 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         }
 
         pub fn push(self: *Self, value: u32) void {
-            self.fifo.write(&intToBytes(u32, value)) catch {};
+            self.fifo.write(&intToBytes(u32, value)) catch |e| log.err("{} Error: {}", .{ kind, e });
         }
 
         pub fn len(self: *const Self) usize {
@@ -951,7 +947,7 @@ const EnvelopeDevice = struct {
 const WaveDevice = struct {
     const Self = @This();
     const wave_len = 0x20;
-    const ticks = (1 << 24) / (1 << 22);
+    const tickInterval: u64 = (1 << 24) / (1 << 22);
 
     buf: [wave_len]u8,
     timer: u16,
@@ -973,7 +969,7 @@ const WaveDevice = struct {
         const timer = (2048 - @as(u64, value)) * 4;
         self.timer = @truncate(u11, timer);
 
-        self.sched.push(.{ .ApuChannel = 2 }, self.sched.now() + timer * ticks);
+        self.sched.push(.{ .ApuChannel = 2 }, timer * tickInterval);
     }
 
     fn handleTimerOverflow(self: *Self, cnt_freq: io.Frequency, cnt_sel: io.WaveSelect, late: u64) void {
@@ -987,7 +983,7 @@ const WaveDevice = struct {
             self.offset = (self.offset + 1) % 0x20; // 0x10 bytes, which contain 2 samples each
         }
 
-        self.sched.push(.{ .ApuChannel = 2 }, self.sched.now() + timer * ticks - late);
+        self.sched.push(.{ .ApuChannel = 2 }, timer * tickInterval -| late);
     }
 
     fn sample(self: *const Self, cnt: io.WaveSelect) u4 {
@@ -1046,7 +1042,7 @@ const WaveDevice = struct {
 
 const SquareWave = struct {
     const Self = @This();
-    const ticks: u64 = (1 << 24) / (1 << 22);
+    const tickInterval: u64 = (1 << 24) / (1 << 22);
 
     pos: u3,
     sched: *Scheduler,
@@ -1098,7 +1094,7 @@ const SquareWave = struct {
         self.timer = @truncate(u12, timer);
         self.pos +%= 1;
 
-        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, self.sched.now() + timer * ticks - late);
+        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, timer * tickInterval -| late);
     }
 
     fn reloadTimer(self: *Self, comptime kind: ChannelKind, value: u11) void {
@@ -1108,7 +1104,7 @@ const SquareWave = struct {
         const timer = (tmp & ~@as(u64, 0x3)) | self.timer & 0x3; // Keep the last two bits from the old timer
         self.timer = @truncate(u12, timer);
 
-        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, self.sched.now() + timer * ticks);
+        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, timer * tickInterval);
     }
 
     fn sample(self: *const Self, cnt: io.Duty) u1 {
@@ -1129,7 +1125,7 @@ const SquareWave = struct {
 // Linear Feedback Shift Register
 const Lfsr = struct {
     const Self = @This();
-    const ticks = (1 << 24) / (1 << 22);
+    const tickInterval: u64 = (1 << 24) / (1 << 22);
 
     shift: u15,
     timer: u16,
@@ -1169,7 +1165,7 @@ const Lfsr = struct {
         const div = Self.divisor(poly.div_ratio.read());
         const timer = @as(u64, div << poly.shift.read());
 
-        self.sched.push(.{ .ApuChannel = 3 }, self.sched.now() + timer * ticks);
+        self.sched.push(.{ .ApuChannel = 3 }, timer * tickInterval);
     }
 
     fn handleTimerOverflow(self: *Self, poly: io.PolyCounter, late: u64) void {
@@ -1182,7 +1178,7 @@ const Lfsr = struct {
         if (poly.width.read())
             self.shift = (self.shift & ~@as(u15, 0x40)) | tmp << 6;
 
-        self.sched.push(.{ .ApuChannel = 3 }, self.sched.now() + timer * ticks - late);
+        self.sched.push(.{ .ApuChannel = 3 }, timer * tickInterval -| late);
     }
 
     fn divisor(code: u3) u16 {
