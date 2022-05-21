@@ -969,7 +969,7 @@ const WaveDevice = struct {
         const timer = (2048 - @as(u64, value)) * 4;
         self.timer = @truncate(u11, timer);
 
-        self.sched.push(.{ .ApuChannel = 2 }, (timer + 1) * tickInterval);
+        self.sched.push(.{ .ApuChannel = 2 }, timer * tickInterval);
     }
 
     fn handleTimerOverflow(self: *Self, cnt_freq: io.Frequency, cnt_sel: io.WaveSelect, late: u64) void {
@@ -983,7 +983,7 @@ const WaveDevice = struct {
             self.offset = (self.offset + 1) % 0x20; // 0x10 bytes, which contain 2 samples each
         }
 
-        self.sched.push(.{ .ApuChannel = 2 }, (timer + 1) * tickInterval -| late);
+        self.sched.push(.{ .ApuChannel = 2 }, timer * tickInterval -| late);
     }
 
     fn sample(self: *const Self, cnt: io.WaveSelect) u4 {
@@ -1094,7 +1094,7 @@ const SquareWave = struct {
         self.timer = @truncate(u12, timer);
         self.pos +%= 1;
 
-        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, (timer + 1) * tickInterval -| late);
+        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, timer * tickInterval -| late);
     }
 
     fn reloadTimer(self: *Self, comptime kind: ChannelKind, value: u11) void {
@@ -1104,7 +1104,7 @@ const SquareWave = struct {
         const timer = (tmp & ~@as(u64, 0x3)) | self.timer & 0x3; // Keep the last two bits from the old timer
         self.timer = @truncate(u12, timer);
 
-        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, (timer + 1) * tickInterval);
+        self.sched.push(.{ .ApuChannel = if (kind == .Ch1) 0 else 1 }, timer * tickInterval);
     }
 
     fn sample(self: *const Self, cnt: io.Duty) u1 {
@@ -1165,15 +1165,12 @@ const Lfsr = struct {
         const div = Self.divisor(poly.div_ratio.read());
         const timer = @as(u64, div << poly.shift.read());
 
-        self.sched.push(.{ .ApuChannel = 3 }, (timer + 1) * tickInterval);
+        self.sched.push(.{ .ApuChannel = 3 }, timer * tickInterval);
     }
 
     fn handleTimerOverflow(self: *Self, poly: io.PolyCounter, late: u64) void {
         const div = Self.divisor(poly.div_ratio.read());
         const timer = @as(u64, div << poly.shift.read());
-
-        // Obscure: Clock Shift of 14 or 15 results in LSFR receiving no clocks
-        if (poly.shift.read() > 14) return;
 
         const tmp = (self.shift & 1) ^ ((self.shift & 2) >> 1);
         self.shift = (self.shift >> 1) | (tmp << 14);
@@ -1181,7 +1178,7 @@ const Lfsr = struct {
         if (poly.width.read())
             self.shift = (self.shift & ~@as(u15, 0x40)) | tmp << 6;
 
-        self.sched.push(.{ .ApuChannel = 3 }, (timer + 1) * tickInterval -| late);
+        self.sched.push(.{ .ApuChannel = 3 }, timer * tickInterval -| late);
     }
 
     fn divisor(code: u3) u16 {
