@@ -24,7 +24,7 @@ pub const Apu = struct {
     chB: DmaSound(.B),
 
     bias: io.SoundBias,
-    /// NR51
+    /// NR50, NR51
     psg_cnt: io.ChannelVolumeControl,
     dma_cnt: io.DmaSoundControl,
     cnt: io.SoundControl,

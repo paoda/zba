@@ -83,6 +83,16 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_004C => unimplementedRead("Read {} from MOSAIC", .{T}),
 
             // Sound
+            0x0400_0060 => bus.apu.ch1.sweep.raw,
+            0x0400_0062 => @as(u16, bus.apu.ch1.envelope.raw) << 8 | bus.apu.ch1.duty.raw,
+            0x0400_0064 => bus.apu.ch1.freq.raw,
+            0x0400_0068 => @as(u16, bus.apu.ch2.envelope.raw) << 8 | bus.apu.ch2.duty.raw,
+            0x0400_006C => bus.apu.ch2.freq.raw,
+            0x0400_0070 => bus.apu.ch3.select.raw,
+            0x0400_0074 => bus.apu.ch3.freq.raw,
+            0x0400_0078 => @as(u16, bus.apu.ch4.envelope.raw) << 8 | bus.apu.ch4.len,
+            0x0400_007C => @as(u16, bus.apu.ch4.poly.raw) << 8 | bus.apu.ch4.cnt.raw,
+            0x0400_0080 => bus.apu.dma_cnt.raw,
             0x0400_0088 => bus.apu.bias.raw,
 
             // DMA Transfers
