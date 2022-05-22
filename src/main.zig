@@ -245,7 +245,7 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
     var have: SDL.SDL_AudioSpec = undefined;
     var want: SDL.SDL_AudioSpec = .{
         .freq = sample_rate,
-        .format = SDL.AUDIO_F32,
+        .format = SDL.AUDIO_U16,
         .channels = 2,
         .samples = 0x100,
         .callback = audioCallback,
