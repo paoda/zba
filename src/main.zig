@@ -9,7 +9,7 @@ const Bus = @import("Bus.zig");
 const Apu = @import("apu.zig").Apu;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
-const EmulatorFps = @import("util.zig").EmulatorFps;
+const FpsTracker = @import("util.zig").FpsTracker;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
@@ -31,65 +31,61 @@ pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_lev
 
 const asString = @import("util.zig").asString;
 
+// CLI Arguments + Help Text
+const params = clap.parseParamsComptime(
+    \\-h, --help            Display this help and exit.
+    \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
+    \\<str>                 Path to the GBA GamePak ROM
+    \\
+);
+
 pub fn main() anyerror!void {
     // Allocator for Emulator + CLI
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
     defer std.debug.assert(!gpa.deinit());
+    const alloc = gpa.allocator();
 
-    // CLI Arguments
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help            Display this help and exit.
-        \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
-        \\<str>                 Path to the GBA GamePak ROM
-        \\
-    );
-
+    // Setup CLI using zig-clap
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();
 
     const stderr = std.io.getStdErr();
     defer stderr.close();
 
+    // Display Help, if requested
+    // Grab ROM and BIOS paths if provided
     if (res.args.help) return clap.help(stderr.writer(), clap.Help, &params, .{});
+    const rom_path = try getRomPath(res, stderr);
     const bios_path: ?[]const u8 = if (res.args.bios) |p| p else null;
 
-    const rom_path = switch (res.positionals.len) {
-        1 => res.positionals[0],
-        0 => {
-            try stderr.writeAll("ZBA requires a positional path to a GamePak ROM.\n");
-            return CliError.InsufficientOptions;
-        },
-        else => {
-            try stderr.writeAll("ZBA received too many arguments.\n");
-            return CliError.UnneededOptions;
-        },
-    };
-
     // Determine Save Directory
-    const save_dir = try setupSavePath(alloc);
+    const save_dir = try getSavePath(alloc);
     defer if (save_dir) |path| alloc.free(path);
     log.info("Found save directory: {s}", .{save_dir});
 
-    // Initialize SDL
-    _ = initSdl2();
-    defer SDL.SDL_Quit();
-
-    // Initialize Emulator
+    // Initialize Scheduler and ARM7TDMI Emulator
+    // Provide GBA Bus (initialized with ARM7TDMI) with a valid ptr to ARM7TDMI
     var scheduler = Scheduler.init(alloc);
     defer scheduler.deinit();
 
     const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_dir };
     var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
     defer cpu.deinit();
-
     cpu.bus.attach(&cpu);
-    // cpu.fastBoot();
+    // cpu.fastBoot(); // Uncomment to skip BIOS
 
-    // Initialize SDL Audio
-    const audio_dev = initAudio(&cpu.bus.apu);
-    defer SDL.SDL_CloseAudioDevice(audio_dev);
+    // Copy ROM title while Emulator still belongs to this thread
+    const title = cpu.bus.pak.title;
 
+    // Initialize SDL2
+    initSdl2();
+    defer SDL.SDL_Quit();
+
+    const dev = initAudio(&cpu.bus.apu);
+    defer SDL.SDL_CloseAudioDevice(dev);
+
+    // TODO: Refactor or delete this Logging code
+    // I probably still need logging in some form though (e.g. Golden Sun IIRC)
     const log_file: ?File = if (enable_logging) blk: {
         const file = try std.fs.cwd().createFile(if (is_binary) "zba.bin" else "zba.log", .{});
         cpu.useLogger(&file, is_binary);
@@ -97,16 +93,17 @@ pub fn main() anyerror!void {
     } else null;
     defer if (log_file) |file| file.close();
 
-    // Init Atomics
     var quit = Atomic(bool).init(false);
-    var emu_rate = EmulatorFps.init();
+    var emu_rate = FpsTracker.init();
 
-    // Create Emulator Thread
+    // Run Emulator in it's separate thread
+    // From this point on, interacting with Arm7tdmi or Scheduler
+    // be justified, as it will require to be thread-afe
     const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
-    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{asString(cpu.bus.pak.title)});
+    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{asString(title)});
 
     const window = createWindow(window_title, gba_width, gba_height);
     defer SDL.SDL_DestroyWindow(window);
@@ -158,7 +155,7 @@ pub fn main() anyerror!void {
                         SDL.SDLK_s => io.keyinput.shoulder_r.set(),
                         SDL.SDLK_RETURN => io.keyinput.start.set(),
                         SDL.SDLK_RSHIFT => io.keyinput.select.set(),
-                        SDL.SDLK_i => std.debug.print("{} samples\n", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(f32))}),
+                        SDL.SDLK_i => std.debug.print("{} samples\n", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))}),
                         else => {},
                     }
                 },
@@ -189,31 +186,9 @@ fn sdlPanic() noreturn {
     @panic(std.mem.sliceTo(str, 0));
 }
 
-// FIXME: Superfluous allocations?
-fn setupSavePath(alloc: std.mem.Allocator) !?[]const u8 {
-    const save_subpath = try std.fs.path.join(alloc, &[_][]const u8{ "zba", "save" });
-    defer alloc.free(save_subpath);
-
-    const maybe_data_path = try known_folders.getPath(alloc, .data);
-    defer if (maybe_data_path) |path| alloc.free(path);
-
-    const save_path = if (maybe_data_path) |base| try std.fs.path.join(alloc, &[_][]const u8{ base, save_subpath }) else null;
-
-    if (save_path) |_| {
-        // If we've determined what our save path should be, ensure the prereq directories
-        // are present so that we can successfully write to the path when necessary
-        const maybe_data_dir = try known_folders.open(alloc, .data, .{});
-        if (maybe_data_dir) |data_dir| try data_dir.makePath(save_subpath);
-    }
-
-    return save_path;
-}
-
-fn initSdl2() c_int {
+fn initSdl2() void {
     const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
     if (status < 0) sdlPanic();
-
-    return status;
 }
 
 fn createWindow(title: []u8, width: c_int, height: c_int) *SDL.SDL_Window {
@@ -267,4 +242,36 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
 export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
     const apu = @ptrCast(*Apu, @alignCast(8, userdata));
     _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+}
+
+fn getSavePath(alloc: std.mem.Allocator) !?[]const u8 {
+    const save_subpath = "zba" ++ [_]u8{std.fs.path.sep} ++ "save";
+
+    const maybe_data_path = try known_folders.getPath(alloc, .data);
+    defer if (maybe_data_path) |path| alloc.free(path);
+
+    const save_path = if (maybe_data_path) |base| try std.fs.path.join(alloc, &[_][]const u8{ base, "zba", "save" }) else null;
+
+    if (save_path) |_| {
+        // If we've determined what our save path should be, ensure the prereq directories
+        // are present so that we can successfully write to the path when necessary
+        const maybe_data_dir = try known_folders.open(alloc, .data, .{});
+        if (maybe_data_dir) |data_dir| try data_dir.makePath(save_subpath);
+    }
+
+    return save_path;
+}
+
+fn getRomPath(res: clap.Result(clap.Help, &params, clap.parsers.default), stderr: std.fs.File) ![]const u8 {
+    return switch (res.positionals.len) {
+        1 => res.positionals[0],
+        0 => {
+            try stderr.writeAll("ZBA requires a positional path to a GamePak ROM.\n");
+            return CliError.InsufficientOptions;
+        },
+        else => {
+            try stderr.writeAll("ZBA received too many arguments.\n");
+            return CliError.UnneededOptions;
+        },
+    };
 }

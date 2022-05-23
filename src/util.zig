@@ -17,7 +17,7 @@ pub inline fn rotr(comptime T: type, x: T, r: anytype) T {
     return x >> ar | x << (1 +% ~ar);
 }
 
-pub const EmulatorFps = struct {
+pub const FpsTracker = struct {
     const Self = @This();
 
     fps: u32,

@@ -4,7 +4,7 @@ const SDL = @import("sdl2");
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const EmulatorFps = @import("util.zig").EmulatorFps;
+const FpsTracker = @import("util.zig").FpsTracker;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
@@ -35,7 +35,7 @@ const RunKind = enum {
     LimitedBusy,
 };
 
-pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *EmulatorFps, sched: *Scheduler, cpu: *Arm7tdmi) void {
+pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7tdmi) void {
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     switch (kind) {
@@ -69,7 +69,7 @@ fn syncToAudio(cpu: *const Arm7tdmi) void {
     while (SDL.SDL_AudioStreamAvailable(stream) > (@sizeOf(u16) * 2) * min_sample_count) {}
 }
 
-pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*EmulatorFps) void {
+pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
     log.info("Emulation thread w/out video sync", .{});
 
     if (fps) |tracker| {
@@ -89,7 +89,7 @@ pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi,
     }
 }
 
-pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*EmulatorFps) void {
+pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
     log.info("Emulation thread w/ video sync", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
