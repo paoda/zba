@@ -1,4 +1,5 @@
 const std = @import("std");
+const SDL = @import("sdl2");
 
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
@@ -8,6 +9,8 @@ const EmulatorFps = @import("util.zig").EmulatorFps;
 const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
+
+const audio_sync = true;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896
@@ -33,6 +36,8 @@ const RunKind = enum {
 };
 
 pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *EmulatorFps, sched: *Scheduler, cpu: *Arm7tdmi) void {
+    if (audio_sync) log.info("Audio sync enabled", .{});
+
     switch (kind) {
         .Unlimited => runUnsynchronized(quit, sched, cpu, null),
         .Limited => runSynchronized(quit, sched, cpu, null),
@@ -56,50 +61,78 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
+fn syncToAudio(cpu: *const Arm7tdmi) void {
+    const stream = cpu.bus.apu.stream;
+    const min_sample_count = 0x800;
+
+    // Busy Loop while we wait for the Audio system to catch up
+    while (SDL.SDL_AudioStreamAvailable(stream) > (@sizeOf(u16) * 2) * min_sample_count) {}
+}
+
 pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*EmulatorFps) void {
+    log.info("Emulation thread w/out video sync", .{});
+
     if (fps) |tracker| {
-        log.info("Start unsynchronized emu thread w/ fps tracking", .{});
+        log.info("FPS Tracking Enabled", .{});
 
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
+            if (audio_sync) syncToAudio(cpu);
+
             tracker.completeFrame();
         }
     } else {
-        log.info("Start unsynchronized emu thread", .{});
-        while (!quit.load(.SeqCst)) runFrame(sched, cpu);
+        while (!quit.load(.SeqCst)) {
+            runFrame(sched, cpu);
+            if (audio_sync) syncToAudio(cpu);
+        }
     }
 }
 
 pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*EmulatorFps) void {
+    log.info("Emulation thread w/ video sync", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
     if (fps) |tracker| {
-        log.info("Start synchronized emu thread w/ fps tracking", .{});
+        log.info("FPS Tracking Enabled", .{});
 
         while (!quit.load(.SeqCst)) {
-            runSyncCore(sched, cpu, &timer, &wake_time);
+            runFrame(sched, cpu);
+            const new_wake_time = syncToVideo(&timer, wake_time);
+
+            // Spin to make up the difference of OS scheduler innacuracies
+            // If we happen to also be syncing to audio, we choose to spin on
+            // the amount of time needed for audio to catch up rather than
+            // our expected wake-up time
+            if (audio_sync) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+            wake_time = new_wake_time;
+
             tracker.completeFrame();
         }
     } else {
-        log.info("Start synchronized emu thread", .{});
-        while (!quit.load(.SeqCst)) runSyncCore(sched, cpu, &timer, &wake_time);
+        while (!quit.load(.SeqCst)) {
+            runFrame(sched, cpu);
+            const new_wake_time = syncToVideo(&timer, wake_time);
+            // see above comment
+            if (audio_sync) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+
+            wake_time = new_wake_time;
+        }
     }
 }
 
-inline fn runSyncCore(sched: *Scheduler, cpu: *Arm7tdmi, timer: *Timer, wake_time: *u64) void {
-    runFrame(sched, cpu);
+inline fn syncToVideo(timer: *Timer, wake_time: u64) u64 {
+    // Use the OS scheduler to put the emulation thread to sleep
+    const maybe_recalc_wake_time = sleep(timer, wake_time);
 
-    // Put the Thread to Sleep + Backup Spin Loop
-    // This saves on resource usage when frame limiting
-    sleep(timer, wake_time);
-
-    // Update to the new wake time
-    wake_time.* += frame_period;
+    // If sleep() determined we need to adjust our wake up time, do so
+    // otherwise predict our next wake up time according to the frame period
+    return if (maybe_recalc_wake_time) |recalc| recalc else wake_time + frame_period;
 }
 
 pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Start synchronized emu thread using busy loop", .{});
+    log.info("Emulation thread with video sync using busy loop", .{});
     var timer = Timer.start() catch unreachable;
     var wake_time: u64 = frame_period;
 
@@ -112,21 +145,17 @@ pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void 
     }
 }
 
-fn sleep(timer: *Timer, wake_time: *u64) void {
+fn sleep(timer: *Timer, wake_time: u64) ?u64 {
     // const step = std.time.ns_per_ms * 10; // 10ms
     const timestamp = timer.read();
 
     // ns_late is non zero if we are late.
-    const ns_late = timestamp -| wake_time.*;
+    const ns_late = timestamp -| wake_time;
 
     // If we're more than a frame late, skip the rest of this loop
     // Recalculate what our new wake time should be so that we can
     // get "back on track"
-    if (ns_late > frame_period) {
-        wake_time.* = timestamp + frame_period;
-        return;
-    }
-
+    if (ns_late > frame_period) return timestamp + frame_period;
     const sleep_for = frame_period - ns_late;
 
     // // Employ several sleep calls in periods of 10ms
@@ -139,9 +168,7 @@ fn sleep(timer: *Timer, wake_time: *u64) void {
 
     std.time.sleep(sleep_for);
 
-    // Spin to make up the difference if there is a need
-    // Make sure that we're using the old wake time and not the onne we recalculated
-    spinLoop(timer, wake_time.*);
+    return null;
 }
 
 fn spinLoop(timer: *Timer, wake_time: u64) void {

@@ -200,8 +200,6 @@ pub const Apu = struct {
             self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable;
         }
 
-        while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(i16) * 2 * 0x800)) {}
-
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left, final_right }, 2 * @sizeOf(u16));
         self.sched.push(.SampleAudio, self.sampleTicks() -| late);
     }
