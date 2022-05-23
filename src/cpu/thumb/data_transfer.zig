@@ -36,7 +36,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     },
                     0b01 => {
                         // LDSB
-                        cpu.r[rd] = sext(8, bus.read(u8, address));
+                        cpu.r[rd] = sext(u32, u8, bus.read(u8, address));
                     },
                     0b10 => {
                         // LDRH
@@ -46,9 +46,9 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
                     0b11 => {
                         // LDRSH
                         cpu.r[rd] = if (address & 1 == 1) blk: {
-                            break :blk sext(8, bus.read(u8, address));
+                            break :blk sext(u32, u8, bus.read(u8, address));
                         } else blk: {
-                            break :blk sext(16, bus.read(u16, address));
+                            break :blk sext(u32, u16, bus.read(u16, address));
                         };
                     },
                 }

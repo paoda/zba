@@ -1,11 +1,16 @@
 const std = @import("std");
 const Log2Int = std.math.Log2Int;
 
-pub inline fn sext(comptime bits: comptime_int, value: u32) u32 {
-    comptime std.debug.assert(bits <= 32);
-    const amount = 32 - bits;
+// Sign-Extend value of type `T` to type `U`
+pub fn sext(comptime T: type, comptime U: type, value: T) T {
+    // U must have less bits than T
+    comptime std.debug.assert(@typeInfo(U).Int.bits <= @typeInfo(T).Int.bits);
 
-    return @bitCast(u32, @bitCast(i32, value << amount) >> amount);
+    const iT = std.meta.Int(.signed, @typeInfo(T).Int.bits);
+    const ExtU = if (@typeInfo(U).Int.signedness == .unsigned) T else iT;
+    const shift = @intCast(Log2Int(T), @typeInfo(T).Int.bits - @typeInfo(U).Int.bits);
+
+    return @bitCast(T, @bitCast(iT, @as(ExtU, @truncate(U, value)) << shift) >> shift);
 }
 
 /// See https://godbolt.org/z/W3en9Eche
