@@ -14,7 +14,7 @@ const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
 const intToBytes = @import("util.zig").intToBytes;
 
 /// This is used to generate byuu / Talurabi's Color Correction algorithm
-// const COLOUR_LUT = genColourLut();
+const COLOUR_LUT = genColourLut();
 
 pub const width = 240;
 pub const height = 160;
@@ -294,7 +294,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -318,7 +318,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -340,7 +340,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -355,7 +355,7 @@ pub const Ppu = struct {
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
                     const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
             },
             0x4 => {
@@ -366,7 +366,7 @@ pub const Ppu = struct {
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
             },
             0x5 => {
@@ -383,7 +383,7 @@ pub const Ppu = struct {
                     const bgr555 =
                         if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
 
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, toRgba8888(bgr555)));
+                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -900,10 +900,10 @@ fn toRgba8888(bgr555: u16) u32 {
 
 fn genColourLut() [0x8000]u32 {
     return comptime {
-        @setEvalBranchQuota(std.math.maxInt(u32));
+        @setEvalBranchQuota(0x10001);
 
         var lut: [0x8000]u32 = undefined;
-        for (lut) |*px, i| px.* = toRgba8888Talarubi(i);
+        for (lut) |*px, i| px.* = toRgba8888(i);
         return lut;
     };
 }
