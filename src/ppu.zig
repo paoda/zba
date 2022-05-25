@@ -183,26 +183,20 @@ pub const Ppu = struct {
         const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
         const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
 
-        const row = tile_y % 8;
-        const col = tile_x % 8;
+        const row = tile_y & 7;
+        const col = @truncate(u3, tile_x);
 
         // When calcualting the inital address, the first entry is always 0x20 * tile_id, even if it is 8bpp
-        const tile_base = char_base + (0x20 * @as(u32, tile_id)) + (tile_row_offset * row) + if (is_8bpp) col else col / 2;
+        const tile_base = char_base + (0x20 * @as(u32, tile_id)) + (tile_row_offset * row) + if (is_8bpp) col else col >> 1;
 
         // TODO: Finish that 2D Sprites Test ROM
-        const offset_base = (tile_x / 8) * tile_len;
-        const offset_offset = (tile_y / 8) * tile_len * if (self.dispcnt.obj_mapping.read()) sprite.width / 8 else if (is_8bpp) @as(u32, 0x10) else 0x20;
+        const offset_base = (tile_x >> 3) * tile_len;
+        const offset_offset = (tile_y >> 3) * tile_len * if (self.dispcnt.obj_mapping.read()) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
 
         const tile_offset = offset_base + offset_offset;
         const tile = self.vram.buf[tile_base + tile_offset];
 
-        const pal_id: u16 = if (!is_8bpp) blk: {
-            const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-            if (nybble_tile == 0) break :blk 0;
-
-            const pal_bank = @as(u8, sprite.pal_bank()) << 4;
-            break :blk pal_bank | nybble_tile;
-        } else tile;
+        const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.pal_bank(), col, tile) else tile;
 
         // Sprite Palette starts at 0x0500_0200
         if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.read(u16, 0x200 + pal_id * 2);
@@ -252,22 +246,23 @@ pub const Ppu = struct {
             // Calculate on which column in a tile we're on
             // Similarly to when we calculated the row, if we're in 4bpp we want to account
             // for 1 byte consisting of two pixels
-            const col = if (entry.h_flip.read()) 7 - (x % 8) else x % 8;
-            const tile = self.vram.buf[tile_addr + if (is_8bpp) col else col / 2];
+            const col = @truncate(u3, x) ^ if (entry.h_flip.read()) 7 else @as(u3, 0);
+            const tile = self.vram.buf[tile_addr + if (is_8bpp) col else col >> 1];
 
             // If we're in 8bpp, then the tile value is an index into the palette,
             // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
             // and then we can index the palette
-            const pal_id: u16 = if (!is_8bpp) blk: {
-                const nybble_tile = if (col & 1 == 1) tile >> 4 else tile & 0xF;
-                if (nybble_tile == 0) break :blk 0;
-
-                const pal_bank = @as(u8, entry.pal_bank.read()) << 4;
-                break :blk pal_bank | nybble_tile;
-            } else tile;
+            const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(entry.pal_bank.read(), col, tile) else tile;
 
             if (pal_id != 0) self.scanline_buf[i] = self.palette.read(u16, pal_id * 2);
         }
+    }
+
+    inline fn get4bppTilePalette(pal_bank: u4, col: u3, tile: u8) u8 {
+        const nybble_tile = tile >> ((col & 1) << 2) & 0xF;
+        if (nybble_tile == 0) return 0;
+
+        return (@as(u8, pal_bank) << 4) | nybble_tile;
     }
 
     pub fn drawScanline(self: *Self) void {
