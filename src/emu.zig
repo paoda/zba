@@ -50,14 +50,17 @@ pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsTracker, sched: *Schedul
 pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
-    while (sched.tick < frame_end) {
-        if (cpu.bus.io.haltcnt == .Halt) sched.tick += 1;
-        if (cpu.bus.io.haltcnt == .Execute) cpu.step();
-        cpu.handleDMATransfers();
+    while (true) {
+        const next = sched.nextTimestamp();
+        const run_until = std.math.min(next, frame_end);
 
-        while (sched.tick >= sched.nextTimestamp()) {
-            sched.handleEvent(cpu);
+        while (sched.tick < run_until) {
+            if (cpu.bus.io.haltcnt == .Execute) cpu.step() else sched.tick += 1;
+            cpu.handleDMATransfers();
         }
+
+        if (sched.tick >= frame_end) break;
+        sched.handleEvent(cpu);
     }
 }
 
