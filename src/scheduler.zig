@@ -90,10 +90,12 @@ pub const Scheduler = struct {
         self.queue.add(.{ .kind = kind, .tick = self.now() + end }) catch unreachable;
     }
 
-    pub fn nextTimestamp(self: *Self) u64 {
-        if (self.queue.peek()) |e| return e.tick;
+    pub inline fn nextTimestamp(self: *const Self) u64 {
+        @setRuntimeSafety(false);
 
-        unreachable; // There's always the HeatDeath event scheduled
+        // Typically you'd use PriorityQueue.peek here, but there's always at least a HeatDeath
+        // event in the PQ so we can just do this instead. Should be faster in ReleaseSafe
+        return self.queue.items[0].tick;
     }
 };
 

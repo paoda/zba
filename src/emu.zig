@@ -51,10 +51,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
     while (true) {
-        const next = sched.nextTimestamp();
-        const run_until = std.math.min(next, frame_end);
-
-        while (sched.tick < run_until) {
+        while (sched.tick < std.math.min(frame_end, sched.nextTimestamp())) {
             if (cpu.bus.io.haltcnt == .Execute) cpu.step() else sched.tick += 1;
             cpu.handleDMATransfers();
         }
