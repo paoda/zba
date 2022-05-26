@@ -239,10 +239,13 @@ fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
     return dev;
 }
 
-// FIXME: Sometimes, we hear garbage upon program start. Why?
 export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
     const apu = @ptrCast(*Apu, @alignCast(8, userdata));
-    _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+    const written = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+
+    // If we don't write anything, play silence otherwise garbage will be played
+    // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
+    if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x80);
 }
 
 fn getSavePath(alloc: std.mem.Allocator) !?[]const u8 {
