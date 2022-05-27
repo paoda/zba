@@ -182,7 +182,7 @@ pub const Apu = struct {
         right += bias;
 
         const tmp_left = std.math.clamp(@intCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
-        const tmp_right = std.math.clamp(@intCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
+        const tmp_right = std.math.clamp(@intCast(u16, right), std.math.minInt(u11), std.math.maxInt(u11));
 
         // Extend to 16-bit signed audio samples
         const final_left = (tmp_left << 5) | (tmp_left >> 6);
