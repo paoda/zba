@@ -65,7 +65,7 @@ pub fn deinit(self: Self) void {
     self.backup.deinit();
 }
 
-pub fn read(self: *const Self, comptime T: type, address: u32) T {
+pub fn read(self: *Self, comptime T: type, address: u32) T {
     const addr = address & 0x1FF_FFFF;
 
     if (self.backup.kind == .Eeprom) {

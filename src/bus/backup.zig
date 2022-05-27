@@ -333,20 +333,8 @@ const Eeprom = struct {
         };
     }
 
-    pub fn read(self: *const Self) u1 {
-        // Here I throw away the const qualifier which is bad and dumb but here's why.
-        // This is one of the few (as of when I write this, **only**) places that mutate
-        // some value upon access. Before this I've been able to have all read-related functions
-        // present a *const Self parameter with no issues.
-        //
-        // I don't think it's worth throwing away all the good that *const Self brings across the entire
-        // memory bus because reading from the EEPROM increments an internal counter which isn't even
-        // visible to neither the cartridge nor any other component of the emulator.
-        //
-        // By throwing away const, we can increment self.read_proc.i which has a range of 0 -> 67. This is
-        // a small enough scope (and a well defined one at that) so that this transgression isn't the worst, I think.
-        const self_mut = @intToPtr(*Self, @ptrToInt(self));
-        return self_mut.reader.read();
+    pub fn read(self: *Self) u1 {
+        return self.reader.read();
     }
 
     pub fn write(self: *Self, word_count: u16, buf: *[]u8, bit: u1) void {

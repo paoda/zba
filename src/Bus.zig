@@ -75,7 +75,10 @@ pub fn debugRead(self: *const Self, comptime T: type, address: u32) T {
     const cached = self.sched.tick;
     defer self.sched.tick = cached;
 
-    return self.read(T, address);
+    // FIXME: This is bad but it's a debug read so I don't care that much?
+    const this = @intToPtr(*Self, @ptrToInt(self));
+
+    return this.read(T, address);
 }
 
 fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
@@ -107,13 +110,13 @@ fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
     return @truncate(T, rotr(u32, word, 8 * (address & 3)));
 }
 
-fn readBios(self: *const Self, comptime T: type, address: u32) T {
+fn readBios(self: *Self, comptime T: type, address: u32) T {
     if (address < Bios.size) return self.bios.checkedRead(T, self.cpu.?.r[15], alignAddress(T, address));
 
     return self.readOpenBus(T, address);
 }
 
-pub fn read(self: *const Self, comptime T: type, address: u32) T {
+pub fn read(self: *Self, comptime T: type, address: u32) T {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
     self.sched.tick += 1;

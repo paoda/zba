@@ -31,11 +31,10 @@ pub fn deinit(self: Self) void {
     if (self.buf) |buf| self.alloc.free(buf);
 }
 
-pub fn checkedRead(self: *const Self, comptime T: type, r15: u32, addr: u32) T {
+pub fn checkedRead(self: *Self, comptime T: type, r15: u32, addr: u32) T {
     if (r15 < Self.size) {
         // FIXME: Just give up on *const Self on bus reads, Rekai
-        const this = @intToPtr(*Self, @ptrToInt(self));
-        this.addr_latch = addr;
+        self.addr_latch = addr;
 
         return self.read(T, addr);
     }
