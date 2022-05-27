@@ -108,7 +108,7 @@ fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
 }
 
 fn readBios(self: *const Self, comptime T: type, address: u32) T {
-    if (address < Bios.size) return self.bios.read(T, alignAddress(T, address));
+    if (address < Bios.size) return self.bios.checkedRead(T, self.cpu.?.r[15], alignAddress(T, address));
 
     return self.readOpenBus(T, address);
 }

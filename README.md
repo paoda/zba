@@ -7,7 +7,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
     - [x] `hello.gba`, `shades.gba`, and `stripes.gba`
     - [x] `memory.gba`
-    - [ ] `bios.gba`
+    - [x] `bios.gba`
     - [ ] `nes.gba`
 - [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
     - [x] `eeprom-test`
