@@ -268,25 +268,29 @@ const Flash = struct {
         self.state = .Ready;
     }
 
-    fn shouldEraseSector(self: *const Self, idx: usize, byte: u8) bool {
-        return self.prep_erase and idx & 0xFFF == 0x000 and byte == 0x30;
+    fn shouldEraseSector(self: *const Self, addr: usize, byte: u8) bool {
+        return self.state == .Command and self.prep_erase and byte == 0x30 and addr & 0xFFF == 0x000;
     }
 
     fn write(self: *Self, buf: []u8, idx: usize, byte: u8) void {
-        buf[idx + if (self.bank == 1) 0x1000 else @as(usize, 0)] = byte;
+        buf[self.baseAddress() + idx] = byte;
         self.prep_write = false;
     }
 
     fn read(self: *const Self, buf: []u8, idx: usize) u8 {
-        return buf[idx + if (self.bank == 1) 0x1000 else @as(usize, 0)];
+        return buf[self.baseAddress() + idx];
     }
 
     fn eraseSector(self: *Self, buf: []u8, idx: usize) void {
-        const start = (idx & 0xF000) + if (self.bank == 1) 0x1000 else @as(usize, 0);
+        const start = self.baseAddress() + (idx & 0xF000);
 
         std.mem.set(u8, buf[start..][0..0x1000], 0xFF);
         self.prep_erase = false;
         self.state = .Ready;
+    }
+
+    inline fn baseAddress(self: *const Self) usize {
+        return if (self.bank == 1) 0x10000 else @as(usize, 0);
     }
 };
 
