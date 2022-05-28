@@ -37,16 +37,12 @@ pub const FpsTracker = struct {
         };
     }
 
-    // TODO: Rename
-    pub fn completeFrame(self: *Self) void {
+    pub fn tick(self: *Self) void {
         _ = self.count.fetchAdd(1, .Monotonic);
     }
 
     pub fn value(self: *Self) u32 {
-        const expected = @intToFloat(f64, std.time.ns_per_s);
-        const actual = @intToFloat(f64, self.timer.read());
-
-        if (actual >= expected) {
+        if (self.timer.read() >= std.time.ns_per_s) {
             self.fps = self.count.swap(0, .SeqCst);
             self.timer.reset();
         }

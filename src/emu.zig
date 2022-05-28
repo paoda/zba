@@ -79,7 +79,7 @@ pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi,
             runFrame(sched, cpu);
             if (audio_sync) syncToAudio(cpu);
 
-            tracker.completeFrame();
+            tracker.tick();
         }
     } else {
         while (!quit.load(.SeqCst)) {
@@ -108,7 +108,7 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
             if (audio_sync) syncToAudio(cpu) else spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
 
-            tracker.completeFrame();
+            tracker.tick();
         }
     } else {
         while (!quit.load(.SeqCst)) {
