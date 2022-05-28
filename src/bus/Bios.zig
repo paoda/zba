@@ -33,9 +33,7 @@ pub fn deinit(self: Self) void {
 
 pub fn checkedRead(self: *Self, comptime T: type, r15: u32, addr: u32) T {
     if (r15 < Self.size) {
-        // FIXME: Just give up on *const Self on bus reads, Rekai
         self.addr_latch = addr;
-
         return self.read(T, addr);
     }
 

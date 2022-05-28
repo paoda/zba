@@ -31,7 +31,6 @@ pub const Apu = struct {
 
     sampling_cycle: u2,
 
-    // TODO: Research whether we can have Atomic Pointers
     stream: *SDL.SDL_AudioStream,
     sched: *Scheduler,
 
@@ -206,83 +205,6 @@ pub const Apu = struct {
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left + 0x4040, final_right + 0x4040 }, 2 * @sizeOf(u16));
         self.sched.push(.SampleAudio, self.sampleTicks() -| late);
     }
-
-    // pub fn sampleAudio(self: *Self, late: u64) void {
-    //     // zig fmt: off
-    //     const any_ch_enabled = self.ch1.enabled
-    //         or self.ch2.enabled
-    //         or self.ch3.enabled
-    //         or self.ch4.enabled;
-    //     // zig fmt: on
-
-    //     const ch_left: u4 = self.psg_cnt.ch_left.read();
-    //     const ch_right: u4 = self.psg_cnt.ch_right.read();
-
-    //     // FIXME: Obscure behaviour?
-    //     // Apply NR50 Volume Modifications
-    //     const left_master_vol = (@intToFloat(f32, self.psg_cnt.left_vol.read()) + 1.0) / 7.0;
-    //     const right_master_vol = (@intToFloat(f32, self.psg_cnt.right_vol.read()) + 1.0) / 7.0;
-
-    //     // Apply SOUNDCNT_H Volume Modifications
-    //     const gba_vol: f32 = switch (self.dma_cnt.ch_vol.read()) {
-    //         0b00 => 0.25,
-    //         0b01 => 0.5,
-    //         else => 1.0,
-    //     };
-
-    //     // Sample Channel 1
-    //     const ch1_sample = self.highPass(self.ch1.amplitude(), any_ch_enabled);
-    //     const ch1_left = if (ch_left & 1 == 1) ch1_sample else 0;
-    //     const ch1_right = if (ch_right & 1 == 1) ch1_sample else 0;
-
-    //     // Sample Channel 2
-    //     const ch2_sample = self.highPass(self.ch2.amplitude(), any_ch_enabled);
-    //     const ch2_left = if (ch_left >> 1 & 1 == 1) ch2_sample else 0;
-    //     const ch2_right = if (ch_right >> 1 & 1 == 1) ch2_sample else 0;
-
-    //     // Sample Channel 3
-    //     const ch3_sample = self.highPass(self.ch3.amplitude(), any_ch_enabled);
-    //     const ch3_left = if (ch_left >> 2 & 1 == 1) ch3_sample else 0;
-    //     const ch3_right = if (ch_right >> 2 & 1 == 1) ch3_sample else 0;
-
-    //     // Sample Channel 4
-    //     const ch4_sample = self.highPass(self.ch4.amplitude(), any_ch_enabled);
-    //     const ch4_left = if (ch_left >> 3 == 1) ch4_sample else 0;
-    //     const ch4_right = if (ch_right >> 3 == 1) ch4_sample else 0;
-
-    //     const psg_left = (ch1_left + ch2_left + ch3_left + ch4_left) * left_master_vol * gba_vol;
-    //     const psg_right = (ch1_right + ch2_right + ch3_right + ch4_right) * right_master_vol * gba_vol;
-
-    //     // Sample Dma Channels
-    //     const chA_sample = if (self.dma_cnt.chA_vol.read()) self.chA.amplitude() * 4 else self.chA.amplitude() * 2;
-    //     const chA_left = if (self.dma_cnt.chA_left.read()) chA_sample else 0;
-    //     const chA_right = if (self.dma_cnt.chA_right.read()) chA_sample else 0;
-
-    //     const chB_sample = if (self.dma_cnt.chB_vol.read()) self.chB.amplitude() * 4 else self.chB.amplitude() * 2;
-    //     const chB_left = if (self.dma_cnt.chB_left.read()) chB_sample else 0;
-    //     const chB_right = if (self.dma_cnt.chB_right.read()) chB_sample else 0;
-
-    //     // Mix all Channels
-    //     const left = (chA_left + chB_left + psg_left) / 6.0;
-    //     const right = (chA_right + chB_right + psg_right) / 6.0;
-
-    //     if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
-    //         log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
-
-    //         // Sample Rate Changed, Create a new Resampler since i can't figure out how to change
-    //         // the parameters of the old one
-    //         const old = self.stream;
-    //         defer SDL.SDL_FreeAudioStream(old);
-
-    //         self.sampling_cycle = self.bias.sampling_cycle.read();
-    //         self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_F32, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_F32, 2, host_sample_rate) orelse unreachable;
-    //     }
-
-    //     while (SDL.SDL_AudioStreamAvailable(self.stream) > (@sizeOf(f32) * 2 * 0x800)) {}
-
-    //     _ = SDL.SDL_AudioStreamPut(self.stream, &[2]f32{ left, right }, 2 * @sizeOf(f32));
-    //     self.sched.push(.SampleAudio, self.sampleTicks() -| late);
-    // }
 
     fn sampleTicks(self: *const Self) u64 {
         return (1 << 24) / self.sampleRate();

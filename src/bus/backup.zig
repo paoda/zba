@@ -411,10 +411,18 @@ const Eeprom = struct {
                     .Large => {
                         if (self.writer.len() == 14) {
                             const addr = @intCast(u10, self.writer.finish());
-
-                            // TODO: Bit Verbose eh?
                             const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
-                            const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
+
+                            // zig fmt: off
+                            const value = @as(u64, value_buf[7]) << 56
+                                | @as(u64, value_buf[6]) << 48
+                                | @as(u64, value_buf[5]) << 40
+                                | @as(u64, value_buf[4]) << 32
+                                | @as(u64, value_buf[3]) << 24
+                                | @as(u64, value_buf[2]) << 16
+                                | @as(u64, value_buf[1]) << 8
+                                | @as(u64, value_buf[0]) << 0;
+                            // zig fmt: on
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;
@@ -422,11 +430,20 @@ const Eeprom = struct {
                     },
                     .Small => {
                         if (self.writer.len() == 6) {
+                            // FIXME: Duplicated code from above
                             const addr = @intCast(u6, self.writer.finish());
-
-                            // TODO: Bit Verbose eh?, also duplicate code
                             const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
-                            const value = @as(u64, value_buf[7]) << 56 | @as(u64, value_buf[6]) << 48 | @as(u64, value_buf[5]) << 40 | @as(u64, value_buf[4]) << 32 | @as(u64, value_buf[3]) << 24 | @as(u64, value_buf[2]) << 16 | @as(u64, value_buf[1]) << 8 | @as(u64, value_buf[0]) << 0;
+
+                            // zig fmt: off
+                            const value = @as(u64, value_buf[7]) << 56
+                                | @as(u64, value_buf[6]) << 48
+                                | @as(u64, value_buf[5]) << 40
+                                | @as(u64, value_buf[4]) << 32
+                                | @as(u64, value_buf[3]) << 24
+                                | @as(u64, value_buf[2]) << 16
+                                | @as(u64, value_buf[1]) << 8
+                                | @as(u64, value_buf[0]) << 0;
+                            // zig fmt: on
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;

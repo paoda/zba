@@ -2,7 +2,7 @@
 An in-progress Gameboy Advance Emulator written in Zig ⚡!
 
 ## Tests 
-- [ ] [jsmolka GBA Test Collection](https://github.com/jsmolka/gba-tests)
+- [ ] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
     - [x] `arm.gba` and `thumb.gba`
     - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
     - [x] `hello.gba`, `shades.gba`, and `stripes.gba`

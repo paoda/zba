@@ -451,7 +451,6 @@ inline fn thumbIdx(opcode: u16) u10 {
 }
 
 pub fn checkCond(cpsr: PSR, cond: u4) bool {
-    // TODO: Should I implement an enum?
     return switch (cond) {
         0x0 => cpsr.z.read(), // EQ - Equal
         0x1 => !cpsr.z.read(), // NE - Not equal
