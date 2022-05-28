@@ -11,7 +11,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [ ] `nes.gba`
 - [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
     - [x] `eeprom-test`
-    - [ ] `flash-test`
+    - [x] `flash-test`
     - [x] `midikey2freq`
     - [ ] `swi-tests-random`
 - [ ] [destoer's GBA Tests](https://github.com/destoer/gba_tests)
@@ -22,7 +22,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [ ] `line_timing.gba`
     - [ ] `lyc_midline.gba`
     - [ ] `window_midframe.gba`
-- [ ] [ladystarbreeze's GBA Test Collection]
+- [ ] [ladystarbreeze's GBA Test Collection](https://github.com/ladystarbreeze/GBA-Test-Collection)
     - [x] `retAddr.gba`
     - [x] `helloWorld.gba`
     - [ ] `helloAudio.gba`
