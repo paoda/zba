@@ -393,10 +393,8 @@ pub const Arm7tdmi = struct {
     }
 
     fn skyWrite(buf: []u8, i: usize, num: u32) void {
-        buf[(@sizeOf(u32) * i) + 3] = @truncate(u8, num >> 24 & 0xFF);
-        buf[(@sizeOf(u32) * i) + 2] = @truncate(u8, num >> 16 & 0xFF);
-        buf[(@sizeOf(u32) * i) + 1] = @truncate(u8, num >> 8 & 0xFF);
-        buf[(@sizeOf(u32) * i) + 0] = @truncate(u8, num >> 0 & 0xFF);
+        const j = @sizeOf(u32) * i;
+        std.mem.writeIntSliceNative(u32, buf[j..(j + @sizeOf(u32))], num);
     }
 
     fn mgbaLog(self: *const Self, file: *const File, opcode: u32) !void {

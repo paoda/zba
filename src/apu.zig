@@ -1014,20 +1014,9 @@ const WaveDevice = struct {
         // TODO: Handle writes when Channel 3 is disabled
         const base = if (!cnt.bank.read()) @as(u32, 0x10) else 0; // Write to the Opposite Bank in Use
 
+        const i = base + addr - 0x0400_0090;
         switch (T) {
-            u32 => {
-                self.buf[base + addr - 0x0400_0090 + 3] = @truncate(u8, value >> 24);
-                self.buf[base + addr - 0x0400_0090 + 2] = @truncate(u8, value >> 16);
-                self.buf[base + addr - 0x0400_0090 + 1] = @truncate(u8, value >> 8);
-                self.buf[base + addr - 0x0400_0090] = @truncate(u8, value);
-            },
-            u16 => {
-                self.buf[base + addr - 0x0400_0090 + 1] = @truncate(u8, value >> 8);
-                self.buf[base + addr - 0x0400_0090] = @truncate(u8, value);
-            },
-            u8 => {
-                self.buf[base + addr - 0x0400_0090] = value;
-            },
+            u32, u16, u8 => std.mem.writeIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)], value),
             else => @compileError("Ch3 WAVERAM: Unsupported write width"),
         }
     }

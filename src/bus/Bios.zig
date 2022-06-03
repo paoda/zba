@@ -44,9 +44,7 @@ pub fn checkedRead(self: *Self, comptime T: type, r15: u32, addr: u32) T {
 fn read(self: *const Self, comptime T: type, addr: u32) T {
     if (self.buf) |buf| {
         return switch (T) {
-            u32 => (@as(u32, buf[addr + 3]) << 24) | (@as(u32, buf[addr + 2]) << 16) | (@as(u32, buf[addr + 1]) << 8) | (@as(u32, buf[addr])),
-            u16 => (@as(u16, buf[addr + 1]) << 8) | @as(u16, buf[addr]),
-            u8 => buf[addr],
+            u32, u16, u8 => std.mem.readIntSliceLittle(T, buf[addr..][0..@sizeOf(T)]),
             else => @compileError("BIOS: Unsupported read width"),
         };
     }

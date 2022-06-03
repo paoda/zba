@@ -11,7 +11,6 @@ const Bitfield = @import("bitfield").Bitfield;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
 const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
-const intToBytes = @import("util.zig").intToBytes;
 
 /// This is used to generate byuu / Talurabi's Color Correction algorithm
 const COLOUR_LUT = genColourLut();
@@ -289,7 +288,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -313,7 +312,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -335,7 +334,7 @@ pub const Ppu = struct {
                 // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
                 for (self.scanline_buf) |maybe_px, i| {
                     const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -350,7 +349,7 @@ pub const Ppu = struct {
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
                     const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
             },
             0x4 => {
@@ -361,7 +360,7 @@ pub const Ppu = struct {
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
             },
             0x5 => {
@@ -378,7 +377,7 @@ pub const Ppu = struct {
                     const bgr555 =
                         if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
 
-                    std.mem.copy(u8, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..4], &intToBytes(u32, COLOUR_LUT[bgr555 & 0x7FFF]));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -494,9 +493,7 @@ const Palette = struct {
         const addr = address & 0x3FF;
 
         return switch (T) {
-            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
-            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
-            u8 => self.buf[addr],
+            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
             else => @compileError("PALRAM: Unsupported read width"),
         };
     }
@@ -505,22 +502,13 @@ const Palette = struct {
         const addr = address & 0x3FF;
 
         switch (T) {
-            u32 => {
-                self.buf[addr + 3] = @truncate(u8, value >> 24);
-                self.buf[addr + 2] = @truncate(u8, value >> 16);
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
-            u16 => {
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
+            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
             u8 => {
                 const halfword: u16 = @as(u16, value) * 0x0101;
-                const real_addr = addr & ~@as(u32, 1); // *was* 8-bit read so address won't be aligned
+                // FIXME: I don't think my comment here makes sense?
+                const weird_addr = addr & ~@as(u32, 1); // *was* 8-bit read so address won't be aligned
 
-                self.buf[real_addr + 1] = @truncate(u8, halfword >> 8);
-                self.buf[real_addr + 0] = @truncate(u8, halfword >> 0);
+                std.mem.writeIntSliceLittle(u16, self.buf[weird_addr..(weird_addr + @sizeOf(u16))], halfword);
             },
             else => @compileError("PALRAM: Unsupported write width"),
         }
@@ -556,9 +544,7 @@ const Vram = struct {
         const addr = Self.mirror(address);
 
         return switch (T) {
-            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
-            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
-            u8 => self.buf[addr],
+            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
             else => @compileError("VRAM: Unsupported read width"),
         };
     }
@@ -568,16 +554,7 @@ const Vram = struct {
         const addr = Self.mirror(address);
 
         switch (T) {
-            u32 => {
-                self.buf[addr + 3] = @truncate(u8, value >> 24);
-                self.buf[addr + 2] = @truncate(u8, value >> 16);
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
-            u16 => {
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
+            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
             u8 => {
                 // Ignore if write is in OBJ
                 switch (mode) {
@@ -586,10 +563,9 @@ const Vram = struct {
                 }
 
                 const halfword: u16 = @as(u16, value) * 0x0101;
-                const real_addr = addr & ~@as(u32, 1);
+                const weird_addr = addr & ~@as(u32, 1);
 
-                self.buf[real_addr + 1] = @truncate(u8, halfword >> 8);
-                self.buf[real_addr + 0] = @truncate(u8, halfword >> 0);
+                std.mem.writeIntSliceLittle(u16, self.buf[weird_addr..(weird_addr + @sizeOf(u16))], halfword);
             },
             else => @compileError("VRAM: Unsupported write width"),
         }
@@ -630,9 +606,7 @@ const Oam = struct {
         const addr = address & 0x3FF;
 
         return switch (T) {
-            u32 => (@as(T, self.buf[addr + 3]) << 24) | (@as(T, self.buf[addr + 2]) << 16) | (@as(T, self.buf[addr + 1]) << 8) | (@as(T, self.buf[addr])),
-            u16 => (@as(T, self.buf[addr + 1]) << 8) | @as(T, self.buf[addr]),
-            u8 => self.buf[addr],
+            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
             else => @compileError("OAM: Unsupported read width"),
         };
     }
@@ -641,16 +615,7 @@ const Oam = struct {
         const addr = address & 0x3FF;
 
         switch (T) {
-            u32 => {
-                self.buf[addr + 3] = @truncate(u8, value >> 24);
-                self.buf[addr + 2] = @truncate(u8, value >> 16);
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
-            u16 => {
-                self.buf[addr + 1] = @truncate(u8, value >> 8);
-                self.buf[addr + 0] = @truncate(u8, value >> 0);
-            },
+            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
             u8 => return, // 8-bit writes are explicitly ignored
             else => @compileError("OAM: Unsupported write width"),
         }

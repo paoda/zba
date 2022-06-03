@@ -4,8 +4,6 @@ const Backup = @import("backup.zig").Backup;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.GamePak);
 
-const intToBytes = @import("../util.zig").intToBytes;
-
 const Self = @This();
 
 title: [12]u8,

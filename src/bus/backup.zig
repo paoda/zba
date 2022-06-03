@@ -4,7 +4,6 @@ const log = std.log.scoped(.Backup);
 
 const escape = @import("../util.zig").escape;
 const asString = @import("../util.zig").asString;
-const intToBytes = @import("../util.zig").intToBytes;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -411,18 +410,7 @@ const Eeprom = struct {
                     .Large => {
                         if (self.writer.len() == 14) {
                             const addr = @intCast(u10, self.writer.finish());
-                            const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
-
-                            // zig fmt: off
-                            const value = @as(u64, value_buf[7]) << 56
-                                | @as(u64, value_buf[6]) << 48
-                                | @as(u64, value_buf[5]) << 40
-                                | @as(u64, value_buf[4]) << 32
-                                | @as(u64, value_buf[3]) << 24
-                                | @as(u64, value_buf[2]) << 16
-                                | @as(u64, value_buf[1]) << 8
-                                | @as(u64, value_buf[0]) << 0;
-                            // zig fmt: on
+                            const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;
@@ -432,18 +420,7 @@ const Eeprom = struct {
                         if (self.writer.len() == 6) {
                             // FIXME: Duplicated code from above
                             const addr = @intCast(u6, self.writer.finish());
-                            const value_buf = buf[@as(u13, addr) * 8 ..][0..8];
-
-                            // zig fmt: off
-                            const value = @as(u64, value_buf[7]) << 56
-                                | @as(u64, value_buf[6]) << 48
-                                | @as(u64, value_buf[5]) << 40
-                                | @as(u64, value_buf[4]) << 32
-                                | @as(u64, value_buf[3]) << 24
-                                | @as(u64, value_buf[2]) << 16
-                                | @as(u64, value_buf[1]) << 8
-                                | @as(u64, value_buf[0]) << 0;
-                            // zig fmt: on
+                            const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;
@@ -471,7 +448,7 @@ const Eeprom = struct {
             },
             .WriteTransfer => {
                 if (self.writer.len() == 64) {
-                    std.mem.copy(u8, buf[self.addr * 8 ..][0..8], &intToBytes(u64, self.writer.finish()));
+                    std.mem.writeIntSliceLittle(u64, buf[self.addr * 8 ..][0..8], self.writer.finish());
                     self.state = .RequestEnd;
                 }
             },
