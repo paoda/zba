@@ -201,6 +201,14 @@ pub const Ppu = struct {
         if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.read(u16, 0x200 + pal_id * 2);
     }
 
+    fn drawAffineBackground(self: *Self, comptime n: u3) void {
+        comptime std.debug.assert(n == 2 or n == 3); // Only BG2 and BG3 can be affine
+
+        // Update BG?X/Y
+        self.aff.bg[n - 2].x_latch += self.aff.bg[n - 2].pb >> 8;
+        self.aff.bg[n - 2].y_latch += self.aff.bg[n - 2].pc >> 8;
+    }
+
     fn drawBackround(self: *Self, comptime n: u3) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
         const charblock_len: u32 = 0x4000;
@@ -458,6 +466,9 @@ pub const Ppu = struct {
                     cpu.handleInterrupt();
                 }
 
+                self.aff.bg[0].latchRefPoints();
+                self.aff.bg[1].latchRefPoints();
+
                 // See if Vblank DMA is present and not enabled
                 pollBlankingDma(&cpu.bus, .VBlank);
             }
@@ -656,33 +667,45 @@ const AffineBackground = struct {
 const AffineBackgroundRegisters = struct {
     const Self = @This();
 
-    x: io.BackgroundRefPoint,
-    y: io.BackgroundRefPoint,
+    x: i32,
+    y: i32,
 
-    pa: io.BackgroundRotScaleParam,
-    pb: io.BackgroundRotScaleParam,
-    pc: io.BackgroundRotScaleParam,
-    pd: io.BackgroundRotScaleParam,
+    pa: i16,
+    pb: i16,
+    pc: i16,
+    pd: i16,
+
+    x_latch: ?i32,
+    y_latch: ?i32,
 
     fn init() Self {
         return .{
-            .x = .{ .raw = 0 },
-            .y = .{ .raw = 0 },
-            .pa = .{ .raw = 0 },
-            .pb = .{ .raw = 0 },
-            .pc = .{ .raw = 0 },
-            .pd = .{ .raw = 0 },
+            .x = 0,
+            .y = 0,
+            .pa = 0,
+            .pb = 0,
+            .pc = 0,
+            .pd = 0,
+
+            .x_latch = null,
+            .y_latch = null,
         };
     }
 
     pub fn writePaPb(self: *Self, value: u32) void {
-        self.pa.raw = @truncate(u16, value);
-        self.pb.raw = @truncate(u16, value >> 16);
+        self.pa = @bitCast(i16, @truncate(u16, value));
+        self.pb = @bitCast(i16, @truncate(u16, value >> 16));
     }
 
     pub fn writePcPd(self: *Self, value: u32) void {
-        self.pc.raw = @truncate(u16, value);
-        self.pd.raw = @truncate(u16, value >> 16);
+        self.pc = @bitCast(i16, @truncate(u16, value));
+        self.pd = @bitCast(i16, @truncate(u16, value >> 16));
+    }
+
+    // Every Vblank BG?X/Y registers are latched
+    fn latchRefPoints(self: *Self) void {
+        self.x_latch = self.x;
+        self.y_latch = self.y;
     }
 };
 
