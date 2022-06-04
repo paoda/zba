@@ -245,7 +245,7 @@ export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void 
 
     // If we don't write anything, play silence otherwise garbage will be played
     // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
-    if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x80);
+    if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
 }
 
 fn getSavePath(alloc: std.mem.Allocator) !?[]const u8 {

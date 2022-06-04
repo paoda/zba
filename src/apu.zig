@@ -180,8 +180,8 @@ pub const Apu = struct {
         left += bias;
         right += bias;
 
-        const tmp_left = std.math.clamp(@intCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
-        const tmp_right = std.math.clamp(@intCast(u16, right), std.math.minInt(u11), std.math.maxInt(u11));
+        const tmp_left = std.math.clamp(@bitCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
+        const tmp_right = std.math.clamp(@bitCast(u16, right), std.math.minInt(u11), std.math.maxInt(u11));
 
         // Extend to 16-bit signed audio samples
         const final_left = (tmp_left << 5) | (tmp_left >> 6);
@@ -199,10 +199,7 @@ pub const Apu = struct {
             self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable;
         }
 
-        // If we add 0x4040 to each sample the DC Offset is removed
-        // note: found this through guess and check
-        // FIXME: Pretty sure this is a dirty hack and should be fixed
-        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left + 0x4040, final_right + 0x4040 }, 2 * @sizeOf(u16));
+        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left, final_right }, 2 * @sizeOf(u16));
         self.sched.push(.SampleAudio, self.sampleTicks() -| late);
     }
 
