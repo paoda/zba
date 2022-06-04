@@ -204,9 +204,48 @@ pub const Ppu = struct {
     fn drawAffineBackground(self: *Self, comptime n: u3) void {
         comptime std.debug.assert(n == 2 or n == 3); // Only BG2 and BG3 can be affine
 
-        // Update BG?X/Y
-        self.aff.bg[n - 2].x_latch += self.aff.bg[n - 2].pb >> 8;
-        self.aff.bg[n - 2].y_latch += self.aff.bg[n - 2].pc >> 8;
+        const char_base = @as(u32, 0x4000) * self.bg[n].cnt.char_base.read();
+        const screen_base = @as(u32, 0x800) * self.bg[n].cnt.screen_base.read();
+        const size: u2 = self.bg[n].cnt.size.read();
+        const tile_width = @as(i32, 0x10) << size;
+
+        const px_width = tile_width << 3;
+        const px_height = px_width;
+
+        var aff_x = self.aff.bg[n - 2].x_latch.?;
+        var aff_y = self.aff.bg[n - 2].y_latch.?;
+
+        var i: u32 = 0;
+        while (i < width) : (i += 1) {
+            var ix = aff_x >> 8;
+            var iy = aff_y >> 8;
+
+            aff_x += self.aff.bg[n - 2].pa;
+            aff_y += self.aff.bg[n - 2].pc;
+
+            if (self.scanline_buf[@as(usize, i)] != null) continue;
+
+            if (self.bg[n].cnt.display_overflow.read()) {
+                ix = if (ix > px_width) @rem(ix, px_width) else if (ix < 0) px_width + @rem(ix, px_width) else ix;
+                iy = if (iy > px_height) @rem(iy, px_height) else if (iy < 0) px_height + @rem(iy, px_height) else iy;
+            } else if (ix > px_width or iy > px_height or ix < 0 or iy < 0) continue;
+
+            const x = @bitCast(u32, ix);
+            const y = @bitCast(u32, iy);
+
+            const tile_id: u32 = self.vram.read(u8, screen_base + ((y / 8) * @bitCast(u32, tile_width) + (x / 8)));
+            const row = y & 7;
+            const col = x & 7;
+
+            const tile_addr = char_base + (tile_id * 0x40) + (row * 0x8) + col;
+            const pal_id: u16 = self.vram.buf[tile_addr];
+
+            if (pal_id != 0) self.scanline_buf[i] = self.palette.read(u16, pal_id * 2);
+        }
+
+        // Update BGxX and BGxY
+        self.aff.bg[n - 2].x_latch.? += self.aff.bg[n - 2].pb; // PB is added to BGxX
+        self.aff.bg[n - 2].y_latch.? += self.aff.bg[n - 2].pd; // PD is added to BGxY
     }
 
     fn drawBackround(self: *Self, comptime n: u3) void {
@@ -313,7 +352,7 @@ pub const Ppu = struct {
                     self.drawSprites(@truncate(u2, layer));
                     if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
                     if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
-                    // TODO: Implement Affine BG2
+                    if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
@@ -335,7 +374,8 @@ pub const Ppu = struct {
                 var layer: usize = 0;
                 while (layer < 4) : (layer += 1) {
                     self.drawSprites(@truncate(u2, layer));
-                    // TODO: Implement Affine BG2, BG3
+                    if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
+                    if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawAffineBackground(3);
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
