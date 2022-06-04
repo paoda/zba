@@ -96,7 +96,7 @@ pub const Ppu = struct {
             const attr0 = @bitCast(Attr0, self.oam.read(u16, i));
 
             // Only consider enabled Sprites
-            if (!attr0.disabled.read()) {
+            if (attr0.is_affine.read() or !attr0.disabled.read()) {
                 const attr1 = @bitCast(Attr1, self.oam.read(u16, i + 2));
 
                 // When fetching sprites we only care about ones that could be rendered
@@ -126,79 +126,68 @@ pub const Ppu = struct {
         }
     }
 
-    /// Draw all relevant sprites on a scanline
-    fn drawSprites(self: *Self, prio: u2) void {
-        const char_base = 0x4000 * 4;
-        const y = @bitCast(i8, self.vcount.scanline.read());
-
+    fn drawSprites(self: *Self, layer: u2) void {
         // Loop over every fetched sprite
-        sprite_loop: for (self.scanline_sprites) |maybe_sprites| {
-            if (maybe_sprites) |sprite| {
-                // Move on to the next sprite If its of a different priority
-                if (sprite.priority() != prio) continue :sprite_loop;
-                if (sprite.attr0.is_affine.read()) continue :sprite_loop; // TODO: Affine Sprites
-
-                var i: u9 = 0;
-                px_loop: while (i < sprite.width) : (i += 1) {
-                    const x = (sprite.x() +% i) % 240;
-                    const ix = @bitCast(i9, x);
-
-                    // If We've already rendered a pixel here don't overwrite it
-                    if (self.scanline_buf[x] != null) continue :px_loop;
-
-                    const start = sprite.x();
-                    const istart = @bitCast(i9, start);
-
-                    const end = start +% sprite.width;
-                    const iend = @bitCast(i9, end);
-
-                    // By comparing with both signed and unsigned values we ensure that sprites
-                    // are displayed in all valid (AFAIK) configuration
-                    if ((start <= x and x < end) or (istart <= ix and ix < iend)) {
-                        self.drawSpritePixel(char_base, sprite, ix, y);
-                    }
-                }
+        for (self.scanline_sprites) |maybe_sprite| {
+            if (maybe_sprite) |sprite| {
+                // Skip this sprite if it isn't on the current priority
+                if (sprite.priority() != layer) continue;
+                if (sprite.attr0.is_affine.read()) self.drawSprite(sprite) else self.drawSprite(sprite);
             } else break;
         }
     }
 
-    /// Draw a Pixel of a Sprite Tile
-    fn drawSpritePixel(self: *Self, char_base: u32, sprite: Sprite, x: i9, y: i8) void {
-        // FIXME: We branch on this condition quite a lot
+    fn drawSprite(self: *Self, sprite: Sprite) void {
+        const iy = @bitCast(i8, self.vcount.scanline.read());
+
         const is_8bpp = sprite.is_8bpp();
-
-        // std.math.absInt is branchless
-        const x_diff = @bitCast(u9, std.math.absInt(x - @bitCast(i9, sprite.x())) catch unreachable);
-        const y_diff = @bitCast(u8, std.math.absInt(y -% @bitCast(i8, sprite.y())) catch unreachable);
-
-        // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
-        // Background Tiles. By doing this we mirror the entire sprite instead of
-        // just a specific tile (see how sprite.width and sprite.height are involved)
-        const tile_y = y_diff ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
-        const tile_x = x_diff ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
-
-        // Like in the background Tiles are 8x8 groups of pixels in 8bpp or 4bpp formats
-        const tile_id = sprite.tile_id();
+        const tile_id: u32 = sprite.tile_id();
+        const obj_mapping = self.dispcnt.obj_mapping.read();
         const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
         const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
 
-        const row = tile_y & 7;
-        const col = @truncate(u3, tile_x);
+        const char_base = 0x4000 * 4;
 
-        // When calcualting the inital address, the first entry is always 0x20 * tile_id, even if it is 8bpp
-        const tile_base = char_base + (0x20 * @as(u32, tile_id)) + (tile_row_offset * row) + if (is_8bpp) col else col >> 1;
+        var i: u9 = 0;
+        while (i < sprite.width) : (i += 1) {
+            const x = (sprite.x() +% i) % width;
+            const ix = @bitCast(i9, x);
 
-        // TODO: Finish that 2D Sprites Test ROM
-        const offset_base = (tile_x >> 3) * tile_len;
-        const offset_offset = (tile_y >> 3) * tile_len * if (self.dispcnt.obj_mapping.read()) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
+            if (self.scanline_buf[x] != null) continue;
 
-        const tile_offset = offset_base + offset_offset;
-        const tile = self.vram.buf[tile_base + tile_offset];
+            const sprite_start = sprite.x();
+            const isprite_start = @bitCast(i9, sprite_start);
+            const sprite_end = sprite_start +% sprite.width;
+            const isprite_end = @bitCast(i9, sprite_end);
 
-        const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.pal_bank(), col, tile) else tile;
+            const condition = (sprite_start <= x and x < sprite_end) or (isprite_start <= ix and ix < isprite_end);
+            if (!condition) continue;
 
-        // Sprite Palette starts at 0x0500_0200
-        if (pal_id != 0) self.scanline_buf[@bitCast(u9, x)] = self.palette.read(u16, 0x200 + pal_id * 2);
+            // Sprite is within bounds and therefore should be rendered
+            // std.math.absInt is branchless
+            const x_diff = @bitCast(u9, std.math.absInt(ix - isprite_start) catch unreachable);
+            const y_diff = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
+
+            // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
+            // Background Tiles. By doing this we mirror the entire sprite instead of
+            // just a specific tile (see how sprite.width and sprite.height are involved)
+            const tile_y = y_diff ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
+            const tile_x = x_diff ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
+
+            const row = @truncate(u3, tile_y);
+            const col = @truncate(u3, tile_x);
+
+            // TODO: Finish that 2D Sprites Test ROM
+            const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
+            const mapping_offset = if (obj_mapping) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
+            const tile_offset = (tile_x >> 3) * tile_len + (tile_y >> 3) * tile_len * mapping_offset;
+
+            const tile = self.vram.buf[tile_base + tile_offset];
+            const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.pal_bank(), col, tile) else tile;
+
+            // Sprite Palette starts at 0x0500_0200
+            if (pal_id != 0) self.scanline_buf[x] = self.palette.read(u16, 0x200 + pal_id * 2);
+        }
     }
 
     fn drawAffineBackground(self: *Self, comptime n: u3) void {
