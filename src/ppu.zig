@@ -25,7 +25,7 @@ pub const Ppu = struct {
     // Registers
 
     bg: [4]Background,
-    aff: AffineBackground,
+    aff_bg: [2]AffineBackground,
 
     dispcnt: io.DisplayControl,
     dispstat: io.DisplayStatus,
@@ -58,7 +58,7 @@ pub const Ppu = struct {
 
             // Registers
             .bg = [_]Background{Background.init()} ** 4,
-            .aff = AffineBackground.init(),
+            .aff_bg = [_]AffineBackground{AffineBackground.init()} ** 2,
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
@@ -212,16 +212,16 @@ pub const Ppu = struct {
         const px_width = tile_width << 3;
         const px_height = px_width;
 
-        var aff_x = self.aff.bg[n - 2].x_latch.?;
-        var aff_y = self.aff.bg[n - 2].y_latch.?;
+        var aff_x = self.aff_bg[n - 2].x_latch.?;
+        var aff_y = self.aff_bg[n - 2].y_latch.?;
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
             var ix = aff_x >> 8;
             var iy = aff_y >> 8;
 
-            aff_x += self.aff.bg[n - 2].pa;
-            aff_y += self.aff.bg[n - 2].pc;
+            aff_x += self.aff_bg[n - 2].pa;
+            aff_y += self.aff_bg[n - 2].pc;
 
             if (self.scanline_buf[@as(usize, i)] != null) continue;
 
@@ -244,17 +244,15 @@ pub const Ppu = struct {
         }
 
         // Update BGxX and BGxY
-        self.aff.bg[n - 2].x_latch.? += self.aff.bg[n - 2].pb; // PB is added to BGxX
-        self.aff.bg[n - 2].y_latch.? += self.aff.bg[n - 2].pd; // PD is added to BGxY
+        self.aff_bg[n - 2].x_latch.? += self.aff_bg[n - 2].pb; // PB is added to BGxX
+        self.aff_bg[n - 2].y_latch.? += self.aff_bg[n - 2].pd; // PD is added to BGxY
     }
 
     fn drawBackround(self: *Self, comptime n: u3) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
-        const charblock_len: u32 = 0x4000;
-        const screenblock_len: u32 = 0x800;
 
-        const cbb: u2 = self.bg[n].cnt.char_base.read(); // Char Block Base
-        const sbb: u5 = self.bg[n].cnt.screen_base.read(); // Screen Block Base
+        const char_base = 0x4000 * @as(u32, self.bg[n].cnt.char_base.read());
+        const screen_base = 0x800 * @as(u32, self.bg[n].cnt.screen_base.read());
         const is_8bpp: bool = self.bg[n].cnt.colour_mode.read(); // Colour Mode
         const size: u2 = self.bg[n].cnt.size.read(); // Background Size
 
@@ -262,10 +260,6 @@ pub const Ppu = struct {
         // In 8bpp: 1 byte represents one pixel so the length is 8 x 8
         const tile_len = if (is_8bpp) @as(u32, 0x40) else 0x20;
         const tile_row_offset = if (is_8bpp) @as(u32, 0x8) else 0x4;
-
-        // 0x0600_000 is implied because we can access VRAM without the Bus
-        const char_base: u32 = charblock_len * @as(u32, cbb);
-        const screen_base: u32 = screenblock_len * @as(u32, sbb);
 
         const vofs: u32 = self.bg[n].vofs.offset.read();
         const hofs: u32 = self.bg[n].hofs.offset.read();
@@ -286,14 +280,15 @@ pub const Ppu = struct {
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
             const tile_id: u32 = entry.tile_id.read();
-            const row = if (entry.v_flip.read()) 7 - (y % 8) else y % 8; // Determine on which row in a tile we're on
-            const tile_addr = char_base + (tile_len * tile_id) + (tile_row_offset * row);
 
-            // Calculate on which column in a tile we're on
-            // Similarly to when we calculated the row, if we're in 4bpp we want to account
-            // for 1 byte consisting of two pixels
+            // Calculate row and column offsets. Understand that
+            // `tile_len`, `tile_row_offset` and `col` are subject to different
+            // values depending on whether we are in 4bpp or 8bpp mode.
+            const row = @truncate(u3, y) ^ if (entry.v_flip.read()) 7 else @as(u3, 0);
             const col = @truncate(u3, x) ^ if (entry.h_flip.read()) 7 else @as(u3, 0);
-            const tile = self.vram.buf[tile_addr + if (is_8bpp) col else col >> 1];
+            const tile_addr = char_base + (tile_id * tile_len) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
+
+            const tile = self.vram.buf[tile_addr];
 
             // If we're in 8bpp, then the tile value is an index into the palette,
             // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
@@ -432,6 +427,7 @@ pub const Ppu = struct {
         }
     }
 
+    // TODO: Comment this + get a better understanding
     fn tilemapOffset(size: u2, x: u32, y: u32) u32 {
         // Current Row: (y % PIXEL_COUNT) / 8
         // Current COlumn: (x % PIXEL_COUNT) / 8
@@ -506,8 +502,8 @@ pub const Ppu = struct {
                     cpu.handleInterrupt();
                 }
 
-                self.aff.bg[0].latchRefPoints();
-                self.aff.bg[1].latchRefPoints();
+                self.aff_bg[0].latchRefPoints();
+                self.aff_bg[1].latchRefPoints();
 
                 // See if Vblank DMA is present and not enabled
                 pollBlankingDma(&cpu.bus, .VBlank);
@@ -693,18 +689,6 @@ const Background = struct {
 };
 
 const AffineBackground = struct {
-    const Self = @This();
-
-    bg: [2]AffineBackgroundRegisters,
-
-    fn init() Self {
-        return .{
-            .bg = [_]AffineBackgroundRegisters{AffineBackgroundRegisters.init()} ** 2,
-        };
-    }
-};
-
-const AffineBackgroundRegisters = struct {
     const Self = @This();
 
     x: i32,
