@@ -132,16 +132,16 @@ pub const Ppu = struct {
             if (maybe_sprite) |sprite| {
                 // Skip this sprite if it isn't on the current priority
                 if (sprite.priority() != layer) continue;
-                if (sprite.attr0.is_affine.read()) self.drawSprite(sprite) else self.drawSprite(sprite);
+                if (sprite.attr0.is_affine.read()) self.drawAffineSprite(AffineSprite.from(sprite)) else self.drawSprite(sprite);
             } else break;
         }
     }
 
-    fn drawSprite(self: *Self, sprite: Sprite) void {
+    fn drawAffineSprite(self: *Self, sprite: AffineSprite) void {
         const iy = @bitCast(i8, self.vcount.scanline.read());
 
-        const is_8bpp = sprite.is_8bpp();
-        const tile_id: u32 = sprite.tile_id();
+        const is_8bpp = sprite.is8bpp();
+        const tile_id: u32 = sprite.tileId();
         const obj_mapping = self.dispcnt.obj_mapping.read();
         const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
         const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
@@ -165,14 +165,8 @@ pub const Ppu = struct {
 
             // Sprite is within bounds and therefore should be rendered
             // std.math.absInt is branchless
-            const x_diff = @bitCast(u9, std.math.absInt(ix - isprite_start) catch unreachable);
-            const y_diff = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
-
-            // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
-            // Background Tiles. By doing this we mirror the entire sprite instead of
-            // just a specific tile (see how sprite.width and sprite.height are involved)
-            const tile_y = y_diff ^ if (sprite.v_flip()) (sprite.height - 1) else 0;
-            const tile_x = x_diff ^ if (sprite.h_flip()) (sprite.width - 1) else 0;
+            const tile_x = @bitCast(u9, std.math.absInt(ix - @bitCast(i9, sprite.x())) catch unreachable);
+            const tile_y = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
 
             const row = @truncate(u3, tile_y);
             const col = @truncate(u3, tile_x);
@@ -183,7 +177,60 @@ pub const Ppu = struct {
             const tile_offset = (tile_x >> 3) * tile_len + (tile_y >> 3) * tile_len * mapping_offset;
 
             const tile = self.vram.buf[tile_base + tile_offset];
-            const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.pal_bank(), col, tile) else tile;
+            const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
+
+            // Sprite Palette starts at 0x0500_0200
+            if (pal_id != 0) self.scanline_buf[x] = self.palette.read(u16, 0x200 + pal_id * 2);
+        }
+    }
+
+    fn drawSprite(self: *Self, sprite: Sprite) void {
+        const iy = @bitCast(i8, self.vcount.scanline.read());
+
+        const is_8bpp = sprite.is8bpp();
+        const tile_id: u32 = sprite.tileId();
+        const obj_mapping = self.dispcnt.obj_mapping.read();
+        const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
+        const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
+
+        const char_base = 0x4000 * 4;
+
+        var i: u9 = 0;
+        while (i < sprite.width) : (i += 1) {
+            const x = (sprite.x() +% i) % width;
+            const ix = @bitCast(i9, x);
+
+            if (self.scanline_buf[x] != null) continue;
+
+            const sprite_start = sprite.x();
+            const isprite_start = @bitCast(i9, sprite_start);
+            const sprite_end = sprite_start +% sprite.width;
+            const isprite_end = @bitCast(i9, sprite_end);
+
+            const condition = (sprite_start <= x and x < sprite_end) or (isprite_start <= ix and ix < isprite_end);
+            if (!condition) continue;
+
+            // Sprite is within bounds and therefore should be rendered
+            // std.math.absInt is branchless
+            const x_diff = @bitCast(u9, std.math.absInt(ix - @bitCast(i9, sprite.x())) catch unreachable);
+            const y_diff = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
+
+            // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
+            // Background Tiles. By doing this we mirror the entire sprite instead of
+            // just a specific tile (see how sprite.width and sprite.height are involved)
+            const tile_y = y_diff ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
+            const tile_x = x_diff ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
+
+            const row = @truncate(u3, tile_y);
+            const col = @truncate(u3, tile_x);
+
+            // TODO: Finish that 2D Sprites Test ROM
+            const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
+            const mapping_offset = if (obj_mapping) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
+            const tile_offset = (tile_x >> 3) * tile_len + (tile_y >> 3) * tile_len * mapping_offset;
+
+            const tile = self.vram.buf[tile_base + tile_offset];
+            const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) self.scanline_buf[x] = self.palette.read(u16, 0x200 + pal_id * 2);
@@ -760,31 +807,23 @@ const Sprite = struct {
         return self.attr0.y.read();
     }
 
-    fn is_8bpp(self: *const Self) bool {
+    fn is8bpp(self: *const Self) bool {
         return self.attr0.is_8bpp.read();
     }
 
-    fn shape(self: *const Self) u2 {
-        return self.attr0.shape.read();
-    }
-
-    fn size(self: *const Self) u2 {
-        return self.attr1.size.read();
-    }
-
-    fn tile_id(self: *const Self) u10 {
+    fn tileId(self: *const Self) u10 {
         return self.attr2.tile_id.read();
     }
 
-    fn pal_bank(self: *const Self) u4 {
+    fn palBank(self: *const Self) u4 {
         return self.attr2.pal_bank.read();
     }
 
-    fn h_flip(self: *const Self) bool {
+    fn hFlip(self: *const Self) bool {
         return self.attr1.h_flip.read();
     }
 
-    fn v_flip(self: *const Self) bool {
+    fn vFlip(self: *const Self) bool {
         return self.attr1.v_flip.read();
     }
 
@@ -803,16 +842,38 @@ const AffineSprite = struct {
     width: u8,
     height: u8,
 
-    fn init(attr0: AffineAttr0, attr1: AffineAttr1, attr2: Attr2) Self {
-        const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
-
+    fn from(sprite: Sprite) AffineSprite {
         return .{
-            .attr0 = attr0,
-            .attr1 = attr1,
-            .attr2 = attr2,
-            .width = d[0],
-            .height = d[1],
+            .attr0 = .{ .raw = sprite.attr0.raw },
+            .attr1 = .{ .raw = sprite.attr1.raw },
+            .attr2 = sprite.attr2,
+            .width = sprite.width,
+            .height = sprite.height,
         };
+    }
+
+    fn x(self: *const Self) u9 {
+        return self.attr1.x.read();
+    }
+
+    fn y(self: *const Self) u8 {
+        return self.attr0.y.read();
+    }
+
+    fn is8bpp(self: *const Self) bool {
+        return self.attr0.is_8bpp.read();
+    }
+
+    fn tileId(self: *const Self) u10 {
+        return self.attr2.tile_id.read();
+    }
+
+    fn palBank(self: *const Self) u4 {
+        return self.attr2.pal_bank.read();
+    }
+
+    fn matrixId(self: *const Self) u5 {
+        return self.attr1.aff_sel.read();
     }
 };
 
@@ -857,6 +918,7 @@ const Attr2 = extern union {
     tile_id: Bitfield(u16, 0, 10),
     rel_prio: Bitfield(u16, 10, 2),
     pal_bank: Bitfield(u16, 12, 4),
+    raw: u16,
 };
 
 fn spriteDimensions(shape: u2, size: u2) [2]u8 {
