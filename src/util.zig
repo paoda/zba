@@ -102,13 +102,13 @@ pub const FilePaths = struct {
 };
 
 pub fn readUndefined(log: anytype, comptime format: []const u8, args: anytype) u8 {
-    log.debug(format, args);
+    log.warn(format, args);
     if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
 
     return 0;
 }
 
 pub fn writeUndefined(log: anytype, comptime format: []const u8, args: anytype) void {
-    log.debug(format, args);
+    log.warn(format, args);
     if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
 }

@@ -113,14 +113,14 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
 
     switch (T) {
         u32 => switch (address) {
-            0x0800_00C4 => log.err("Wrote {} 0x{X:} to I/O Port Data and Direction", .{ T, value }),
-            0x0800_00C6 => log.err("Wrote {} 0x{X:} to I/O Port Direction and Control", .{ T, value }),
+            0x0800_00C4 => log.debug("Wrote {} 0x{X:} to I/O Port Data and Direction", .{ T, value }),
+            0x0800_00C6 => log.debug("Wrote {} 0x{X:} to I/O Port Direction and Control", .{ T, value }),
             else => {},
         },
         u16 => switch (address) {
-            0x0800_00C4 => log.err("Wrote {} 0x{X:} to I/O Port Data", .{ T, value }),
-            0x0800_00C6 => log.err("Wrote {} 0x{X:} to I/O Port Direction", .{ T, value }),
-            0x0800_00C8 => log.err("Wrote {} 0x{X:} to I/O Port Control", .{ T, value }),
+            0x0800_00C4 => log.debug("Wrote {} 0x{X:} to I/O Port Data", .{ T, value }),
+            0x0800_00C6 => log.debug("Wrote {} 0x{X:} to I/O Port Direction", .{ T, value }),
+            0x0800_00C8 => log.debug("Wrote {} 0x{X:} to I/O Port Control", .{ T, value }),
             else => {},
         },
         u8 => log.debug("Wrote {} 0x{X:} to 0x{X:0>8}, Ignored.", .{ T, value, address }),
