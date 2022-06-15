@@ -11,6 +11,8 @@ const timer = @import("timer.zig");
 const dma = @import("dma.zig");
 const apu = @import("../apu.zig");
 
+const readUndefined = @import("../util.zig").readUndefined;
+const writeUndefined = @import("../util.zig").writeUndefined;
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -56,18 +58,18 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0100...0x0400_010C => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
-            0x0400_0128 => unimplementedRead("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
+            0x0400_0128 => readTodo("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
 
             // Keypad Input
-            0x0400_0130 => unimplementedRead("Read {} from KEYINPUT", .{T}),
+            0x0400_0130 => readTodo("Read {} from KEYINPUT", .{T}),
 
             // Serial Communication 2
-            0x0400_0150 => unimplementedRead("Read {} from JOY_RECV", .{T}),
+            0x0400_0150 => readTodo("Read {} from JOY_RECV", .{T}),
 
             // Interrupts
             0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u16 => switch (address) {
             // Display
@@ -78,10 +80,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000A => bus.ppu.bg[1].cnt.raw,
             0x0400_000C => bus.ppu.bg[2].cnt.raw,
             0x0400_000E => bus.ppu.bg[3].cnt.raw,
-            0x0400_004C => unimplementedRead("Read {} from MOSAIC", .{T}),
+            0x0400_004C => readTodo("Read {} from MOSAIC", .{T}),
 
             // Sound
-            0x0400_0060...0x0400_0088 => apu.read(T, &bus.apu, address),
+            0x0400_0060...0x0400_009F => apu.read(T, &bus.apu, address),
 
             // DMA Transfers
             0x0400_00BA...0x0400_00DE => dma.read(T, &bus.dma, address),
@@ -90,20 +92,20 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0100...0x0400_010E => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
-            0x0400_0128 => unimplementedRead("Read {} from SIOCNT", .{T}),
+            0x0400_0128 => readTodo("Read {} from SIOCNT", .{T}),
 
             // Keypad Input
             0x0400_0130 => bus.io.keyinput.raw,
 
             // Serial Communication 2
-            0x0400_0134 => unimplementedRead("Read {} from RCNT", .{T}),
+            0x0400_0134 => readTodo("Read {} from RCNT", .{T}),
 
             // Interrupts
             0x0400_0200 => bus.io.ie.raw,
             0x0400_0202 => bus.io.irq.raw,
-            0x0400_0204 => unimplementedRead("Read {} from WAITCNT", .{T}),
+            0x0400_0204 => readTodo("Read {} from WAITCNT", .{T}),
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
             // Display
@@ -120,18 +122,18 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0060...0x0400_0089 => apu.read(T, &bus.apu, address),
 
             // Serial Communication 1
-            0x0400_0128 => unimplementedRead("Read {} from SIOCNT_L", .{T}),
+            0x0400_0128 => readTodo("Read {} from SIOCNT_L", .{T}),
 
             // Keypad Input
-            0x0400_0130 => unimplementedRead("read {} from KEYINPUT_L", .{T}),
+            0x0400_0130 => readTodo("read {} from KEYINPUT_L", .{T}),
 
             // Serial Communication 2
-            0x0400_0135 => unimplementedRead("Read {} from RCNT_H", .{T}),
+            0x0400_0135 => readTodo("Read {} from RCNT_H", .{T}),
 
             // Interrupts
             0x0400_0200 => @truncate(T, bus.io.ie.raw),
             0x0400_0300 => @enumToInt(bus.io.postflg),
-            else => undefinedRead("Tried to read {} from 0x{X:0>8}", .{ T, address }),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         else => @compileError("I/O: Unsupported read width"),
     };
@@ -201,7 +203,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_020C...0x0400_021C => {}, // Unused
-            else => undefinedWrite("Tried to write {} 0x{X:0>8} to 0x{X:0>8}", .{ T, value, address }),
+            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u16 => switch (address) {
             // Display
@@ -283,7 +285,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0204 => log.debug("Wrote 0x{X:0>4} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0206, 0x0400_020A => {}, // Not Used
-            else => undefinedWrite("Tried to write {} 0x{X:0>4} to 0x{X:0>8}", .{ T, value, address }),
+            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u8 => switch (address) {
             // Display
@@ -315,27 +317,15 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
 
             0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),
-            else => undefinedWrite("Tried to write {} 0x{X:0>2} to 0x{X:0>8}", .{ T, value, address }),
+            else => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         else => @compileError("I/O: Unsupported write width"),
     };
 }
 
-fn undefinedRead(comptime format: []const u8, args: anytype) u8 {
-    log.debug(format, args);
-    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
-
-    return 0;
-}
-
-fn unimplementedRead(comptime format: []const u8, args: anytype) u8 {
+fn readTodo(comptime format: []const u8, args: anytype) u8 {
     log.debug(format, args);
     return 0;
-}
-
-fn undefinedWrite(comptime format: []const u8, args: anytype) void {
-    log.debug(format, args);
-    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
 }
 
 /// Read / Write

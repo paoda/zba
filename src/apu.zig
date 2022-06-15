@@ -9,6 +9,8 @@ const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 const AudioDeviceId = SDL.SDL_AudioDeviceID;
 
 const intToBytes = @import("util.zig").intToBytes;
+const readUndefined = @import("util.zig").readUndefined;
+const writeUndefined = @import("util.zig").writeUndefined;
 const log = std.log.scoped(.APU);
 
 pub const host_sample_rate = 1 << 15;
@@ -18,25 +20,28 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
 
     return switch (T) {
         u16 => switch (byte) {
-            0x60 => apu.ch1.sweep.raw, // SOUND1CNT_L
+            0x60 => apu.ch1.getSoundCntL(),
             0x62 => apu.ch1.getSoundCntH(),
-            0x64 => apu.ch1.freq.raw, // SOUND1CNT_X
-
+            0x64 => apu.ch1.getSoundCntX(),
             0x68 => apu.ch2.getSoundCntL(),
-            0x6C => apu.ch2.freq.raw, // SOUND2CNT_H
+            0x6C => apu.ch2.getSoundCntH(),
 
-            0x70 => apu.ch3.select.raw, // SOUND3CNT_L
-            0x74 => apu.ch3.freq.raw, // SOUND3CNT_X
+            0x70 => apu.ch3.select.raw & 0xE0, // SOUND3CNT_L
+            0x72 => apu.ch3.getSoundCntH(),
+            0x74 => apu.ch3.freq.raw & 0x4000, // SOUND3CNT_X
 
             0x78 => apu.ch4.getSoundCntL(),
             0x7C => apu.ch4.getSoundCntH(),
 
-            0x80 => apu.dma_cnt.raw, // SOUNDCNT_L
+            0x80 => apu.psg_cnt.raw & 0xFF77, // SOUNDCNT_L
+            0x82 => apu.dma_cnt.raw & 0x770F, // SOUNDCNT_H
+            0x84 => apu.getSoundCntX(),
             0x88 => apu.bias.raw, // SOUNDBIAS
-            else => @panic("TODO: Unexpected APU u16 read"),
+            0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
-            0x60 => apu.ch1.sweep.raw, // NR10
+            0x60 => apu.ch1.getSoundCntL(), // NR10
             0x63 => apu.ch1.envelope.raw, // NR12
             0x69 => apu.ch2.envelope.raw, // NR22
             0x73 => apu.ch3.vol.raw, // NR32
@@ -45,9 +50,9 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
             0x81 => @truncate(u8, apu.psg_cnt.raw >> 8), // NR51
             0x84 => apu.getSoundCntX(),
             0x89 => @truncate(u8, apu.bias.raw >> 8), // SOUNDBIAS_H
-            else => @panic("TODO: Unexpected APU u8 read"),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u32 => @panic("TODO: Unexpected APU u32 read"),
+        u32 => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         else => @compileError("APU: Unsupported read width"),
     };
 }
@@ -65,7 +70,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
             0xA0 => apu.chA.push(value), // FIFO_A
             0xA4 => apu.chB.push(value), // FIFO_B
-            else => @panic("TODO: Unexpected APU u32 write"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
             0x60 => apu.ch1.sweep.raw = @truncate(u8, value), // SOUND1CNT_L
@@ -88,7 +93,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x88 => apu.bias.raw = value, // SOUNDBIAS
             // WAVE_RAM
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            else => @panic("TODO: Unexpected APU u16 write"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => switch (byte) {
             0x60 => apu.ch1.sweep.raw = value, // NR10
@@ -118,7 +123,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
             0x89 => apu.setSoundBiasH(value),
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            else => @panic("TODO: Unexpected APU u8 write"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         else => @compileError("APU: Unsupported write width"),
     }
@@ -500,9 +505,14 @@ const ToneSweep = struct {
         return @as(i16, self.sample);
     }
 
+    /// NR10
+    pub fn getSoundCntL(self: *const Self) u8 {
+        return self.sweep.raw & 0x7F;
+    }
+
     /// NR11, NR12
     pub fn getSoundCntH(self: *const Self) u16 {
-        return @as(u16, self.envelope.raw) << 8 | self.duty.raw;
+        return @as(u16, self.envelope.raw) << 8 | (self.duty.raw & 0xC0);
     }
 
     /// NR11, NR12
@@ -521,6 +531,11 @@ const ToneSweep = struct {
     pub fn setNr12(self: *Self, value: u8) void {
         self.envelope.raw = value;
         if (!self.isDacEnabled()) self.enabled = false;
+    }
+
+    /// NR13, NR14
+    pub fn getSoundCntX(self: *const Self) u16 {
+        return self.freq.raw & 0x4000;
     }
 
     /// NR13, NR14
@@ -641,7 +656,7 @@ const Tone = struct {
 
     /// NR21, NR22
     pub fn getSoundCntL(self: *const Self) u16 {
-        return @as(u16, self.envelope.raw) << 8 | self.duty.raw;
+        return @as(u16, self.envelope.raw) << 8 | (self.duty.raw & 0xC0);
     }
 
     /// NR21, NR22
@@ -660,6 +675,11 @@ const Tone = struct {
     pub fn setNr22(self: *Self, value: u8) void {
         self.envelope.raw = value;
         if (!self.isDacEnabled()) self.enabled = false;
+    }
+
+    /// NR23, NR24
+    pub fn getSoundCntH(self: *const Self) u16 {
+        return self.freq.raw & 0x4000;
     }
 
     /// NR23, NR24
@@ -757,6 +777,11 @@ const Wave = struct {
     pub fn setSoundCntL(self: *Self, value: u8) void {
         self.select.raw = value;
         if (!self.select.enabled.read()) self.enabled = false;
+    }
+
+    /// NR31, NR32
+    fn getSoundCntH(self: *const Self) u16 {
+        return @as(u16, self.length & 0xE0) << 8;
     }
 
     /// NR31, NR32
@@ -880,7 +905,7 @@ const Noise = struct {
 
     /// NR41, NR42
     pub fn getSoundCntL(self: *const Self) u16 {
-        return @as(u16, self.envelope.raw) << 8 | self.len;
+        return @as(u16, self.envelope.raw) << 8;
     }
 
     /// NR41, NR42
@@ -903,7 +928,7 @@ const Noise = struct {
 
     /// NR43, NR44
     pub fn getSoundCntH(self: *const Self) u16 {
-        return @as(u16, self.poly.raw) << 8 | self.cnt.raw;
+        return @as(u16, self.poly.raw & 0x40) << 8 | self.cnt.raw;
     }
 
     /// NR43, NR44
@@ -1143,10 +1168,15 @@ const WaveDevice = struct {
         const base = if (!cnt.bank.read()) @as(u32, 0x10) else 0; // Write to the Opposite Bank in Use
 
         const i = base + addr - 0x0400_0090;
-        switch (T) {
-            u32, u16, u8 => std.mem.writeIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)], value),
-            else => @compileError("Ch3 WAVERAM: Unsupported write width"),
-        }
+        std.mem.writeIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)], value);
+    }
+
+    fn read(self: *const Self, comptime T: type, cnt: io.WaveSelect, addr: u32) T {
+        // TODO: Handle reads when Channel 3 is disabled
+        const base = if (!cnt.bank.read()) @as(u32, 0x10) else 0; // Read from the Opposite Bank in Use
+
+        const i = base + addr - 0x0400_0090;
+        return std.mem.readIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)]);
     }
 };
 

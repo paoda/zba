@@ -123,7 +123,7 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
             0x0800_00C8 => log.err("Wrote {} 0x{X:} to I/O Port Control", .{ T, value }),
             else => {},
         },
-        u8 => log.warn("Wrote {} 0x{X:} to 0x{X:0>8}, Ignored.", .{ T, value, address }),
+        u8 => log.debug("Wrote {} 0x{X:} to 0x{X:0>8}, Ignored.", .{ T, value, address }),
         else => @compileError("GamePak: Unsupported write width"),
     }
 }

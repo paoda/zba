@@ -6,6 +6,8 @@ const Scheduler = @import("../scheduler.zig").Scheduler;
 const Event = @import("../scheduler.zig").Event;
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
+const readUndefined = @import("../util.zig").readUndefined;
+const writeUndefined = @import("../util.zig").writeUndefined;
 pub const TimerTuple = std.meta.Tuple(&[_]type{ Timer(0), Timer(1), Timer(2), Timer(3) });
 const log = std.log.scoped(.Timer);
 
@@ -22,7 +24,7 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) T {
             0x4 => @as(T, tim.*[1].cnt.raw) << 16 | tim.*[1].getCntL(),
             0x8 => @as(T, tim.*[2].cnt.raw) << 16 | tim.*[2].getCntL(),
             0xC => @as(T, tim.*[3].cnt.raw) << 16 | tim.*[3].getCntL(),
-            else => @panic("TODO: u32 timer unexpected nybble"),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (nybble) {
             0x0 => tim.*[0].getCntL(),
@@ -33,10 +35,10 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) T {
             0xA => tim.*[2].cnt.raw,
             0xC => tim.*[3].getCntL(),
             0xE => tim.*[3].cnt.raw,
-            else => @panic("TODO: u16 timer unexpected nybble"),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => @panic("TODO: u8 timer unexpected read"),
-        else => @compileError("TIMX: Unsupported read width"),
+        u8 => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        else => @compileError("TIM: Unsupported read width"),
     };
 }
 
@@ -49,7 +51,7 @@ pub fn write(comptime T: type, tim: *TimerTuple, addr: u32, value: T) void {
             0x4 => tim.*[1].setCnt(value),
             0x8 => tim.*[2].setCnt(value),
             0xC => tim.*[3].setCnt(value),
-            else => @panic("TODO: u32 timer unexpected nybble"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (nybble) {
             0x0 => tim.*[0].setCntL(value),
@@ -60,10 +62,10 @@ pub fn write(comptime T: type, tim: *TimerTuple, addr: u32, value: T) void {
             0xA => tim.*[2].setCntH(value),
             0xC => tim.*[3].setCntL(value),
             0xE => tim.*[3].setCntH(value),
-            else => @panic("TODO: u16 timer unexpected nybble"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u8 => @panic("TODO: u8 timer unexpected write"),
-        else => @compileError("TIMX: Unsupported write width"),
+        u8 => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+        else => @compileError("TIM: Unsupported write width"),
     };
 }
 

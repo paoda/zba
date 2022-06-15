@@ -4,6 +4,8 @@ const DmaControl = @import("io.zig").DmaControl;
 const Bus = @import("../Bus.zig");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
+const readUndefined = @import("../util.zig").readUndefined;
+const writeUndefined = @import("../util.zig").writeUndefined;
 pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
 const log = std.log.scoped(.DmaTransfer);
 
@@ -20,16 +22,16 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) T {
             0xC4 => @as(T, dma.*[1].cnt.raw) << 16,
             0xD0 => @as(T, dma.*[1].cnt.raw) << 16,
             0xDC => @as(T, dma.*[3].cnt.raw) << 16,
-            else => @panic("TODO: Unexpected u32 DMA read"),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (byte) {
             0xBA => dma.*[0].cnt.raw,
             0xC6 => dma.*[1].cnt.raw,
             0xD2 => dma.*[2].cnt.raw,
             0xDE => dma.*[3].cnt.raw,
-            else => @panic("TODO: Unexpected u16 DMA read"),
+            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => @panic("TODO: Unexpected u8 DMA read"),
+        u8 => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         else => @compileError("DMA: Unsupported read width"),
     };
 }
@@ -51,7 +53,7 @@ pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
             0xD4 => dma.*[3].setSad(value),
             0xD8 => dma.*[3].setDad(value),
             0xDC => dma.*[3].setCnt(value),
-            else => @panic("TODO: Unexpected u32 DMA write"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
             0xB0 => dma.*[0].setSad(setU32L(dma.*[0].sad, value)),
@@ -81,9 +83,9 @@ pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
             0xDA => dma.*[3].setDad(setU32H(dma.*[3].dad, value)),
             0xDC => dma.*[3].setCntL(value),
             0xDE => dma.*[3].setCntH(value),
-            else => @panic("TODO: Unexpected u16 DMA write"),
+            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u8 => @panic("TODO: Unexpected u8 DMA write"),
+        u8 => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         else => @compileError("DMA: Unsupported write width"),
     }
 }

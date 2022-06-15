@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Log2Int = std.math.Log2Int;
 
 // Sign-Extend value of type `T` to type `U`
@@ -99,3 +100,15 @@ pub const FilePaths = struct {
     bios: ?[]const u8,
     save: ?[]const u8,
 };
+
+pub fn readUndefined(log: anytype, comptime format: []const u8, args: anytype) u8 {
+    log.debug(format, args);
+    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
+
+    return 0;
+}
+
+pub fn writeUndefined(log: anytype, comptime format: []const u8, args: anytype) void {
+    log.debug(format, args);
+    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
+}
