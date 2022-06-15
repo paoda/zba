@@ -7,6 +7,10 @@ const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
+const timer = @import("timer.zig");
+const dma = @import("dma.zig");
+const apu = @import("../apu.zig");
+
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -46,16 +50,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0006 => @as(T, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
 
             // DMA Transfers
-            0x0400_00B8 => @as(T, bus.dma[0].cnt.raw) << 16,
-            0x0400_00C4 => @as(T, bus.dma[1].cnt.raw) << 16,
-            0x0400_00D0 => @as(T, bus.dma[1].cnt.raw) << 16,
-            0x0400_00DC => @as(T, bus.dma[3].cnt.raw) << 16,
+            0x0400_00B8...0x0400_00DC => dma.read(T, &bus.dma, address),
 
             // Timers
-            0x0400_0100 => @as(T, bus.tim[0].cnt.raw) << 16 | bus.tim[0].counter(),
-            0x0400_0104 => @as(T, bus.tim[1].cnt.raw) << 16 | bus.tim[1].counter(),
-            0x0400_0108 => @as(T, bus.tim[2].cnt.raw) << 16 | bus.tim[2].counter(),
-            0x0400_010C => @as(T, bus.tim[3].cnt.raw) << 16 | bus.tim[3].counter(),
+            0x0400_0100...0x0400_010C => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
@@ -83,33 +81,13 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_004C => unimplementedRead("Read {} from MOSAIC", .{T}),
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw,
-            0x0400_0062 => @as(u16, bus.apu.ch1.envelope.raw) << 8 | bus.apu.ch1.duty.raw,
-            0x0400_0064 => bus.apu.ch1.freq.raw,
-            0x0400_0068 => @as(u16, bus.apu.ch2.envelope.raw) << 8 | bus.apu.ch2.duty.raw,
-            0x0400_006C => bus.apu.ch2.freq.raw,
-            0x0400_0070 => bus.apu.ch3.select.raw,
-            0x0400_0074 => bus.apu.ch3.freq.raw,
-            0x0400_0078 => @as(u16, bus.apu.ch4.envelope.raw) << 8 | bus.apu.ch4.len,
-            0x0400_007C => @as(u16, bus.apu.ch4.poly.raw) << 8 | bus.apu.ch4.cnt.raw,
-            0x0400_0080 => bus.apu.dma_cnt.raw,
-            0x0400_0088 => bus.apu.bias.raw,
+            0x0400_0060...0x0400_0088 => apu.read(T, &bus.apu, address),
 
             // DMA Transfers
-            0x0400_00BA => bus.dma[0].cnt.raw,
-            0x0400_00C6 => bus.dma[1].cnt.raw,
-            0x0400_00D2 => bus.dma[2].cnt.raw,
-            0x0400_00DE => bus.dma[3].cnt.raw,
+            0x0400_00BA...0x0400_00DE => dma.read(T, &bus.dma, address),
 
             // Timers
-            0x0400_0100 => bus.tim[0].counter(),
-            0x0400_0102 => bus.tim[0].cnt.raw,
-            0x0400_0104 => bus.tim[1].counter(),
-            0x0400_0106 => bus.tim[1].cnt.raw,
-            0x0400_0108 => bus.tim[2].counter(),
-            0x0400_010A => bus.tim[2].cnt.raw,
-            0x0400_010C => bus.tim[3].counter(),
-            0x0400_010E => bus.tim[3].cnt.raw,
+            0x0400_0100...0x0400_010E => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT", .{T}),
@@ -139,15 +117,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000B => @truncate(T, bus.ppu.bg[1].cnt.raw >> 8),
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw,
-            0x0400_0063 => bus.apu.ch1.envelope.raw,
-            0x0400_0069 => bus.apu.ch2.envelope.raw,
-            0x0400_0073 => bus.apu.ch3.vol.raw,
-            0x0400_0079 => bus.apu.ch4.envelope.raw,
-            0x0400_007C => bus.apu.ch4.poly.raw,
-            0x0400_0081 => @truncate(T, bus.apu.psg_cnt.raw >> 8),
-            0x0400_0084 => bus.apu.soundCntX(),
-            0x0400_0089 => @truncate(T, bus.apu.bias.raw >> 8),
+            0x0400_0060...0x0400_0089 => apu.read(T, &bus.apu, address),
 
             // Serial Communication 1
             0x0400_0128 => unimplementedRead("Read {} from SIOCNT_L", .{T}),
@@ -199,35 +169,15 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0058...0x0400_005C => {}, // Unused
 
             // Sound
-            0x0400_0080 => {
-                bus.apu.psg_cnt.raw = @truncate(u16, value);
-                bus.apu.dma_cnt.raw = @truncate(u16, value >> 16);
-            },
-            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
-            0x0400_00A0 => bus.apu.chA.push(value),
-            0x0400_00A4 => bus.apu.chB.push(value),
+            0x0400_0080...0x0400_00A4 => apu.write(T, &bus.apu, address, value),
             0x0400_00A8, 0x0400_00AC => {}, // Unused
 
             // DMA Transfers
-            0x0400_00B0 => bus.dma[0].writeSad(value),
-            0x0400_00B4 => bus.dma[0].writeDad(value),
-            0x0400_00B8 => bus.dma[0].writeCnt(value),
-            0x0400_00BC => bus.dma[1].writeSad(value),
-            0x0400_00C0 => bus.dma[1].writeDad(value),
-            0x0400_00C4 => bus.dma[1].writeCnt(value),
-            0x0400_00C8 => bus.dma[2].writeSad(value),
-            0x0400_00CC => bus.dma[2].writeDad(value),
-            0x0400_00D0 => bus.dma[2].writeCnt(value),
-            0x0400_00D4 => bus.dma[3].writeSad(value),
-            0x0400_00D8 => bus.dma[3].writeDad(value),
-            0x0400_00DC => bus.dma[3].writeCnt(value),
+            0x0400_00B0...0x0400_00DC => dma.write(T, &bus.dma, address, value),
             0x0400_00E0...0x0400_00FC => {}, // Unused
 
             // Timers
-            0x0400_0100 => bus.tim[0].writeCnt(value),
-            0x0400_0104 => bus.tim[1].writeCnt(value),
-            0x0400_0108 => bus.tim[2].writeCnt(value),
-            0x0400_010C => bus.tim[3].writeCnt(value),
+            0x0400_0100...0x0400_010C => timer.write(T, &bus.tim, address, value),
             0x0400_0110...0x0400_011C => {}, // Unused
 
             // Serial Communication 1
@@ -299,64 +249,13 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw = @truncate(u8, value), // Channel 1
-            0x0400_0062 => bus.apu.ch1.setSoundCntH(value),
-            0x0400_0064 => bus.apu.ch1.setFreq(&bus.apu.fs, value),
-
-            0x0400_0068 => bus.apu.ch2.setSoundCntH(value), // Channel 2
-            0x0400_006C => bus.apu.ch2.setFreq(&bus.apu.fs, value),
-
-            0x0400_0070 => bus.apu.ch3.setWaveSelect(@truncate(u8, value)), // Channel 3
-            0x0400_0072 => bus.apu.ch3.setSoundCntH(value),
-            0x0400_0074 => bus.apu.ch3.setFreq(&bus.apu.fs, value),
-
-            0x0400_0078 => bus.apu.ch4.setSoundCntL(value), // Channel 4
-            0x0400_007C => bus.apu.ch4.setSoundCntH(&bus.apu.fs, value),
-
-            0x0400_0080 => bus.apu.psg_cnt.raw = value,
-            0x0400_0082 => bus.apu.setDmaCnt(value),
-            0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
-            0x0400_0088 => bus.apu.bias.raw = value,
-            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
+            0x0400_0060...0x0400_009F => apu.write(T, &bus.apu, address, value),
 
             // Dma Transfers
-            0x0400_00B0 => bus.dma[0].writeSad(bus.dma[0].sad & 0xFFFF_0000 | value),
-            0x0400_00B2 => bus.dma[0].writeSad(bus.dma[0].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00B4 => bus.dma[0].writeDad(bus.dma[0].dad & 0xFFFF_0000 | value),
-            0x0400_00B6 => bus.dma[0].writeDad(bus.dma[0].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00B8 => bus.dma[0].writeWordCount(value),
-            0x0400_00BA => bus.dma[0].writeCntHigh(value),
-
-            0x0400_00BC => bus.dma[1].writeSad(bus.dma[1].sad & 0xFFFF_0000 | value),
-            0x0400_00BE => bus.dma[1].writeSad(bus.dma[1].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00C0 => bus.dma[1].writeDad(bus.dma[1].dad & 0xFFFF_0000 | value),
-            0x0400_00C2 => bus.dma[1].writeDad(bus.dma[1].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00C4 => bus.dma[1].writeWordCount(value),
-            0x0400_00C6 => bus.dma[1].writeCntHigh(value),
-
-            0x0400_00C8 => bus.dma[2].writeSad(bus.dma[2].sad & 0xFFFF_0000 | value),
-            0x0400_00CA => bus.dma[2].writeSad(bus.dma[2].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00CC => bus.dma[2].writeDad(bus.dma[2].dad & 0xFFFF_0000 | value),
-            0x0400_00CE => bus.dma[2].writeDad(bus.dma[2].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00D0 => bus.dma[2].writeWordCount(value),
-            0x0400_00D2 => bus.dma[2].writeCntHigh(value),
-
-            0x0400_00D4 => bus.dma[3].writeSad(bus.dma[3].sad & 0xFFFF_0000 | value),
-            0x0400_00D6 => bus.dma[3].writeSad(bus.dma[3].sad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00D8 => bus.dma[3].writeDad(bus.dma[3].dad & 0xFFFF_0000 | value),
-            0x0400_00DA => bus.dma[3].writeDad(bus.dma[3].dad & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_00DC => bus.dma[3].writeWordCount(value),
-            0x0400_00DE => bus.dma[3].writeCntHigh(value),
+            0x0400_00B0...0x0400_00DE => dma.write(T, &bus.dma, address, value),
 
             // Timers
-            0x0400_0100 => bus.tim[0].setReload(value),
-            0x0400_0102 => bus.tim[0].writeCntHigh(value),
-            0x0400_0104 => bus.tim[1].setReload(value),
-            0x0400_0106 => bus.tim[1].writeCntHigh(value),
-            0x0400_0108 => bus.tim[2].setReload(value),
-            0x0400_010A => bus.tim[2].writeCntHigh(value),
-            0x0400_010C => bus.tim[3].setReload(value),
-            0x0400_010E => bus.tim[3].writeCntHigh(value),
+            0x0400_0100...0x0400_010E => timer.write(T, &bus.tim, address, value),
             0x0400_0114 => {}, // TODO: Gyakuten Saiban writes 0x8000 to 0x0400_0114
             0x0400_0110 => {}, // Not Used,
 
@@ -399,33 +298,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
 
             // Sound
-            0x0400_0060 => bus.apu.ch1.sweep.raw = value, // Channel 1
-            0x0400_0062 => bus.apu.ch1.duty.raw = value,
-            0x0400_0063 => bus.apu.ch1.envelope.raw = value,
-            0x0400_0064 => bus.apu.ch1.setFreqLow(value),
-            0x0400_0065 => bus.apu.ch1.setFreqHigh(&bus.apu.fs, value),
-
-            0x0400_0068 => bus.apu.ch2.duty.raw = value, // Channel 2
-            0x0400_0069 => bus.apu.ch2.envelope.raw = value,
-            0x0400_006C => bus.apu.ch2.setFreqLow(value),
-            0x0400_006D => bus.apu.ch2.setFreqHigh(&bus.apu.fs, value),
-
-            0x0400_0070 => bus.apu.ch3.setWaveSelect(value), // Channel 3
-            0x0400_0072 => bus.apu.ch3.setLength(value),
-            0x0400_0073 => bus.apu.ch3.vol.raw = value,
-            0x0400_0074 => bus.apu.ch3.setFreqLow(value),
-            0x0400_0075 => bus.apu.ch3.setFreqHigh(&bus.apu.fs, value),
-
-            0x0400_0078 => bus.apu.ch4.setLength(value), // Channel 4
-            0x0400_0079 => bus.apu.ch4.setEnvelope(value),
-            0x0400_007C => bus.apu.ch4.poly.raw = value,
-            0x0400_007D => bus.apu.ch4.setCnt(&bus.apu.fs, value),
-
-            0x0400_0080 => bus.apu.setSoundCntLLow(value),
-            0x0400_0081 => bus.apu.setSoundCntLHigh(value),
-            0x0400_0084 => bus.apu.setSoundCntX(value >> 7 & 1 == 1),
-            0x0400_0089 => bus.apu.setBiasHigh(value),
-            0x0400_0090...0x0400_009F => bus.apu.ch3.wave_dev.write(T, bus.apu.ch3.select, address, value),
+            0x0400_0060...0x0400_009F => apu.write(T, &bus.apu, address, value),
 
             // Serial Communication 1
             0x0400_0120 => log.debug("Wrote 0x{X:0>2} to SIODATA32_L_L", .{value}),

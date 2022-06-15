@@ -13,6 +13,117 @@ const log = std.log.scoped(.APU);
 
 pub const host_sample_rate = 1 << 15;
 
+pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
+    const byte = @truncate(u8, addr);
+
+    return switch (T) {
+        u16 => switch (byte) {
+            0x60 => apu.ch1.sweep.raw, // SOUND1CNT_L
+            0x62 => apu.ch1.getSoundCntH(),
+            0x64 => apu.ch1.freq.raw, // SOUND1CNT_X
+
+            0x68 => apu.ch2.getSoundCntL(),
+            0x6C => apu.ch2.freq.raw, // SOUND2CNT_H
+
+            0x70 => apu.ch3.select.raw, // SOUND3CNT_L
+            0x74 => apu.ch3.freq.raw, // SOUND3CNT_X
+
+            0x78 => apu.ch4.getSoundCntL(),
+            0x7C => apu.ch4.getSoundCntH(),
+
+            0x80 => apu.dma_cnt.raw, // SOUNDCNT_L
+            0x88 => apu.bias.raw, // SOUNDBIAS
+            else => @panic("TODO: Unexpected APU u16 read"),
+        },
+        u8 => switch (byte) {
+            0x60 => apu.ch1.sweep.raw, // NR10
+            0x63 => apu.ch1.envelope.raw, // NR12
+            0x69 => apu.ch2.envelope.raw, // NR22
+            0x73 => apu.ch3.vol.raw, // NR32
+            0x79 => apu.ch4.envelope.raw, // NR42
+            0x7C => apu.ch4.poly.raw, // NR43
+            0x81 => @truncate(u8, apu.psg_cnt.raw >> 8), // NR51
+            0x84 => apu.getSoundCntX(),
+            0x89 => @truncate(u8, apu.bias.raw >> 8), // SOUNDBIAS_H
+            else => @panic("TODO: Unexpected APU u8 read"),
+        },
+        u32 => @panic("TODO: Unexpected APU u32 read"),
+        else => @compileError("APU: Unsupported read width"),
+    };
+}
+
+pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
+    const byte = @truncate(u8, addr);
+
+    switch (T) {
+        u32 => switch (byte) {
+            0x80 => {
+                apu.psg_cnt.raw = @truncate(u16, value); // SOUNDCNT_L
+                apu.dma_cnt.raw = @truncate(u16, value >> 16); // SOUNDCNT_H
+            },
+            // WAVE_RAM
+            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            0xA0 => apu.chA.push(value), // FIFO_A
+            0xA4 => apu.chB.push(value), // FIFO_B
+            else => @panic("TODO: Unexpected APU u32 write"),
+        },
+        u16 => switch (byte) {
+            0x60 => apu.ch1.sweep.raw = @truncate(u8, value), // SOUND1CNT_L
+            0x62 => apu.ch1.setSoundCntH(value),
+            0x64 => apu.ch1.setSoundCntX(&apu.fs, value),
+
+            0x68 => apu.ch2.setSoundCntL(value),
+            0x6C => apu.ch2.setSoundCntH(&apu.fs, value),
+
+            0x70 => apu.ch3.setSoundCntL(@truncate(u8, value)),
+            0x72 => apu.ch3.setSoundCntH(value),
+            0x74 => apu.ch3.setSoundCntX(&apu.fs, value),
+
+            0x78 => apu.ch4.setSoundCntL(value),
+            0x7C => apu.ch4.setSoundCntH(&apu.fs, value),
+
+            0x80 => apu.psg_cnt.raw = value, // SOUNDCNT_L
+            0x82 => apu.setSoundCntH(value),
+            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+            0x88 => apu.bias.raw = value, // SOUNDBIAS
+            // WAVE_RAM
+            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            else => @panic("TODO: Unexpected APU u16 write"),
+        },
+        u8 => switch (byte) {
+            0x60 => apu.ch1.sweep.raw = value, // NR10
+            0x62 => apu.ch1.setNr11(value),
+            0x63 => apu.ch1.setNr12(value),
+            0x64 => apu.ch1.setNr13(value),
+            0x65 => apu.ch1.setNr14(&apu.fs, value),
+
+            0x68 => apu.ch2.setNr21(value),
+            0x69 => apu.ch2.setNr22(value),
+            0x6C => apu.ch2.setNr23(value),
+            0x6D => apu.ch2.setNr24(&apu.fs, value),
+
+            0x70 => apu.ch3.setSoundCntL(value), // NR30
+            0x72 => apu.ch3.setNr31(value),
+            0x73 => apu.ch3.vol.raw = value, // NR32
+            0x74 => apu.ch3.setNr33(value),
+            0x75 => apu.ch3.setNr34(&apu.fs, value),
+
+            0x78 => apu.ch4.setNr41(value),
+            0x79 => apu.ch4.setNr42(value),
+            0x7C => apu.ch4.poly.raw = value, // NR 43
+            0x7D => apu.ch4.setNr44(&apu.fs, value),
+
+            0x80 => apu.setNr50(value),
+            0x81 => apu.setNr51(value),
+            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
+            0x89 => apu.setSoundBiasH(value),
+            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            else => @panic("TODO: Unexpected APU u8 write"),
+        },
+        else => @compileError("APU: Unsupported write width"),
+    }
+}
+
 pub const Apu = struct {
     const Self = @This();
 
@@ -76,7 +187,7 @@ pub const Apu = struct {
         self.ch4.reset();
     }
 
-    pub fn setDmaCnt(self: *Self, value: u16) void {
+    pub fn setSoundCntH(self: *Self, value: u16) void {
         const new: io.DmaSoundControl = .{ .raw = value };
 
         // Reinitializing instead of resetting is fine because
@@ -106,7 +217,7 @@ pub const Apu = struct {
     }
 
     /// NR52
-    pub fn soundCntX(self: *const Self) u8 {
+    pub fn getSoundCntX(self: *const Self) u8 {
         const apu_enable: u8 = @boolToInt(self.cnt.apu_enable.read());
 
         const ch1_enable: u8 = @boolToInt(self.ch1.enabled);
@@ -118,16 +229,16 @@ pub const Apu = struct {
     }
 
     /// NR50
-    pub fn setSoundCntLLow(self: *Self, byte: u8) void {
+    pub fn setNr50(self: *Self, byte: u8) void {
         self.psg_cnt.raw = (self.psg_cnt.raw & 0xFF00) | byte;
     }
 
     /// NR51
-    pub fn setSoundCntLHigh(self: *Self, byte: u8) void {
+    pub fn setNr51(self: *Self, byte: u8) void {
         self.psg_cnt.raw = @as(u16, byte) << 8 | (self.psg_cnt.raw & 0xFF);
     }
 
-    pub fn setBiasHigh(self: *Self, byte: u8) void {
+    pub fn setSoundBiasH(self: *Self, byte: u8) void {
         self.bias.raw = (@as(u16, byte) << 8) | (self.bias.raw & 0xFF);
     }
 
@@ -390,36 +501,41 @@ const ToneSweep = struct {
     }
 
     /// NR11, NR12
+    pub fn getSoundCntH(self: *const Self) u16 {
+        return @as(u16, self.envelope.raw) << 8 | self.duty.raw;
+    }
+
+    /// NR11, NR12
     pub fn setSoundCntH(self: *Self, value: u16) void {
-        self.setDuty(@truncate(u8, value));
-        self.setEnvelope(@truncate(u8, value >> 8));
+        self.setNr11(@truncate(u8, value));
+        self.setNr12(@truncate(u8, value >> 8));
     }
 
     /// NR11
-    pub fn setDuty(self: *Self, value: u8) void {
+    pub fn setNr11(self: *Self, value: u8) void {
         self.duty.raw = value;
         self.len_dev.timer = @as(u7, 64) - @truncate(u6, value);
     }
 
     /// NR12
-    pub fn setEnvelope(self: *Self, value: u8) void {
+    pub fn setNr12(self: *Self, value: u8) void {
         self.envelope.raw = value;
         if (!self.isDacEnabled()) self.enabled = false;
     }
 
     /// NR13, NR14
-    pub fn setFreq(self: *Self, fs: *const FrameSequencer, value: u16) void {
-        self.setFreqLow(@truncate(u8, value));
-        self.setFreqHigh(fs, @truncate(u8, value >> 8));
+    pub fn setSoundCntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.setNr13(@truncate(u8, value));
+        self.setNr14(fs, @truncate(u8, value >> 8));
     }
 
     /// NR13
-    pub fn setFreqLow(self: *Self, byte: u8) void {
+    pub fn setNr13(self: *Self, byte: u8) void {
         self.freq.raw = (self.freq.raw & 0xFF00) | byte;
     }
 
     /// NR14
-    pub fn setFreqHigh(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+    pub fn setNr14(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
@@ -524,36 +640,41 @@ const Tone = struct {
     }
 
     /// NR21, NR22
-    pub fn setSoundCntH(self: *Self, value: u16) void {
-        self.setDuty(@truncate(u8, value));
-        self.setEnvelope(@truncate(u8, value >> 8));
+    pub fn getSoundCntL(self: *const Self) u16 {
+        return @as(u16, self.envelope.raw) << 8 | self.duty.raw;
+    }
+
+    /// NR21, NR22
+    pub fn setSoundCntL(self: *Self, value: u16) void {
+        self.setNr21(@truncate(u8, value));
+        self.setNr22(@truncate(u8, value >> 8));
     }
 
     /// NR21
-    pub fn setDuty(self: *Self, value: u8) void {
+    pub fn setNr21(self: *Self, value: u8) void {
         self.duty.raw = value;
         self.len_dev.timer = @as(u7, 64) - @truncate(u6, value);
     }
 
     /// NR22
-    pub fn setEnvelope(self: *Self, value: u8) void {
+    pub fn setNr22(self: *Self, value: u8) void {
         self.envelope.raw = value;
         if (!self.isDacEnabled()) self.enabled = false;
     }
 
     /// NR23, NR24
-    pub fn setFreq(self: *Self, fs: *const FrameSequencer, value: u16) void {
-        self.setFreqLow(@truncate(u8, value));
-        self.setFreqHigh(fs, @truncate(u8, value >> 8));
+    pub fn setSoundCntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.setNr23(@truncate(u8, value));
+        self.setNr24(fs, @truncate(u8, value >> 8));
     }
 
     /// NR23
-    pub fn setFreqLow(self: *Self, byte: u8) void {
+    pub fn setNr23(self: *Self, byte: u8) void {
         self.freq.raw = (self.freq.raw & 0xFF00) | byte;
     }
 
     /// NR24
-    pub fn setFreqHigh(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+    pub fn setNr24(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
@@ -633,36 +754,36 @@ const Wave = struct {
     }
 
     /// NR30
-    pub fn setWaveSelect(self: *Self, value: u8) void {
+    pub fn setSoundCntL(self: *Self, value: u8) void {
         self.select.raw = value;
         if (!self.select.enabled.read()) self.enabled = false;
     }
 
     /// NR31, NR32
     pub fn setSoundCntH(self: *Self, value: u16) void {
-        self.setLength(@truncate(u8, value));
+        self.setNr31(@truncate(u8, value));
         self.vol.raw = (@truncate(u8, value >> 8));
     }
 
     /// NR31
-    pub fn setLength(self: *Self, len: u8) void {
+    pub fn setNr31(self: *Self, len: u8) void {
         self.length = len;
         self.len_dev.timer = 256 - @as(u9, len);
     }
 
     /// NR33, NR34
-    pub fn setFreq(self: *Self, fs: *const FrameSequencer, value: u16) void {
-        self.setFreqLow(@truncate(u8, value));
-        self.setFreqHigh(fs, @truncate(u8, value >> 8));
+    pub fn setSoundCntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
+        self.setNr33(@truncate(u8, value));
+        self.setNr34(fs, @truncate(u8, value >> 8));
     }
 
     /// NR33
-    pub fn setFreqLow(self: *Self, byte: u8) void {
+    pub fn setNr33(self: *Self, byte: u8) void {
         self.freq.raw = (self.freq.raw & 0xFF00) | byte;
     }
 
     /// NR34
-    pub fn setFreqHigh(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+    pub fn setNr34(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         var new: io.Frequency = .{ .raw = (@as(u16, byte) << 8) | (self.freq.raw & 0xFF) };
 
         if (new.trigger.read()) {
@@ -757,32 +878,42 @@ const Noise = struct {
         self.env_dev.tick(self.envelope);
     }
 
+    /// NR41, NR42
+    pub fn getSoundCntL(self: *const Self) u16 {
+        return @as(u16, self.envelope.raw) << 8 | self.len;
+    }
+
+    /// NR41, NR42
+    pub fn setSoundCntL(self: *Self, value: u16) void {
+        self.setNr41(@truncate(u8, value));
+        self.setNr42(@truncate(u8, value >> 8));
+    }
+
     /// NR41
-    pub fn setLength(self: *Self, len: u8) void {
+    pub fn setNr41(self: *Self, len: u8) void {
         self.len = @truncate(u6, len);
         self.len_dev.timer = @as(u7, 64) - @truncate(u6, len);
     }
 
     /// NR42
-    pub fn setEnvelope(self: *Self, value: u8) void {
+    pub fn setNr42(self: *Self, value: u8) void {
         self.envelope.raw = value;
         if (!self.isDacEnabled()) self.enabled = false;
     }
 
-    /// NR41, NR42
-    pub fn setSoundCntL(self: *Self, value: u16) void {
-        self.setLength(@truncate(u8, value));
-        self.setEnvelope(@truncate(u8, value >> 8));
+    /// NR43, NR44
+    pub fn getSoundCntH(self: *const Self) u16 {
+        return @as(u16, self.poly.raw) << 8 | self.cnt.raw;
     }
 
     /// NR43, NR44
     pub fn setSoundCntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
         self.poly.raw = @truncate(u8, value);
-        self.setCnt(fs, @truncate(u8, value >> 8));
+        self.setNr44(fs, @truncate(u8, value >> 8));
     }
 
     /// NR44
-    pub fn setCnt(self: *Self, fs: *const FrameSequencer, byte: u8) void {
+    pub fn setNr44(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         var new: io.NoiseControl = .{ .raw = byte };
 
         if (new.trigger.read()) {

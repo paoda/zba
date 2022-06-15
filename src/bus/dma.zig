@@ -11,6 +11,83 @@ pub fn create() DmaTuple {
     return .{ DmaController(0).init(), DmaController(1).init(), DmaController(2).init(), DmaController(3).init() };
 }
 
+pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) T {
+    const byte = @truncate(u8, addr);
+
+    return switch (T) {
+        u32 => switch (byte) {
+            0xB8 => @as(T, dma.*[0].cnt.raw) << 16,
+            0xC4 => @as(T, dma.*[1].cnt.raw) << 16,
+            0xD0 => @as(T, dma.*[1].cnt.raw) << 16,
+            0xDC => @as(T, dma.*[3].cnt.raw) << 16,
+            else => @panic("TODO: Unexpected u32 DMA read"),
+        },
+        u16 => switch (byte) {
+            0xBA => dma.*[0].cnt.raw,
+            0xC6 => dma.*[1].cnt.raw,
+            0xD2 => dma.*[2].cnt.raw,
+            0xDE => dma.*[3].cnt.raw,
+            else => @panic("TODO: Unexpected u16 DMA read"),
+        },
+        u8 => @panic("TODO: Unexpected u8 DMA read"),
+        else => @compileError("DMA: Unsupported read width"),
+    };
+}
+
+pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
+    const byte = @truncate(u8, addr);
+
+    switch (T) {
+        u32 => switch (byte) {
+            0xB0 => dma.*[0].setSad(value),
+            0xB4 => dma.*[0].setDad(value),
+            0xB8 => dma.*[0].setCnt(value),
+            0xBC => dma.*[1].setSad(value),
+            0xC0 => dma.*[1].setDad(value),
+            0xC4 => dma.*[1].setCnt(value),
+            0xC8 => dma.*[2].setSad(value),
+            0xCC => dma.*[2].setDad(value),
+            0xD0 => dma.*[2].setCnt(value),
+            0xD4 => dma.*[3].setSad(value),
+            0xD8 => dma.*[3].setDad(value),
+            0xDC => dma.*[3].setCnt(value),
+            else => @panic("TODO: Unexpected u32 DMA write"),
+        },
+        u16 => switch (byte) {
+            0xB0 => dma.*[0].setSad(setU32L(dma.*[0].sad, value)),
+            0xB2 => dma.*[0].setSad(setU32H(dma.*[0].sad, value)),
+            0xB4 => dma.*[0].setDad(setU32L(dma.*[0].dad, value)),
+            0xB6 => dma.*[0].setDad(setU32H(dma.*[0].dad, value)),
+            0xB8 => dma.*[0].setCntL(value),
+            0xBA => dma.*[0].setCntH(value),
+
+            0xBC => dma.*[1].setSad(setU32L(dma.*[1].sad, value)),
+            0xBE => dma.*[1].setSad(setU32H(dma.*[1].sad, value)),
+            0xC0 => dma.*[1].setDad(setU32L(dma.*[1].dad, value)),
+            0xC2 => dma.*[1].setDad(setU32H(dma.*[1].dad, value)),
+            0xC4 => dma.*[1].setCntL(value),
+            0xC6 => dma.*[1].setCntH(value),
+
+            0xC8 => dma.*[2].setSad(setU32L(dma.*[2].sad, value)),
+            0xCA => dma.*[2].setSad(setU32H(dma.*[2].sad, value)),
+            0xCC => dma.*[2].setDad(setU32L(dma.*[2].dad, value)),
+            0xCE => dma.*[2].setDad(setU32H(dma.*[2].dad, value)),
+            0xD0 => dma.*[2].setCntL(value),
+            0xD2 => dma.*[2].setCntH(value),
+
+            0xD4 => dma.*[3].setSad(setU32L(dma.*[3].sad, value)),
+            0xD6 => dma.*[3].setSad(setU32H(dma.*[3].sad, value)),
+            0xD8 => dma.*[3].setDad(setU32L(dma.*[3].dad, value)),
+            0xDA => dma.*[3].setDad(setU32H(dma.*[3].dad, value)),
+            0xDC => dma.*[3].setCntL(value),
+            0xDE => dma.*[3].setCntH(value),
+            else => @panic("TODO: Unexpected u16 DMA write"),
+        },
+        u8 => @panic("TODO: Unexpected u8 DMA write"),
+        else => @compileError("DMA: Unsupported write width"),
+    }
+}
+
 /// Function that creates a DMAController. Determines unique DMA Controller behaiour at compile-time
 fn DmaController(comptime id: u2) type {
     return struct {
@@ -66,19 +143,19 @@ fn DmaController(comptime id: u2) type {
             };
         }
 
-        pub fn writeSad(self: *Self, addr: u32) void {
+        pub fn setSad(self: *Self, addr: u32) void {
             self.sad = addr & sad_mask;
         }
 
-        pub fn writeDad(self: *Self, addr: u32) void {
+        pub fn setDad(self: *Self, addr: u32) void {
             self.dad = addr & dad_mask;
         }
 
-        pub fn writeWordCount(self: *Self, halfword: u16) void {
+        pub fn setCntL(self: *Self, halfword: u16) void {
             self.word_count = @truncate(@TypeOf(self.word_count), halfword);
         }
 
-        pub fn writeCntHigh(self: *Self, halfword: u16) void {
+        pub fn setCntH(self: *Self, halfword: u16) void {
             const new = DmaControl{ .raw = halfword };
 
             if (!self.cnt.enabled.read() and new.enabled.read()) {
@@ -94,9 +171,9 @@ fn DmaController(comptime id: u2) type {
             self.cnt.raw = halfword;
         }
 
-        pub fn writeCnt(self: *Self, word: u32) void {
+        pub fn setCnt(self: *Self, word: u32) void {
             self.word_count = @truncate(@TypeOf(self.word_count), word);
-            self.writeCntHigh(@truncate(u16, word >> 16));
+            self.setCntH(@truncate(u16, word >> 16));
         }
 
         pub fn step(self: *Self, cpu: *Arm7tdmi) bool {
@@ -218,3 +295,11 @@ const DmaKind = enum(u2) {
     VBlank,
     Special,
 };
+
+fn setU32L(left: u32, right: u16) u32 {
+    return (left & 0xFFFF_0000) | right;
+}
+
+fn setU32H(left: u32, right: u16) u32 {
+    return (left & 0x0000_FFFF) | (@as(u32, right) << 16);
+}

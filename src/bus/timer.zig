@@ -13,17 +13,71 @@ pub fn create(sched: *Scheduler) TimerTuple {
     return .{ Timer(0).init(sched), Timer(1).init(sched), Timer(2).init(sched), Timer(3).init(sched) };
 }
 
+pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) T {
+    const nybble = @truncate(u4, addr);
+
+    return switch (T) {
+        u32 => switch (nybble) {
+            0x0 => @as(T, tim.*[0].cnt.raw) << 16 | tim.*[0].getCntL(),
+            0x4 => @as(T, tim.*[1].cnt.raw) << 16 | tim.*[1].getCntL(),
+            0x8 => @as(T, tim.*[2].cnt.raw) << 16 | tim.*[2].getCntL(),
+            0xC => @as(T, tim.*[3].cnt.raw) << 16 | tim.*[3].getCntL(),
+            else => @panic("TODO: u32 timer unexpected nybble"),
+        },
+        u16 => switch (nybble) {
+            0x0 => tim.*[0].getCntL(),
+            0x2 => tim.*[0].cnt.raw,
+            0x4 => tim.*[1].getCntL(),
+            0x6 => tim.*[1].cnt.raw,
+            0x8 => tim.*[2].getCntL(),
+            0xA => tim.*[2].cnt.raw,
+            0xC => tim.*[3].getCntL(),
+            0xE => tim.*[3].cnt.raw,
+            else => @panic("TODO: u16 timer unexpected nybble"),
+        },
+        u8 => @panic("TODO: u8 timer unexpected read"),
+        else => @compileError("TIMX: Unsupported read width"),
+    };
+}
+
+pub fn write(comptime T: type, tim: *TimerTuple, addr: u32, value: T) void {
+    const nybble = @truncate(u4, addr);
+
+    return switch (T) {
+        u32 => switch (nybble) {
+            0x0 => tim.*[0].setCnt(value),
+            0x4 => tim.*[1].setCnt(value),
+            0x8 => tim.*[2].setCnt(value),
+            0xC => tim.*[3].setCnt(value),
+            else => @panic("TODO: u32 timer unexpected nybble"),
+        },
+        u16 => switch (nybble) {
+            0x0 => tim.*[0].setCntL(value),
+            0x2 => tim.*[0].setCntH(value),
+            0x4 => tim.*[1].setCntL(value),
+            0x6 => tim.*[1].setCntH(value),
+            0x8 => tim.*[2].setCntL(value),
+            0xA => tim.*[2].setCntH(value),
+            0xC => tim.*[3].setCntL(value),
+            0xE => tim.*[3].setCntH(value),
+            else => @panic("TODO: u16 timer unexpected nybble"),
+        },
+        u8 => @panic("TODO: u8 timer unexpected write"),
+        else => @compileError("TIMX: Unsupported write width"),
+    };
+}
+
 fn Timer(comptime id: u2) type {
     return struct {
         const Self = @This();
 
-        /// Read Only, Internal. Please use self.counter()
+        /// Read Only, Internal. Please use self.getCntL()
         _counter: u16,
 
-        /// Write Only, Internal. Please use self.setReload()
+        /// Write Only, Internal. Please use self.setCntL()
         _reload: u16,
 
-        /// Write Only, Internal. Please use self.WriteCntHigh()
+        /// Write Only, Internal. Please use self.setCntH()
         cnt: TimerControl,
 
         /// Internal.
@@ -42,22 +96,26 @@ fn Timer(comptime id: u2) type {
             };
         }
 
-        pub fn counter(self: *const Self) u16 {
+        /// TIMCNT_L
+        pub fn getCntL(self: *const Self) u16 {
             if (self.cnt.cascade.read() or !self.cnt.enabled.read()) return self._counter;
 
             return self._counter +% @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
         }
 
-        pub fn writeCnt(self: *Self, word: u32) void {
-            self.setReload(@truncate(u16, word));
-            self.writeCntHigh(@truncate(u16, word >> 16));
-        }
-
-        pub fn setReload(self: *Self, halfword: u16) void {
+        /// TIMCNT_L
+        pub fn setCntL(self: *Self, halfword: u16) void {
             self._reload = halfword;
         }
 
-        pub fn writeCntHigh(self: *Self, halfword: u16) void {
+        /// TIMCNT_L & TIMCNT_H
+        pub fn setCnt(self: *Self, word: u32) void {
+            self.setCntL(@truncate(u16, word));
+            self.setCntH(@truncate(u16, word >> 16));
+        }
+
+        /// TIMCNT_H
+        pub fn setCntH(self: *Self, halfword: u16) void {
             const new = TimerControl{ .raw = halfword };
 
             // If Timer happens to be enabled, It will either be resheduled or disabled
