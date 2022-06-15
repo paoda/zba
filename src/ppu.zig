@@ -752,6 +752,16 @@ const AffineBackground = struct {
         };
     }
 
+    pub fn setX(self: *Self, is_vblank: bool, value: u32) void {
+        self.x = @bitCast(i32, value);
+        if (!is_vblank) self.x_latch = @bitCast(i32, value);
+    }
+
+    pub fn setY(self: *Self, is_vblank: bool, value: u32) void {
+        self.y = @bitCast(i32, value);
+        if (!is_vblank) self.y_latch = @bitCast(i32, value);
+    }
+
     pub fn writePaPb(self: *Self, value: u32) void {
         self.pa = @bitCast(i16, @truncate(u16, value));
         self.pb = @bitCast(i16, @truncate(u16, value >> 16));
