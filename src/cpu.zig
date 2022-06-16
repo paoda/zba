@@ -148,6 +148,10 @@ pub const Arm7tdmi = struct {
         };
     }
 
+    pub inline fn isHalted(self: *const Self) bool {
+        return self.bus.io.haltcnt == .Halt;
+    }
+
     pub fn setCpsr(self: *Self, value: u32) void {
         if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
         self.cpsr.raw = value;

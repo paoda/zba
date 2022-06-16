@@ -52,7 +52,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
 
     while (true) {
         while (sched.tick < std.math.min(frame_end, sched.nextTimestamp())) {
-            if (cpu.bus.io.haltcnt == .Execute) cpu.step() else sched.tick += 1;
+            if (!cpu.isHalted()) cpu.step() else sched.tick += 1;
             cpu.handleDMATransfers();
         }
 
