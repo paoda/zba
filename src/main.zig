@@ -157,6 +157,15 @@ pub fn main() anyerror!void {
                         SDL.SDLK_RSHIFT => io.keyinput.select.set(),
                         SDL.SDLK_i => log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))}),
                         SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
+                        SDL.SDLK_k => {
+                            // Dump IWRAM to file
+                            log.info("PC: 0x{X:0>8}", .{cpu.r[15]});
+                            log.info("LR: 0x{X:0>8}", .{cpu.r[14]});
+                            // const iwram_file = try std.fs.cwd().createFile("iwram.bin", .{});
+                            // defer iwram_file.close();
+
+                            // try iwram_file.writeAll(cpu.bus.iwram.buf);
+                        },
                         else => {},
                     }
                 },

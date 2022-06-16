@@ -20,7 +20,7 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) T {
         u32 => switch (byte) {
             0xB8 => @as(T, dma.*[0].cnt.raw) << 16,
             0xC4 => @as(T, dma.*[1].cnt.raw) << 16,
-            0xD0 => @as(T, dma.*[1].cnt.raw) << 16,
+            0xD0 => @as(T, dma.*[2].cnt.raw) << 16,
             0xDC => @as(T, dma.*[3].cnt.raw) << 16,
             else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
@@ -174,7 +174,7 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn setCnt(self: *Self, word: u32) void {
-            self.word_count = @truncate(@TypeOf(self.word_count), word);
+            self.setCntL(@truncate(u16, word));
             self.setCntH(@truncate(u16, word >> 16));
         }
 
