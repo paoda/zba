@@ -42,7 +42,9 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
         },
         u8 => switch (byte) {
             0x60 => apu.ch1.getSoundCntL(), // NR10
+            0x62 => apu.ch1.duty.raw, // NR11
             0x63 => apu.ch1.envelope.raw, // NR12
+            0x68 => apu.ch2.duty.raw, // NR21
             0x69 => apu.ch2.envelope.raw, // NR22
             0x73 => apu.ch3.vol.raw, // NR32
             0x79 => apu.ch4.envelope.raw, // NR42
@@ -120,6 +122,8 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
 
             0x80 => apu.setNr50(value),
             0x81 => apu.setNr51(value),
+            0x82 => apu.setSoundCntHL(value),
+            0x83 => apu.setSoundCntHH(value),
             0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
             0x89 => apu.setSoundBiasH(value),
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
@@ -190,6 +194,18 @@ pub const Apu = struct {
         self.ch2.reset();
         self.ch3.reset();
         self.ch4.reset();
+    }
+
+    /// SOUNDCNT_H_L
+    fn setSoundCntHL(self: *Self, value: u8) void {
+        const merged = (self.dma_cnt.raw & 0xFF00) | value;
+        self.setSoundCntH(merged);
+    }
+
+    /// SOUNDCNT_H_H
+    fn setSoundCntHH(self: *Self, value: u8) void {
+        const merged = (self.dma_cnt.raw & 0x00FF) | (@as(u16, value) << 8);
+        self.setSoundCntH(merged);
     }
 
     pub fn setSoundCntH(self: *Self, value: u16) void {

@@ -296,6 +296,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_000A => bus.ppu.bg[1].cnt.raw = (bus.ppu.bg[1].cnt.raw & 0xFF00) | value,
             0x0400_000B => bus.ppu.bg[1].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[1].cnt.raw & 0xFF),
             0x0400_0048 => log.debug("Wrote 0x{X:0>2} to WININ_L", .{value}),
+            0x0400_0049 => log.debug("Wrote 0x{X:0>2} to WININ_H", .{value}),
             0x0400_004A => log.debug("Wrote 0x{X:0>2} to WINOUT_L", .{value}),
             0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
 
