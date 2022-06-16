@@ -271,13 +271,33 @@ pub const Arm7tdmi = struct {
         }
     }
 
-    pub fn handleDMATransfers(self: *Self) void {
-        while (self.bus.isDmaRunning()) {
-            if (self.bus.dma[0].step(self)) continue;
-            if (self.bus.dma[1].step(self)) continue;
-            if (self.bus.dma[2].step(self)) continue;
-            if (self.bus.dma[3].step(self)) continue;
+    pub fn stepDmaTransfer(self: *Self) bool {
+        const dma0 = &self.bus.dma[0];
+        const dma1 = &self.bus.dma[1];
+        const dma2 = &self.bus.dma[2];
+        const dma3 = &self.bus.dma[3];
+
+        if (dma0.active) {
+            dma0.step(self);
+            return true;
         }
+
+        if (dma1.active) {
+            dma1.step(self);
+            return true;
+        }
+
+        if (dma2.active) {
+            dma2.step(self);
+            return true;
+        }
+
+        if (dma3.active) {
+            dma3.step(self);
+            return true;
+        }
+
+        return false;
     }
 
     pub fn handleInterrupt(self: *Self) void {

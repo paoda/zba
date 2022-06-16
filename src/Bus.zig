@@ -64,13 +64,6 @@ pub fn attach(self: *Self, cpu: *Arm7tdmi) void {
     self.cpu = cpu;
 }
 
-pub inline fn isDmaRunning(self: *const Self) bool {
-    return self.dma[0].active or
-        self.dma[1].active or
-        self.dma[2].active or
-        self.dma[3].active;
-}
-
 pub fn debugRead(self: *const Self, comptime T: type, address: u32) T {
     const cached = self.sched.tick;
     defer self.sched.tick = cached;

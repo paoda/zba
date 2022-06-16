@@ -178,9 +178,7 @@ fn DmaController(comptime id: u2) type {
             self.setCntH(@truncate(u16, word >> 16));
         }
 
-        pub fn step(self: *Self, cpu: *Arm7tdmi) bool {
-            if (!self.active) return false;
-
+        pub fn step(self: *Self, cpu: *Arm7tdmi) void {
             const is_fifo = (self.id == 1 or self.id == 2) and self.cnt.start_timing.read() == 0b11;
             const sad_adj = Self.adjustment(self.cnt.sad_adj.read());
             const dad_adj = if (is_fifo) .Fixed else Self.adjustment(self.cnt.dad_adj.read());
@@ -232,13 +230,6 @@ fn DmaController(comptime id: u2) type {
                 // timing window
                 self.active = false;
             }
-
-            return true;
-        }
-
-        pub fn isBlocking(self: *const Self) bool {
-            // A DMA Transfer is Blocking if it is Immediate
-            return self.cnt.start_timing.read() == 0b00;
         }
 
         pub fn pollBlankingDma(self: *Self, comptime kind: DmaKind) void {

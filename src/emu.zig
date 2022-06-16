@@ -52,8 +52,8 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
 
     while (true) {
         while (sched.tick < std.math.min(frame_end, sched.nextTimestamp())) {
+            if (cpu.stepDmaTransfer()) continue; // DMA is blocking, ticks scheduler
             if (!cpu.isHalted()) cpu.step() else sched.tick += 1;
-            cpu.handleDMATransfers();
         }
 
         if (sched.tick >= frame_end) break;
