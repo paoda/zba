@@ -21,6 +21,19 @@ const log = std.log.scoped(.Bus);
 const createDmaTuple = @import("bus/dma.zig").create;
 const createTimerTuple = @import("bus/timer.zig").create;
 const rotr = @import("util.zig").rotr;
+
+const timings: [2][0x10]u8 = [_][0x10]u8{
+    // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused
+    [_]u8{ 1, 1, 3, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5 }, // 8-bit & 16-bit
+    [_]u8{ 1, 1, 6, 1, 1, 2, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8 }, // 32-bit
+};
+
+pub const fetch_timings: [2][0x10]u8 = [_][0x10]u8{
+    // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused
+    [_]u8{ 1, 1, 3, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 5, 5 }, // 8-bit & 16-bit
+    [_]u8{ 1, 1, 6, 1, 1, 2, 2, 1, 4, 4, 4, 4, 4, 4, 8, 8 }, // 32-bit
+};
+
 const Self = @This();
 
 pak: GamePak,
@@ -112,7 +125,7 @@ fn readBios(self: *Self, comptime T: type, address: u32) T {
 pub fn read(self: *Self, comptime T: type, address: u32) T {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
-    self.sched.tick += 1;
+    defer self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
     return switch (page) {
         // General Internal Memory
@@ -147,7 +160,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
 pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
     const page = @truncate(u8, address >> 24);
     const align_addr = alignAddress(T, address);
-    self.sched.tick += 1;
+    defer self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
     switch (page) {
         // General Internal Memory

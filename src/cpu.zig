@@ -330,6 +330,10 @@ pub const Arm7tdmi = struct {
         comptime std.debug.assert(T == u32 or T == u16); // Opcode may be 32-bit (ARM) or 16-bit (THUMB)
         defer self.r[15] += if (T == u32) 4 else 2;
 
+        // FIXME: You better hope this is optimized out
+        const tick_cache = self.sched.tick;
+        defer self.sched.tick = tick_cache + Bus.fetch_timings[@boolToInt(T == u32)][@truncate(u4, self.r[15] >> 24)];
+
         return self.bus.read(T, self.r[15]);
     }
 
