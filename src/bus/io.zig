@@ -171,7 +171,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0058...0x0400_005C => {}, // Unused
 
             // Sound
-            0x0400_0080...0x0400_00A4 => apu.write(T, &bus.apu, address, value),
+            0x0400_0060...0x0400_00A4 => apu.write(T, &bus.apu, address, value),
             0x0400_00A8, 0x0400_00AC => {}, // Unused
 
             // DMA Transfers

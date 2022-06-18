@@ -64,10 +64,16 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
 
     switch (T) {
         u32 => switch (byte) {
-            0x80 => {
-                apu.psg_cnt.raw = @truncate(u16, value); // SOUNDCNT_L
-                apu.dma_cnt.raw = @truncate(u16, value >> 16); // SOUNDCNT_H
-            },
+            0x60 => apu.ch1.setSoundCnt(value),
+            0x64 => apu.ch1.setSoundCntX(&apu.fs, @truncate(u16, value)),
+            0x68 => apu.ch2.setSoundCntL(@truncate(u16, value)),
+            0x6C => apu.ch2.setSoundCntH(&apu.fs, @truncate(u16, value)),
+            0x70 => apu.ch3.setSoundCnt(value),
+            0x74 => apu.ch3.setSoundCntX(&apu.fs, @truncate(u16, value)),
+            0x78 => apu.ch4.setSoundCntL(@truncate(u16, value)),
+            0x7C => apu.ch4.setSoundCntH(&apu.fs, @truncate(u16, value)),
+
+            0x80 => apu.setSoundCnt(value),
             // WAVE_RAM
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
             0xA0 => apu.chA.push(value), // FIFO_A
@@ -196,6 +202,12 @@ pub const Apu = struct {
         self.ch4.reset();
     }
 
+    /// SOUNDCNT
+    fn setSoundCnt(self: *Self, value: u32) void {
+        self.psg_cnt.raw = @truncate(u16, value);
+        self.setSoundCntH(@truncate(u16, value >> 16));
+    }
+
     /// SOUNDCNT_H_L
     fn setSoundCntHL(self: *Self, value: u8) void {
         const merged = (self.dma_cnt.raw & 0xFF00) | value;
@@ -208,6 +220,7 @@ pub const Apu = struct {
         self.setSoundCntH(merged);
     }
 
+    /// SOUNDCNT_H
     pub fn setSoundCntH(self: *Self, value: u16) void {
         const new: io.DmaSoundControl = .{ .raw = value };
 
@@ -521,6 +534,12 @@ const ToneSweep = struct {
         return @as(i16, self.sample);
     }
 
+    /// NR10, NR11, NR12
+    fn setSoundCnt(self: *Self, value: u32) void {
+        self.sweep.raw = @truncate(u8, value);
+        self.setSoundCntH(@truncate(u16, value >> 16));
+    }
+
     /// NR10
     pub fn getSoundCntL(self: *const Self) u8 {
         return self.sweep.raw & 0x7F;
@@ -787,6 +806,12 @@ const Wave = struct {
 
     pub fn tickLength(self: *Self) void {
         self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
+    }
+
+    /// NR30, NR31, NR32
+    fn setSoundCnt(self: *Self, value: u32) void {
+        self.setSoundCntL(@truncate(u8, value));
+        self.setSoundCntH(@truncate(u16, value >> 16));
     }
 
     /// NR30
