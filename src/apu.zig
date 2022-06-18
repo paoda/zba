@@ -81,7 +81,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
-            0x60 => apu.ch1.sweep.raw = @truncate(u8, value), // SOUND1CNT_L
+            0x60 => apu.ch1.setSoundCntL(@truncate(u8, value)), // SOUND1CNT_L
             0x62 => apu.ch1.setSoundCntH(value),
             0x64 => apu.ch1.setSoundCntX(&apu.fs, value),
 
@@ -104,7 +104,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => switch (byte) {
-            0x60 => apu.ch1.sweep.raw = value, // NR10
+            0x60 => apu.ch1.setSoundCntL(value),
             0x62 => apu.ch1.setNr11(value),
             0x63 => apu.ch1.setNr12(value),
             0x64 => apu.ch1.setNr13(value),
@@ -443,11 +443,14 @@ const ToneSweep = struct {
         enabled: bool,
         shadow: u11,
 
+        calc_performed: bool,
+
         pub fn init() This {
             return .{
                 .timer = 0,
                 .enabled = false,
                 .shadow = 0,
+                .calc_performed = false,
             };
         }
 
@@ -457,6 +460,7 @@ const ToneSweep = struct {
             if (this.timer == 0) {
                 const period = ch1.sweep.period.read();
                 this.timer = if (period == 0) 8 else period;
+                if (!this.calc_performed) this.calc_performed = true;
 
                 if (this.enabled and period != 0) {
                     const new_freq = this.calcFrequency(ch1);
@@ -502,6 +506,8 @@ const ToneSweep = struct {
 
     fn reset(self: *Self) void {
         self.sweep.raw = 0;
+        self.sweep_dev.calc_performed = false;
+
         self.duty.raw = 0;
         self.envelope.raw = 0;
         self.freq.raw = 0;
@@ -536,13 +542,28 @@ const ToneSweep = struct {
 
     /// NR10, NR11, NR12
     fn setSoundCnt(self: *Self, value: u32) void {
-        self.sweep.raw = @truncate(u8, value);
+        self.setSoundCntL(@truncate(u8, value));
         self.setSoundCntH(@truncate(u16, value >> 16));
     }
 
     /// NR10
     pub fn getSoundCntL(self: *const Self) u8 {
         return self.sweep.raw & 0x7F;
+    }
+
+    /// NR10
+    fn setSoundCntL(self: *Self, value: u8) void {
+        const new = io.Sweep{ .raw = value };
+
+        if (self.sweep.direction.read() and !new.direction.read()) {
+            // Sweep Negate bit has been cleared
+            // If At least 1 Sweep Calculation has been made since
+            // the last trigger, the channel is immediately disabled
+
+            if (self.sweep_dev.calc_performed) self.enabled = false;
+        }
+
+        self.sweep.raw = value;
     }
 
     /// NR11, NR12
@@ -608,6 +629,7 @@ const ToneSweep = struct {
             const sw_period = self.sweep.period.read();
             const sw_shift = self.sweep.shift.read();
 
+            self.sweep_dev.calc_performed = false;
             self.sweep_dev.shadow = self.freq.frequency.read();
             self.sweep_dev.timer = if (sw_period == 0) 8 else sw_period;
             self.sweep_dev.enabled = sw_period != 0 or sw_shift != 0;
