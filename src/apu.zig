@@ -333,7 +333,8 @@ pub const Apu = struct {
         const final_right = (tmp_right << 5) | (tmp_right >> 6);
 
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
-            log.info("Sampling Cycle changed from {} to {}", .{ self.sampling_cycle, self.bias.sampling_cycle.read() });
+            const new_sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
+            log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), new_sample_rate });
 
             // Sample Rate Changed, Create a new Resampler since i can't figure out how to change
             // the parameters of the old one
@@ -341,7 +342,7 @@ pub const Apu = struct {
             defer SDL.SDL_FreeAudioStream(old);
 
             self.sampling_cycle = self.bias.sampling_cycle.read();
-            self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, self.sampleRate()), SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable;
+            self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, new_sample_rate), SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable;
         }
 
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left, final_right }, 2 * @sizeOf(u16));
@@ -349,11 +350,11 @@ pub const Apu = struct {
     }
 
     fn sampleTicks(self: *const Self) u64 {
-        return (1 << 24) / self.sampleRate();
+        return (1 << 24) / Self.sampleRate(self.bias.sampling_cycle.read());
     }
 
-    fn sampleRate(self: *const Self) u64 {
-        return @as(u64, 1) << (15 + @as(u6, self.bias.sampling_cycle.read()));
+    fn sampleRate(cycle: u2) u64 {
+        return @as(u64, 1) << (15 + @as(u6, cycle));
     }
 
     pub fn tickFrameSequencer(self: *Self, late: u64) void {
@@ -398,17 +399,6 @@ pub const Apu = struct {
             self.chB.updateSample();
             if (self.chB.len() <= 15) cpu.bus.dma[2].requestSoundDma(0x0400_00A4);
         }
-    }
-
-    fn highPass(self: *Self, sample: f32, enabled: bool) f32 {
-        return if (enabled) blk: {
-            const out = sample - self.capacitor;
-            const charge_factor =
-                std.math.pow(f32, 0.999958, @intToFloat(f32, (1 << 22) / self.sampleRate()));
-
-            self.capacitor = sample - out * charge_factor;
-            break :blk out;
-        } else 0.0;
     }
 };
 
