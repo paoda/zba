@@ -98,9 +98,6 @@ fn DmaController(comptime id: u2) type {
         const sad_mask: u32 = if (id == 0) 0x07FF_FFFF else 0x0FFF_FFFF;
         const dad_mask: u32 = if (id != 3) 0x07FF_FFFF else 0x0FFF_FFFF;
 
-        /// Determines whether DMAController is for DMA0, DMA1, DMA2 or DMA3
-        /// Note: Determined at comptime
-        id: u2,
         /// Write-only. The first address in a DMA transfer. (DMASAD)
         /// Note: use writeSrc instead of manipulating src_addr directly
         sad: u32,
@@ -126,11 +123,10 @@ fn DmaController(comptime id: u2) type {
         /// Some DMA Transfers are enabled during Hblank / VBlank and / or
         /// have delays. Thefore bit 15 of DMACNT isn't actually something
         /// we can use to control when we do or do not execute a step in a DMA Transfer
-        active: bool,
+        in_progress: bool,
 
         pub fn init() Self {
             return .{
-                .id = id,
                 .sad = 0,
                 .dad = 0,
                 .word_count = 0,
@@ -141,7 +137,7 @@ fn DmaController(comptime id: u2) type {
                 ._dad = 0,
                 ._word_count = 0,
                 ._fifo_word_count = 4,
-                .active = false,
+                .in_progress = false,
             };
         }
 
@@ -167,7 +163,7 @@ fn DmaController(comptime id: u2) type {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
 
                 // Only a Start Timing of 00 has a DMA Transfer immediately begin
-                self.active = new.start_timing.read() == 0b00;
+                self.in_progress = new.start_timing.read() == 0b00;
             }
 
             self.cnt.raw = halfword;
@@ -179,7 +175,7 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn step(self: *Self, cpu: *Arm7tdmi) void {
-            const is_fifo = (self.id == 1 or self.id == 2) and self.cnt.start_timing.read() == 0b11;
+            const is_fifo = (id == 1 or id == 2) and self.cnt.start_timing.read() == 0b11;
             const sad_adj = Self.adjustment(self.cnt.sad_adj.read());
             const dad_adj = if (is_fifo) .Fixed else Self.adjustment(self.cnt.dad_adj.read());
 
@@ -228,20 +224,20 @@ fn DmaController(comptime id: u2) type {
                 // We want to disable our internal enabled flag regardless of repeat
                 // because we only want to step A DMA that repeats during it's specific
                 // timing window
-                self.active = false;
+                self.in_progress = false;
             }
         }
 
         pub fn pollBlankingDma(self: *Self, comptime kind: DmaKind) void {
-            if (self.active) return;
+            if (self.in_progress) return;
 
             switch (kind) {
-                .HBlank => self.active = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
-                .VBlank => self.active = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
+                .HBlank => self.in_progress = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
+                .VBlank => self.in_progress = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
                 .Immediate, .Special => {},
             }
 
-            if (self.cnt.repeat.read() and self.active) {
+            if (self.cnt.repeat.read() and self.in_progress) {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
                 if (Self.adjustment(self.cnt.dad_adj.read()) == .IncrementReload) self._dad = self.dad;
             }
@@ -258,7 +254,7 @@ fn DmaController(comptime id: u2) type {
             if (is_enabled and is_special and is_repeating and is_fifo) {
                 self._word_count = 4;
                 self.cnt.transfer_type.set();
-                self.active = true;
+                self.in_progress = true;
             }
         }
 
