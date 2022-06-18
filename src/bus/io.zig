@@ -52,7 +52,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0006 => @as(T, bus.ppu.bg[0].cnt.raw) << 16 | bus.ppu.vcount.raw,
 
             // DMA Transfers
-            0x0400_00B8...0x0400_00DC => dma.read(T, &bus.dma, address),
+            0x0400_00B0...0x0400_00DC => dma.read(T, &bus.dma, address),
 
             // Timers
             0x0400_0100...0x0400_010C => timer.read(T, &bus.tim, address),
@@ -83,10 +83,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_004C => readTodo("Read {} from MOSAIC", .{T}),
 
             // Sound
-            0x0400_0060...0x0400_009F => apu.read(T, &bus.apu, address),
+            0x0400_0060...0x0400_009E => apu.read(T, &bus.apu, address),
 
             // DMA Transfers
-            0x0400_00BA...0x0400_00DE => dma.read(T, &bus.dma, address),
+            0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address),
 
             // Timers
             0x0400_0100...0x0400_010E => timer.read(T, &bus.tim, address),
@@ -119,7 +119,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000B => @truncate(T, bus.ppu.bg[1].cnt.raw >> 8),
 
             // Sound
-            0x0400_0060...0x0400_0089 => apu.read(T, &bus.apu, address),
+            0x0400_0060...0x0400_00A7 => apu.read(T, &bus.apu, address),
 
             // Serial Communication 1
             0x0400_0128 => readTodo("Read {} from SIOCNT_L", .{T}),
@@ -190,6 +190,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Keypad Input
             0x0400_0130 => log.debug("Wrote 0x{X:0>8} to KEYINPUT and KEYCNT", .{value}),
+            0x0400_0134 => log.debug("Wrote 0x{X:0>8} to RCNT and IR", .{value}),
+            0x0400_0138, 0x0400_013C => {}, // Unused
 
             // Serial Communication 2
             0x0400_0140 => log.debug("Wrote 0x{X:0>8} to JOYCNT", .{value}),
@@ -197,6 +199,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0154 => log.debug("Wrote 0x{X:0>8} to JOY_TRANS", .{value}),
             0x0400_0158 => log.debug("Wrote 0x{X:0>8} to JOYSTAT (?)", .{value}),
             0x0400_0144...0x0400_014C, 0x0400_015C => {}, // Unused
+            0x0400_0160...0x0400_01FC => {},
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
@@ -251,7 +254,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
-            0x0400_0060...0x0400_009F => apu.write(T, &bus.apu, address, value),
+            0x0400_0060...0x0400_009E => apu.write(T, &bus.apu, address, value),
 
             // Dma Transfers
             0x0400_00B0...0x0400_00DE => dma.write(T, &bus.dma, address, value),
@@ -301,7 +304,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
 
             // Sound
-            0x0400_0060...0x0400_009F => apu.write(T, &bus.apu, address, value),
+            0x0400_0060...0x0400_00A7 => apu.write(T, &bus.apu, address, value),
 
             // Serial Communication 1
             0x0400_0120 => log.debug("Wrote 0x{X:0>2} to SIODATA32_L_L", .{value}),
