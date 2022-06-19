@@ -205,21 +205,19 @@ fn DmaController(comptime id: u2) type {
             self._word_count -= 1;
 
             if (self._word_count == 0) {
-                if (!self.cnt.repeat.read()) {
-                    // If we're not repeating, Fire the IRQs and disable the DMA
-                    if (self.cnt.irq.read()) {
-                        switch (id) {
-                            0 => cpu.bus.io.irq.dma0.set(),
-                            1 => cpu.bus.io.irq.dma0.set(),
-                            2 => cpu.bus.io.irq.dma0.set(),
-                            3 => cpu.bus.io.irq.dma0.set(),
-                        }
-
-                        cpu.handleInterrupt();
+                if (self.cnt.irq.read()) {
+                    switch (id) {
+                        0 => cpu.bus.io.irq.dma0.set(),
+                        1 => cpu.bus.io.irq.dma1.set(),
+                        2 => cpu.bus.io.irq.dma2.set(),
+                        3 => cpu.bus.io.irq.dma3.set(),
                     }
 
-                    self.cnt.enabled.unset();
+                    cpu.handleInterrupt();
                 }
+
+                // If we're not repeating, Fire the IRQs and disable the DMA
+                if (!self.cnt.repeat.read()) self.cnt.enabled.unset();
 
                 // We want to disable our internal enabled flag regardless of repeat
                 // because we only want to step A DMA that repeats during it's specific
@@ -229,15 +227,20 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn pollBlankingDma(self: *Self, comptime kind: DmaKind) void {
-            if (self.in_progress) return;
+            if (self.in_progress) return; // If there's an ongoing DMA Transfer, exit early
 
+            // No ongoing DMA Transfer, We want to check if we should repeat an existing one
+            // Determined by the repeat bit and whether the DMA is in the right start_timing
             switch (kind) {
-                .HBlank => self.in_progress = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
                 .VBlank => self.in_progress = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b01,
+                .HBlank => self.in_progress = self.cnt.enabled.read() and self.cnt.start_timing.read() == 0b10,
                 .Immediate, .Special => {},
             }
 
-            if (self.cnt.repeat.read() and self.in_progress) {
+            // If we determined that the repeat bit is set (and now the Hblank / Vblank DMA is now in progress)
+            // Reload internal word count latch
+            // Reload internal DAD latch if we are in IncrementRelaod
+            if (self.in_progress) {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
                 if (Self.adjustment(self.cnt.dad_adj.read()) == .IncrementReload) self._dad = self.dad;
             }
@@ -245,17 +248,32 @@ fn DmaController(comptime id: u2) type {
 
         pub fn requestSoundDma(self: *Self, fifo_addr: u32) void {
             comptime std.debug.assert(id == 1 or id == 2);
-
-            const is_enabled = self.cnt.enabled.read();
-            const is_special = self.cnt.start_timing.read() == 0b11;
-            const is_repeating = self.cnt.repeat.read();
-            const is_fifo = self.dad == fifo_addr;
-
-            if (is_enabled and is_special and is_repeating and is_fifo) {
-                self._word_count = 4;
-                self.cnt.transfer_type.set();
-                self.in_progress = true;
+            if (self.in_progress) {
+                log.err("DMA{} Sound Request but DMA{} is already running?", .{ id, id });
+                return;
             }
+
+            if (self.cnt.start_timing.read() != 0b11) {
+                log.err("APU requested Sound DMA from DMA{}, but the DMA was not configured for Sound", .{id});
+                return;
+            }
+
+            // log.err("DMA{}: SAD = 0x{X:0>8}, DAD = 0x{X:0>8}, WC = 0x{X:}", .{ id, self.sad, self.dad, self.word_count });
+            // log.err("\tSAD Adjustment: {}", .{Self.adjustment(self.cnt.sad_adj.read())});
+            // log.err("\tDAD Adjustment: {}", .{Self.adjustment(self.cnt.dad_adj.read())});
+            // log.err("\tRepeat: {}", .{@boolToInt(self.cnt.repeat.read())});
+            // log.err("\tTransfer Type: {}-bit", .{if (self.cnt.transfer_type.read()) @as(u32, 32) else 16});
+            // log.err("\tStart Timing: {}", .{self.cnt.start_timing.read()});
+
+            // We Assume the Repeat Bit is Set
+            // We Assume that DAD is set to 0x0400_00A0 or 0x0400_00A4 (fifo_addr)
+            // We Assume DMACNT_L is set to 4
+
+            self.cnt.repeat.set();
+            self._dad = fifo_addr;
+            self._word_count = 4;
+
+            self.in_progress = true;
         }
 
         fn adjustment(idx: u2) Adjustment {
