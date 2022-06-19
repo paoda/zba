@@ -246,33 +246,21 @@ fn DmaController(comptime id: u2) type {
             }
         }
 
-        pub fn requestSoundDma(self: *Self, fifo_addr: u32) void {
+        pub fn requestSoundDma(self: *Self, _: u32) void {
             comptime std.debug.assert(id == 1 or id == 2);
-            if (self.in_progress) {
-                log.err("DMA{} Sound Request but DMA{} is already running?", .{ id, id });
-                return;
-            }
+            if (self.in_progress) return; // APU must wait their turn
 
-            if (self.cnt.start_timing.read() != 0b11) {
-                log.err("APU requested Sound DMA from DMA{}, but the DMA was not configured for Sound", .{id});
-                return;
-            }
-
-            // log.err("DMA{}: SAD = 0x{X:0>8}, DAD = 0x{X:0>8}, WC = 0x{X:}", .{ id, self.sad, self.dad, self.word_count });
-            // log.err("\tSAD Adjustment: {}", .{Self.adjustment(self.cnt.sad_adj.read())});
-            // log.err("\tDAD Adjustment: {}", .{Self.adjustment(self.cnt.dad_adj.read())});
-            // log.err("\tRepeat: {}", .{@boolToInt(self.cnt.repeat.read())});
-            // log.err("\tTransfer Type: {}-bit", .{if (self.cnt.transfer_type.read()) @as(u32, 32) else 16});
-            // log.err("\tStart Timing: {}", .{self.cnt.start_timing.read()});
+            // DMA May not be configured for handling DMAs
+            if (self.cnt.start_timing.read() != 0b11) return;
 
             // We Assume the Repeat Bit is Set
             // We Assume that DAD is set to 0x0400_00A0 or 0x0400_00A4 (fifo_addr)
             // We Assume DMACNT_L is set to 4
 
+            // FIXME: Safe to just assume whatever DAD is set to is the FIFO Address?
+            // self._dad = fifo_addr;
             self.cnt.repeat.set();
-            self._dad = fifo_addr;
             self._word_count = 4;
-
             self.in_progress = true;
         }
 

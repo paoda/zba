@@ -144,10 +144,10 @@ fn Timer(comptime id: u2) type {
 
             if (self.cnt.irq.read()) {
                 switch (id) {
-                    0 => io.irq.tim0_overflow.set(),
-                    1 => io.irq.tim1_overflow.set(),
-                    2 => io.irq.tim2_overflow.set(),
-                    3 => io.irq.tim3_overflow.set(),
+                    0 => io.irq.tim0.set(),
+                    1 => io.irq.tim1.set(),
+                    2 => io.irq.tim2.set(),
+                    3 => io.irq.tim3.set(),
                 }
 
                 cpu.handleInterrupt();
