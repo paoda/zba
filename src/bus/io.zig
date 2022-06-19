@@ -81,6 +81,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000C => bus.ppu.bg[2].cnt.raw,
             0x0400_000E => bus.ppu.bg[3].cnt.raw,
             0x0400_004C => readTodo("Read {} from MOSAIC", .{T}),
+            0x0400_0050 => bus.ppu.bldcnt.raw,
 
             // Sound
             0x0400_0060...0x0400_009E => apu.read(T, &bus.apu, address),
@@ -166,8 +167,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0044 => log.debug("Wrote 0x{X:0>8} to WIN0V and WIN1V", .{value}),
             0x0400_0048 => log.debug("Wrote 0x{X:0>8} to WININ and WINOUT", .{value}),
             0x0400_004C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
-            0x0400_0050 => log.debug("Wrote 0x{X:0>8} to BLDCNT and BLDALPHA", .{value}),
-            0x0400_0054 => log.debug("Wrote 0x{X:0>8} to BLDY", .{value}),
+            0x0400_0050 => {
+                bus.ppu.bldcnt.raw = @truncate(u16, value);
+                bus.ppu.bldalpha.raw = @truncate(u16, value >> 16);
+            },
+            0x0400_0054 => bus.ppu.bldy.raw = @truncate(u16, value),
             0x0400_0058...0x0400_005C => {}, // Unused
 
             // Sound
@@ -248,9 +252,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0048 => log.debug("Wrote 0x{X:0>4} to WININ", .{value}),
             0x0400_004A => log.debug("Wrote 0x{X:0>4} to WINOUT", .{value}),
             0x0400_004C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
-            0x0400_0050 => log.debug("Wrote 0x{X:0>4} to BLDCNT", .{value}),
-            0x0400_0052 => log.debug("Wrote 0x{X:0>4} to BLDALPHA", .{value}),
-            0x0400_0054 => log.debug("Wrote 0x{X:0>4} to BLDY", .{value}),
+            0x0400_0050 => bus.ppu.bldcnt.raw = value,
+            0x0400_0052 => bus.ppu.bldalpha.raw = value,
+            0x0400_0054 => bus.ppu.bldy.raw = value,
             0x0400_004E, 0x0400_0056 => {}, // Not used
 
             // Sound
@@ -301,7 +305,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0048 => log.debug("Wrote 0x{X:0>2} to WININ_L", .{value}),
             0x0400_0049 => log.debug("Wrote 0x{X:0>2} to WININ_H", .{value}),
             0x0400_004A => log.debug("Wrote 0x{X:0>2} to WINOUT_L", .{value}),
-            0x0400_0054 => log.debug("Wrote 0x{X:0>2} to BLDY_L", .{value}),
+            0x0400_0054 => bus.ppu.bldy.raw = (bus.ppu.bldy.raw & 0xFF00) | value,
 
             // Sound
             0x0400_0060...0x0400_00A7 => apu.write(T, &bus.apu, address, value),
@@ -427,6 +431,39 @@ pub const BackgroundControl = extern union {
 /// Write Only
 pub const BackgroundOffset = extern union {
     offset: Bitfield(u16, 0, 9),
+    raw: u16,
+};
+
+/// Read / Write
+pub const BldCnt = extern union {
+    bg0a: Bit(u16, 0),
+    bg1a: Bit(u16, 1),
+    bg2a: Bit(u16, 2),
+    bg3a: Bit(u16, 3),
+    obja: Bit(u16, 4),
+    bda: Bit(u16, 5),
+    mode: Bitfield(u16, 6, 2),
+    bg0b: Bit(u16, 8),
+    bg1b: Bit(u16, 9),
+    bg2b: Bit(u16, 10),
+    bg3b: Bit(u16, 11),
+    objb: Bit(u16, 12),
+    bdb: Bit(u16, 13),
+    raw: u16,
+};
+
+/// Read-only?
+/// Alpha Blending Coefficients
+pub const BldAlpha = extern union {
+    eva: Bitfield(u16, 0, 5),
+    evb: Bitfield(u16, 8, 5),
+    raw: u16,
+};
+
+/// Write-only?
+/// Brightness COefficients
+pub const BldY = extern union {
+    evy: Bitfield(u16, 0, 5),
     raw: u16,
 };
 

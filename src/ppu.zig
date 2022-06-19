@@ -31,6 +31,10 @@ pub const Ppu = struct {
     dispstat: io.DisplayStatus,
     vcount: io.VCount,
 
+    bldcnt: io.BldCnt,
+    bldalpha: io.BldAlpha,
+    bldy: io.BldY,
+
     vram: Vram,
     palette: Palette,
     oam: Oam,
@@ -62,6 +66,9 @@ pub const Ppu = struct {
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
+            .bldcnt = .{ .raw = 0x0000 },
+            .bldalpha = .{ .raw = 0x0000 },
+            .bldy = .{ .raw = 0x0000 },
 
             .scanline_buf = [_]?u16{null} ** width,
             .scanline_sprites = [_]?Sprite{null} ** 128,
