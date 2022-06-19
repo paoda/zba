@@ -22,10 +22,10 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [ ] `line_timing.gba`
     - [ ] `lyc_midline.gba`
     - [ ] `window_midframe.gba`
-- [ ] [ladystarbreeze's GBA Test Collection](https://github.com/ladystarbreeze/GBA-Test-Collection)
+- [x] [ladystarbreeze's GBA Test Collection](https://github.com/ladystarbreeze/GBA-Test-Collection)
     - [x] `retAddr.gba`
     - [x] `helloWorld.gba`
-    - [ ] `helloAudio.gba`
+    - [x] `helloAudio.gba`
 - [x] [`armwrestler-gba-fixed.gba`](https://github.com/destoer/armwrestler-gba-fixed)
 - [x] [FuzzARM](https://github.com/DenSinH/FuzzARM)
 
@@ -36,7 +36,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [0.10.0-dev.2424+b3672e073](https://github.com/ziglang/zig/tree/b3672e073)
+Most recently built on Zig [0.10.0-dev.2624+d506275a0](https://github.com/ziglang/zig/tree/d506275a0)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
@@ -63,8 +63,8 @@ Key | Button
 --- | ---
 <kbd>X</kbd> | A
 <kbd>Z</kbd> | B
-<kbd>A</kbd> | Left Shoulder
-<kbd>S</kbd> | Right Shoulder
+<kbd>A</kbd> | L
+<kbd>S</kbd> | R
 <kbd>Return</kbd> | Start
 <kbd>RShift</kbd> | Select
 Arrow Keys | D-Pad
