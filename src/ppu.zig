@@ -43,7 +43,7 @@ pub const Ppu = struct {
     alloc: Allocator,
 
     scanline_sprites: [128]?Sprite,
-    scanline_buf: [width]?u16,
+    scanline: Scanline,
 
     pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
@@ -51,6 +51,9 @@ pub const Ppu = struct {
 
         const framebufs = try alloc.alloc(u8, (framebuf_pitch * height) * 2);
         std.mem.set(u8, framebufs, 0);
+
+        const scanline_buf = try alloc.alloc(?u16, width * 2);
+        std.mem.set(?u16, scanline_buf, null);
 
         return Self{
             .vram = try Vram.init(alloc),
@@ -70,24 +73,25 @@ pub const Ppu = struct {
             .bldalpha = .{ .raw = 0x0000 },
             .bldy = .{ .raw = 0x0000 },
 
-            .scanline_buf = [_]?u16{null} ** width,
+            .scanline = Scanline.init(scanline_buf),
             .scanline_sprites = [_]?Sprite{null} ** 128,
         };
     }
 
     pub fn deinit(self: Self) void {
         self.framebuf.deinit(self.alloc);
+        self.scanline.deinit(self.alloc);
         self.vram.deinit();
         self.palette.deinit();
         self.oam.deinit();
     }
 
-    pub fn setBgOffsets(self: *Self, comptime n: u3, word: u32) void {
+    pub fn setBgOffsets(self: *Self, comptime n: u2, word: u32) void {
         self.bg[n].hofs.raw = @truncate(u16, word);
         self.bg[n].vofs.raw = @truncate(u16, word >> 16);
     }
 
-    pub fn setAdjCnts(self: *Self, comptime n: u3, word: u32) void {
+    pub fn setAdjCnts(self: *Self, comptime n: u2, word: u32) void {
         self.bg[n].cnt.raw = @truncate(u16, word);
         self.bg[n + 1].cnt.raw = @truncate(u16, word >> 16);
     }
@@ -160,7 +164,7 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (self.scanline_buf[x] != null) continue;
+            if (self.scanline.top()[x] != null) continue;
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -187,7 +191,7 @@ pub const Ppu = struct {
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
             // Sprite Palette starts at 0x0500_0200
-            if (pal_id != 0) self.scanline_buf[x] = self.palette.read(u16, 0x200 + pal_id * 2);
+            if (pal_id != 0) self.scanline.top()[x] = self.palette.read(u16, 0x200 + pal_id * 2);
         }
     }
 
@@ -207,7 +211,15 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (self.scanline_buf[x] != null) continue;
+            if (self.scanline.top()[x] != null) continue;
+
+            if (self.scanline.btm()[x] != null) {
+                if (self.bldcnt.mode.read() != 0b01) continue;
+
+                const b_layers = self.bldcnt.layer_b.read();
+                const is_blend_enabled = (b_layers >> 4) & 1 == 1;
+                if (!is_blend_enabled) continue;
+            }
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -240,11 +252,26 @@ pub const Ppu = struct {
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
             // Sprite Palette starts at 0x0500_0200
-            if (pal_id != 0) self.scanline_buf[x] = self.palette.read(u16, 0x200 + pal_id * 2);
+            if (pal_id != 0) {
+                const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
+
+                if (self.bldcnt.mode.read() == 0b01) {
+                    // Alpha Blending
+                    const a_layers = self.bldcnt.layer_a.read();
+                    const is_blend_enabled = (a_layers >> 4) & 1 == 1;
+
+                    if (is_blend_enabled) {
+                        self.scanline.btm()[x] = bgr555;
+                        return;
+                    }
+                }
+
+                self.scanline.top()[x] = bgr555;
+            }
         }
     }
 
-    fn drawAffineBackground(self: *Self, comptime n: u3) void {
+    fn drawAffineBackground(self: *Self, comptime n: u2) void {
         comptime std.debug.assert(n == 2 or n == 3); // Only BG2 and BG3 can be affine
 
         const char_base = @as(u32, 0x4000) * self.bg[n].cnt.char_base.read();
@@ -266,7 +293,7 @@ pub const Ppu = struct {
             aff_x += self.aff_bg[n - 2].pa;
             aff_y += self.aff_bg[n - 2].pc;
 
-            if (self.scanline_buf[@as(usize, i)] != null) continue;
+            if (!shouldDrawBackground(n, self.bldcnt, &self.scanline, i)) continue;
 
             if (self.bg[n].cnt.display_overflow.read()) {
                 ix = if (ix > px_width) @rem(ix, px_width) else if (ix < 0) px_width + @rem(ix, px_width) else ix;
@@ -283,7 +310,10 @@ pub const Ppu = struct {
             const tile_addr = char_base + (tile_id * 0x40) + (row * 0x8) + col;
             const pal_id: u16 = self.vram.buf[tile_addr];
 
-            if (pal_id != 0) self.scanline_buf[i] = self.palette.read(u16, pal_id * 2);
+            if (pal_id != 0) {
+                const bgr555 = self.palette.read(u16, pal_id * 2);
+                drawToScanlineBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+            }
         }
 
         // Update BGxX and BGxY
@@ -291,7 +321,7 @@ pub const Ppu = struct {
         self.aff_bg[n - 2].y_latch.? += self.aff_bg[n - 2].pd; // PD is added to BGxY
     }
 
-    fn drawBackround(self: *Self, comptime n: u3) void {
+    fn drawBackround(self: *Self, comptime n: u2) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
 
         const char_base = 0x4000 * @as(u32, self.bg[n].cnt.char_base.read());
@@ -311,8 +341,7 @@ pub const Ppu = struct {
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
-            // Exit early if a pixel is already here
-            if (self.scanline_buf[i] != null) continue;
+            if (!shouldDrawBackground(n, self.bldcnt, &self.scanline, i)) continue;
 
             const x = hofs + i;
 
@@ -338,7 +367,10 @@ pub const Ppu = struct {
             // and then we can index the palette
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(entry.pal_bank.read(), col, tile) else tile;
 
-            if (pal_id != 0) self.scanline_buf[i] = self.palette.read(u16, pal_id * 2);
+            if (pal_id != 0) {
+                const bgr555 = self.palette.read(u16, pal_id * 2);
+                drawToScanlineBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+            }
         }
     }
 
@@ -370,15 +402,19 @@ pub const Ppu = struct {
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline_buf) |maybe_px, i| {
-                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+                // If there are any nulls present in self.scanline it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline.top()) |maybe_px, i| {
+                    const maybe_top = maybe_px;
+                    const maybe_btm = self.scanline.btm()[i];
+
+                    // TODO: Why must I reverse this?
+                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
-                std.mem.set(?u16, &self.scanline_buf, null);
+                self.scanline.reset();
                 std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x1 => {
@@ -394,15 +430,19 @@ pub const Ppu = struct {
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline_buf) |maybe_px, i| {
-                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+                // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline.top()) |maybe_px, i| {
+                    const maybe_top = maybe_px;
+                    const maybe_btm = self.scanline.btm()[i];
+
+                    // TODO: Why must I reverse this?
+                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
-                std.mem.set(?u16, &self.scanline_buf, null);
+                self.scanline.reset();
                 std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x2 => {
@@ -417,15 +457,19 @@ pub const Ppu = struct {
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline_buf it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline_buf) |maybe_px, i| {
-                    const bgr555 = if (maybe_px) |px| px else self.palette.getBackdrop();
+                // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
+                for (self.scanline.top()) |maybe_px, i| {
+                    const maybe_top = maybe_px;
+                    const maybe_btm = self.scanline.btm()[i];
+
+                    // TODO: Why must I reverse this?
+                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
-                std.mem.set(?u16, &self.scanline_buf, null);
+                self.scanline.reset();
                 std.mem.set(?Sprite, &self.scanline_sprites, null);
             },
             0x3 => {
@@ -1005,6 +1049,118 @@ fn toRgba8888Talarubi(bgr555: u16) u32 {
 
     return @floatToInt(u32, out_r) << 24 | @floatToInt(u32, out_g) << 16 | @floatToInt(u32, out_b) << 8 | 0xFF;
 }
+
+fn getBgr555(palette: *const Palette, bldalpha: io.BldAlpha, maybe_top: ?u16, maybe_btm: ?u16) u16 {
+    if (maybe_top) |top| {
+        if (maybe_btm) |btm| return alphaBlend(top, btm, bldalpha);
+        return top;
+    }
+
+    if (maybe_btm) |btm| return btm;
+    return palette.getBackdrop();
+}
+
+fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
+    const eva: u16 = bldalpha.eva.read();
+    const evb: u16 = bldalpha.evb.read();
+
+    const top_r = top & 0x1F;
+    const top_g = (top >> 5) & 0x1F;
+    const top_b = (top >> 10) & 0x1F;
+
+    const btm_r = btm & 0x1F;
+    const btm_g = (btm >> 5) & 0x1F;
+    const btm_b = (btm >> 10) & 0x1F;
+
+    const bld_r = std.math.min(31, (top_r * eva + btm_r * evb) >> 4);
+    const bld_g = std.math.min(31, (top_g * eva + btm_g * evb) >> 4);
+    const bld_b = std.math.min(31, (top_b * eva + btm_b * evb) >> 4);
+
+    return (bld_b << 10) | (bld_g << 5) | bld_r;
+}
+
+fn shouldDrawBackground(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize) bool {
+    // If a pixel has been drawn on the top layer, it's because
+    // Either the pixel is to be blended with a pixel on the bottom layer
+    // or the pixel is not to be blended at all
+    // Consequentially, if we find a pixel on the top layer, there's no need
+    // to render anything I think?
+    if (scanline.top()[i] != null) return false;
+
+    if (scanline.btm()[i] != null) {
+        // The Pixel found in the Bottom layer is
+        // 1. From a higher priority
+        // 2. From a Backround that is marked for Blending (Pixel A)
+        //
+        // We now have to confirm whether this current Background can be used
+        // as Pixel B or not.
+
+        // If Alpha Blending isn't enabled, we've aready found a higher
+        // priority pixel to render. Move on
+        if (bldcnt.mode.read() != 0b01) return false;
+
+        const b_layers = bldcnt.layer_b.read();
+        const is_blend_enabled = (b_layers >> n) & 1 == 1;
+
+        // If the Background is not marked for blending, we've already found
+        // a higher priority pixel, move on.
+        if (!is_blend_enabled) return false;
+    }
+
+    return true;
+}
+
+fn drawToScanlineBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize, bgr555: u16) void {
+    if (bldcnt.mode.read() == 0b01) {
+        // Standard Alpha Blending
+        const a_layers = bldcnt.layer_a.read();
+        const is_blend_enabled = (a_layers >> n) & 1 == 1;
+
+        // If Alpha Blending is enabled and we've found an eligible layer for
+        // Pixel A, store the pixel in the bottom pixel buffer
+        if (is_blend_enabled) {
+            scanline.btm()[i] = bgr555;
+            return;
+        }
+    }
+
+    scanline.top()[i] = bgr555;
+}
+
+const Scanline = struct {
+    const Self = @This();
+
+    buf: [2][]?u16,
+    original: []?u16,
+
+    fn init(buf: []?u16) Self {
+        std.debug.assert(buf.len == width * 2);
+
+        const top_slice = buf[0..][0..width];
+        const btm_slice = buf[width..][0..width];
+
+        return .{
+            .buf = [_][]?u16{ top_slice, btm_slice },
+            .original = buf,
+        };
+    }
+
+    fn reset(self: *Self) void {
+        std.mem.set(?u16, self.original, null);
+    }
+
+    fn deinit(self: Self, alloc: Allocator) void {
+        alloc.free(self.original);
+    }
+
+    fn top(self: *Self) []?u16 {
+        return self.buf[0];
+    }
+
+    fn btm(self: *Self) []?u16 {
+        return self.buf[1];
+    }
+};
 
 // Double Buffering Implementation
 const FrameBuffer = struct {

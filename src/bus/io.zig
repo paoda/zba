@@ -436,19 +436,16 @@ pub const BackgroundOffset = extern union {
 
 /// Read / Write
 pub const BldCnt = extern union {
-    bg0a: Bit(u16, 0),
-    bg1a: Bit(u16, 1),
-    bg2a: Bit(u16, 2),
-    bg3a: Bit(u16, 3),
-    obja: Bit(u16, 4),
-    bda: Bit(u16, 5),
+    /// BLDCNT{0} is BG0 A
+    /// BLDCNT{4} is OBJ A
+    /// BLDCNT{5} is BD  A
+    layer_a: Bitfield(u16, 0, 6),
     mode: Bitfield(u16, 6, 2),
-    bg0b: Bit(u16, 8),
-    bg1b: Bit(u16, 9),
-    bg2b: Bit(u16, 10),
-    bg3b: Bit(u16, 11),
-    objb: Bit(u16, 12),
-    bdb: Bit(u16, 13),
+
+    /// BLDCNT{8} is BG0 B
+    /// BLDCNT{12} is OBJ B
+    /// BLDCNT{13} is BD  B
+    layer_b: Bitfield(u16, 8, 6),
     raw: u16,
 };
 
