@@ -390,8 +390,7 @@ pub const Ppu = struct {
                     const maybe_top = maybe_px;
                     const maybe_btm = self.scanline.btm()[i];
 
-                    // TODO: Why must I reverse this?
-                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
+                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
@@ -418,8 +417,7 @@ pub const Ppu = struct {
                     const maybe_top = maybe_px;
                     const maybe_btm = self.scanline.btm()[i];
 
-                    // TODO: Why must I reverse this?
-                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
+                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
@@ -445,8 +443,7 @@ pub const Ppu = struct {
                     const maybe_top = maybe_px;
                     const maybe_btm = self.scanline.btm()[i];
 
-                    // TODO: Why must I reverse this?
-                    const bgr555 = getBgr555(&self.palette, self.bldalpha, maybe_btm, maybe_top);
+                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
                 }
 
@@ -495,6 +492,44 @@ pub const Ppu = struct {
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
         }
+    }
+
+    fn getBgr555(self: *Self, maybe_top: ?u16, maybe_btm: ?u16) u16 {
+        if (maybe_btm) |btm| {
+            return switch (self.bldcnt.mode.read()) {
+                0b00 => if (maybe_top) |top| top else btm,
+                0b01 => if (maybe_top) |top| alphaBlend(btm, top, self.bldalpha) else btm,
+                0b10 => blk: {
+                    const evy: u16 = self.bldy.evy.read();
+
+                    const r = btm & 0x1F;
+                    const g = (btm >> 5) & 0x1F;
+                    const b = (btm >> 10) & 0x1F;
+
+                    const bld_r = r + (((31 - r) * evy) >> 4);
+                    const bld_g = g + (((31 - g) * evy) >> 4);
+                    const bld_b = b + (((31 - b) * evy) >> 4);
+
+                    break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
+                },
+                0b11 => blk: {
+                    const evy: u16 = self.bldy.evy.read();
+
+                    const btm_r = btm & 0x1F;
+                    const btm_g = (btm >> 5) & 0x1F;
+                    const btm_b = (btm >> 10) & 0x1F;
+
+                    const bld_r = btm_r - ((btm_r * evy) >> 4);
+                    const bld_g = btm_g - ((btm_g * evy) >> 4);
+                    const bld_b = btm_b - ((btm_b * evy) >> 4);
+
+                    break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
+                },
+            };
+        }
+
+        if (maybe_top) |top| return top;
+        return self.palette.getBackdrop();
     }
 
     // TODO: Comment this + get a better understanding
@@ -1033,16 +1068,6 @@ fn toRgba8888Talarubi(bgr555: u16) u32 {
     return @floatToInt(u32, out_r) << 24 | @floatToInt(u32, out_g) << 16 | @floatToInt(u32, out_b) << 8 | 0xFF;
 }
 
-fn getBgr555(palette: *const Palette, bldalpha: io.BldAlpha, maybe_top: ?u16, maybe_btm: ?u16) u16 {
-    if (maybe_top) |top| {
-        if (maybe_btm) |btm| return alphaBlend(top, btm, bldalpha);
-        return top;
-    }
-
-    if (maybe_btm) |btm| return btm;
-    return palette.getBackdrop();
-}
-
 fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
     const eva: u16 = bldalpha.eva.read();
     const evb: u16 = bldalpha.evb.read();
@@ -1108,7 +1133,7 @@ fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
 }
 
 fn copyToBackgroundBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize, bgr555: u16) void {
-    if (bldcnt.mode.read() == 0b01) {
+    if (bldcnt.mode.read() != 0b00) {
         // Standard Alpha Blending
         const a_layers = bldcnt.layer_a.read();
         const is_blend_enabled = (a_layers >> n) & 1 == 1;
@@ -1125,7 +1150,7 @@ fn copyToBackgroundBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline
 }
 
 fn copyToSpriteBuffer(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
-    if (bldcnt.mode.read() == 0b01) {
+    if (bldcnt.mode.read() != 0b00) {
         // Alpha Blending
         const a_layers = bldcnt.layer_a.read();
         const is_blend_enabled = (a_layers >> 4) & 1 == 1;
