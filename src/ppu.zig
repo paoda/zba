@@ -164,7 +164,7 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (self.scanline.top()[x] != null) continue;
+            if (!shouldDrawSprite(self.bldcnt, &self.scanline, x)) continue;
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -191,7 +191,10 @@ pub const Ppu = struct {
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
             // Sprite Palette starts at 0x0500_0200
-            if (pal_id != 0) self.scanline.top()[x] = self.palette.read(u16, 0x200 + pal_id * 2);
+            if (pal_id != 0) {
+                const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
+                copyToSpriteBuffer(self.bldcnt, &self.scanline, x, bgr555);
+            }
         }
     }
 
@@ -211,15 +214,7 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (self.scanline.top()[x] != null) continue;
-
-            if (self.scanline.btm()[x] != null) {
-                if (self.bldcnt.mode.read() != 0b01) continue;
-
-                const b_layers = self.bldcnt.layer_b.read();
-                const is_blend_enabled = (b_layers >> 4) & 1 == 1;
-                if (!is_blend_enabled) continue;
-            }
+            if (!shouldDrawSprite(self.bldcnt, &self.scanline, x)) continue;
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -254,19 +249,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-
-                if (self.bldcnt.mode.read() == 0b01) {
-                    // Alpha Blending
-                    const a_layers = self.bldcnt.layer_a.read();
-                    const is_blend_enabled = (a_layers >> 4) & 1 == 1;
-
-                    if (is_blend_enabled) {
-                        self.scanline.btm()[x] = bgr555;
-                        return;
-                    }
-                }
-
-                self.scanline.top()[x] = bgr555;
+                copyToSpriteBuffer(self.bldcnt, &self.scanline, x, bgr555);
             }
         }
     }
@@ -312,7 +295,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                drawToScanlineBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+                copyToBackgroundBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
             }
         }
 
@@ -369,7 +352,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                drawToScanlineBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+                copyToBackgroundBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
             }
         }
     }
@@ -1110,7 +1093,21 @@ fn shouldDrawBackground(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, 
     return true;
 }
 
-fn drawToScanlineBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize, bgr555: u16) void {
+fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
+    if (scanline.top()[x] != null) return false;
+
+    if (scanline.btm()[x] != null) {
+        if (bldcnt.mode.read() != 0b01) return false;
+
+        const b_layers = bldcnt.layer_b.read();
+        const is_blend_enabled = (b_layers >> 4) & 1 == 1;
+        if (!is_blend_enabled) return false;
+    }
+
+    return true;
+}
+
+fn copyToBackgroundBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize, bgr555: u16) void {
     if (bldcnt.mode.read() == 0b01) {
         // Standard Alpha Blending
         const a_layers = bldcnt.layer_a.read();
@@ -1125,6 +1122,21 @@ fn drawToScanlineBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, 
     }
 
     scanline.top()[i] = bgr555;
+}
+
+fn copyToSpriteBuffer(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
+    if (bldcnt.mode.read() == 0b01) {
+        // Alpha Blending
+        const a_layers = bldcnt.layer_a.read();
+        const is_blend_enabled = (a_layers >> 4) & 1 == 1;
+
+        if (is_blend_enabled) {
+            scanline.btm()[x] = bgr555;
+            return;
+        }
+    }
+
+    scanline.top()[x] = bgr555;
 }
 
 const Scanline = struct {
