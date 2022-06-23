@@ -569,7 +569,9 @@ pub const Ppu = struct {
         }
 
         // See if HBlank DMA is present and not enabled
-        pollBlankingDma(&cpu.bus, .HBlank);
+
+        if (!self.dispstat.vblank.read())
+            pollBlankingDma(&cpu.bus, .HBlank);
 
         self.dispstat.hblank.set();
         self.sched.push(.HBlank, 68 * 4 -| late);
