@@ -133,10 +133,9 @@ pub fn fmt12(comptime isSP: bool, comptime rd: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             // ADD
-            const left = if (isSP) cpu.r[13] else (cpu.r[15] + 2) & 0xFFFF_FFFD;
+            const left = if (isSP) cpu.r[13] else cpu.r[15] & ~@as(u32, 2);
             const right = (opcode & 0xFF) << 2;
-            const result = left + right;
-            cpu.r[rd] = result;
+            cpu.r[rd] = left + right;
         }
     }.inner;
 }
