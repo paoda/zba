@@ -18,10 +18,8 @@ pub fn execute(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
 
 fn registerShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const rs_idx = opcode >> 8 & 0xF;
+    const rm = cpu.r[opcode & 0xF];
     const rs = @truncate(u8, cpu.r[rs_idx]);
-
-    const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
 
     return switch (@truncate(u2, opcode >> 5)) {
         0b00 => logicalLeft(S, &cpu.cpsr, rm, rs),
@@ -33,9 +31,7 @@ fn registerShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
 
 pub fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const amount = @truncate(u8, opcode >> 7 & 0x1F);
-
-    const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
+    const rm = cpu.r[opcode & 0xF];
 
     var result: u32 = undefined;
     if (amount == 0) {

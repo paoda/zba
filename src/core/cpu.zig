@@ -242,6 +242,7 @@ pub const Arm7tdmi = struct {
     const Self = @This();
 
     r: [16]u32,
+    pipe: Pipline,
     sched: *Scheduler,
     bus: *Bus,
     cpsr: PSR,
@@ -262,6 +263,7 @@ pub const Arm7tdmi = struct {
     pub fn init(sched: *Scheduler, bus: *Bus, log_file: ?std.fs.File) Self {
         return Self{
             .r = [_]u32{0x00} ** 16,
+            .pipe = Pipline.init(),
             .sched = sched,
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_001F },
@@ -321,8 +323,21 @@ pub const Arm7tdmi = struct {
         return self.bus.io.haltcnt == .Halt;
     }
 
+    pub fn setCpsrNoFlush(self: *Self, value: u32) void {
+        if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
+        self.cpsr.raw = value;
+    }
+
     pub fn setCpsr(self: *Self, value: u32) void {
         if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
+
+        const new: PSR = .{ .raw = value };
+        if (self.cpsr.t.read() != new.t.read()) {
+            // If THUMB to ARM or ARM to THUMB, flush pipeline
+            self.r[15] &= if (new.t.read()) ~@as(u32, 1) else ~@as(u32, 3);
+            self.pipe.flush();
+        }
+
         self.cpsr.raw = value;
     }
 
@@ -425,19 +440,22 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) void {
-        if (self.cpsr.t.read()) {
-            const opcode = self.fetch(u16);
+        if (self.cpsr.t.read()) blk: {
+            const opcode = @truncate(u16, self.pipe.step(self, u16) orelse break :blk);
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             thumb.lut[thumb.idx(opcode)](self, self.bus, opcode);
-        } else {
-            const opcode = self.fetch(u32);
+        } else blk: {
+            const opcode = self.pipe.step(self, u32) orelse break :blk;
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm.lut[arm.idx(opcode)](self, self.bus, opcode);
             }
         }
+
+        if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        self.pipe.flushed = false;
     }
 
     pub fn stepDmaTransfer(self: *Self) bool {
@@ -481,8 +499,8 @@ pub const Arm7tdmi = struct {
             if (!self.bus.io.ime or self.cpsr.i.read()) return;
             // log.debug("An interrupt was Handled!", .{});
 
-            // retAddr.gba says r15 on it's own is off by -04h in both ARM and THUMB mode
-            const r15 = self.r[15] + 4;
+            // FIXME: Is the return address ahead?
+            const r15 = self.r[15];
             const cpsr = self.cpsr.raw;
 
             self.changeMode(.Irq);
@@ -506,8 +524,12 @@ pub const Arm7tdmi = struct {
         return self.bus.read(T, self.r[15]);
     }
 
-    pub fn fakePC(self: *const Self) u32 {
-        return self.r[15] + 4;
+    fn debug_log(self: *const Self, file: *const File, opcode: u32) void {
+        if (self.binary_log) {
+            self.skyLog(file) catch unreachable;
+        } else {
+            self.mgbaLog(file, opcode) catch unreachable;
+        }
     }
 
     pub fn panic(self: *const Self, comptime format: []const u8, args: anytype) noreturn {
@@ -587,7 +609,7 @@ pub const Arm7tdmi = struct {
         const r12 = self.r[12];
         const r13 = self.r[13];
         const r14 = self.r[14];
-        const r15 = self.r[15];
+        const r15 = self.r[15] -| if (self.cpsr.t.read()) 2 else @as(u32, 4);
 
         const c_psr = self.cpsr.raw;
 
@@ -595,7 +617,7 @@ pub const Arm7tdmi = struct {
         if (self.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const other_half = self.bus.dbgRead(u16, self.r[15]);
+                const other_half = self.bus.debugRead(u16, self.r[15] - 2);
                 const bl_opcode = @as(u32, opcode) << 16 | other_half;
 
                 log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, bl_opcode });
@@ -630,6 +652,44 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
         0xF => false, // NV - Never (reserved in ARMv3 and up, but seems to have not changed?)
     };
 }
+
+const Pipline = struct {
+    const Self = @This();
+    stage: [2]?u32,
+    flushed: bool,
+
+    fn init() Self {
+        return .{
+            .stage = [_]?u32{null} ** 2,
+            .flushed = false,
+        };
+    }
+
+    pub fn flush(self: *Self) void {
+        for (self.stage) |*opcode| opcode.* = null;
+        self.flushed = true;
+    }
+
+    pub fn step(self: *Self, cpu: *Arm7tdmi, comptime T: type) ?u32 {
+        comptime std.debug.assert(T == u32 or T == u16);
+
+        const opcode = self.stage[0];
+
+        self.stage[0] = self.stage[1];
+        self.stage[1] = cpu.bus.read(T, cpu.r[15]);
+
+        return opcode;
+    }
+
+    fn reload(self: *Self, cpu: *Arm7tdmi, comptime T: type) void {
+        comptime std.debug.assert(T == u32 or T == u16);
+        const inc = if (T == u32) 4 else 2;
+
+        self.stage[0] = cpu.bus.read(T, cpu.r[15]);
+        self.stage[1] = cpu.bus.read(T, cpu.r[15] + inc);
+        cpu.r[15] += inc * 2;
+    }
+};
 
 pub const PSR = extern union {
     mode: Bitfield(u32, 0, 5),

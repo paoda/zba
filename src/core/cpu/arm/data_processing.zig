@@ -13,17 +13,12 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
             const old_carry = @boolToInt(cpu.cpsr.c.read());
 
             // If certain conditions are met, PC is 12 ahead instead of 8
+            // TODO: What are these conditions? I can't remember
             if (!I and opcode >> 4 & 1 == 1) cpu.r[15] += 4;
+            const op1 = cpu.r[rn];
 
-            const op1 = if (rn == 0xF) cpu.fakePC() else cpu.r[rn];
-
-            var op2: u32 = undefined;
-            if (I) {
-                const amount = @truncate(u8, (opcode >> 8 & 0xF) << 1);
-                op2 = rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount);
-            } else {
-                op2 = execute(S, cpu, opcode);
-            }
+            const amount = @truncate(u8, (opcode >> 8 & 0xF) << 1);
+            const op2 = if (I) rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount) else execute(S, cpu, opcode);
 
             // Undo special condition from above
             if (!I and opcode >> 4 & 1 == 1) cpu.r[15] -= 4;
@@ -67,39 +62,31 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                 },
                 0x8 => {
                     // TST
-                    if (rd == 0xF) {
-                        undefinedTestBehaviour(cpu);
-                        return;
-                    }
+                    if (rd == 0xF)
+                        return undefinedTestBehaviour(cpu);
 
                     const result = op1 & op2;
                     setTestOpFlags(S, cpu, opcode, result);
                 },
                 0x9 => {
                     // TEQ
-                    if (rd == 0xF) {
-                        undefinedTestBehaviour(cpu);
-                        return;
-                    }
+                    if (rd == 0xF)
+                        return undefinedTestBehaviour(cpu);
 
                     const result = op1 ^ op2;
                     setTestOpFlags(S, cpu, opcode, result);
                 },
                 0xA => {
                     // CMP
-                    if (rd == 0xF) {
-                        undefinedTestBehaviour(cpu);
-                        return;
-                    }
+                    if (rd == 0xF)
+                        return undefinedTestBehaviour(cpu);
 
                     cmp(cpu, op1, op2);
                 },
                 0xB => {
                     // CMN
-                    if (rd == 0xF) {
-                        undefinedTestBehaviour(cpu);
-                        return;
-                    }
+                    if (rd == 0xF)
+                        return undefinedTestBehaviour(cpu);
 
                     cmn(cpu, op1, op2);
                 },
@@ -127,6 +114,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime instrKind: u4
                     setArmLogicOpFlags(S, cpu, rd, result);
                 },
             }
+
+            if (rd == 0xF) cpu.pipe.flush();
         }
     }.inner;
 }
@@ -280,5 +269,5 @@ fn setTestOpFlags(comptime S: bool, cpu: *Arm7tdmi, opcode: u32, result: u32) vo
 
 fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
     @setCold(true);
-    cpu.setCpsr(cpu.spsr.raw);
+    cpu.setCpsrNoFlush(cpu.spsr.raw);
 }
