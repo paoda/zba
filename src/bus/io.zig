@@ -163,9 +163,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0034 => bus.ppu.aff_bg[1].writePcPd(value),
             0x0400_0038 => bus.ppu.aff_bg[1].setX(bus.ppu.dispstat.vblank.read(), value),
             0x0400_003C => bus.ppu.aff_bg[1].setY(bus.ppu.dispstat.vblank.read(), value),
-            0x0400_0040 => log.debug("Wrote 0x{X:0>8} to WIN0H and WIN1H", .{value}),
-            0x0400_0044 => log.debug("Wrote 0x{X:0>8} to WIN0V and WIN1V", .{value}),
-            0x0400_0048 => log.debug("Wrote 0x{X:0>8} to WININ and WINOUT", .{value}),
+            0x0400_0040 => bus.ppu.win.setH(value),
+            0x0400_0044 => bus.ppu.win.setV(value),
+            0x0400_0048 => bus.ppu.win.setIo(value),
             0x0400_004C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
             0x0400_0050 => {
                 bus.ppu.bldcnt.raw = @truncate(u16, value);
@@ -245,12 +245,12 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_003A => bus.ppu.aff_bg[1].x = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].x) & 0x0000_FFFF | (@as(u32, value) << 16)),
             0x0400_003C => bus.ppu.aff_bg[1].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].y) & 0xFFFF_0000 | value),
             0x0400_003E => bus.ppu.aff_bg[1].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].y) & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_0040 => log.debug("Wrote 0x{X:0>4} to WIN0H", .{value}),
-            0x0400_0042 => log.debug("Wrote 0x{X:0>4} to WIN1H", .{value}),
-            0x0400_0044 => log.debug("Wrote 0x{X:0>4} to WIN0V", .{value}),
-            0x0400_0046 => log.debug("Wrote 0x{X:0>4} to WIN1V", .{value}),
-            0x0400_0048 => log.debug("Wrote 0x{X:0>4} to WININ", .{value}),
-            0x0400_004A => log.debug("Wrote 0x{X:0>4} to WINOUT", .{value}),
+            0x0400_0040 => bus.ppu.win.h[0].raw = value,
+            0x0400_0042 => bus.ppu.win.h[1].raw = value,
+            0x0400_0044 => bus.ppu.win.v[0].raw = value,
+            0x0400_0046 => bus.ppu.win.v[1].raw = value,
+            0x0400_0048 => bus.ppu.win.in.raw = value,
+            0x0400_004A => bus.ppu.win.out.raw = value,
             0x0400_004C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
             0x0400_0050 => bus.ppu.bldcnt.raw = value,
             0x0400_0052 => bus.ppu.bldalpha.raw = value,
@@ -302,9 +302,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0009 => bus.ppu.bg[0].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[0].cnt.raw & 0xFF),
             0x0400_000A => bus.ppu.bg[1].cnt.raw = (bus.ppu.bg[1].cnt.raw & 0xFF00) | value,
             0x0400_000B => bus.ppu.bg[1].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[1].cnt.raw & 0xFF),
-            0x0400_0048 => log.debug("Wrote 0x{X:0>2} to WININ_L", .{value}),
-            0x0400_0049 => log.debug("Wrote 0x{X:0>2} to WININ_H", .{value}),
-            0x0400_004A => log.debug("Wrote 0x{X:0>2} to WINOUT_L", .{value}),
+            0x0400_0048 => bus.ppu.win.setInL(value),
+            0x0400_0049 => bus.ppu.win.setInH(value),
+            0x0400_004A => bus.ppu.win.setOutL(value),
             0x0400_0054 => bus.ppu.bldy.raw = (bus.ppu.bldy.raw & 0xFF00) | value,
 
             // Sound
@@ -461,6 +461,40 @@ pub const BldAlpha = extern union {
 /// Brightness COefficients
 pub const BldY = extern union {
     evy: Bitfield(u16, 0, 5),
+    raw: u16,
+};
+
+/// Write-only
+pub const WinH = extern union {
+    x2: Bitfield(u16, 0, 8),
+    x1: Bitfield(u16, 8, 8),
+    raw: u16,
+};
+
+/// Write-only
+pub const WinV = extern union {
+    y2: Bitfield(u16, 0, 8),
+    y1: Bitfield(u16, 8, 8),
+    raw: u16,
+};
+
+pub const WinIn = extern union {
+    w0_bg: Bitfield(u16, 0, 4),
+    w0_obj: Bit(u16, 4),
+    w0_colour: Bit(u16, 5),
+    w1_bg: Bitfield(u16, 8, 4),
+    w1_obj: Bit(u16, 12),
+    w1_colour: Bit(u16, 13),
+    raw: u16,
+};
+
+pub const WinOut = extern union {
+    out_bg: Bitfield(u16, 0, 4),
+    out_obj: Bit(u16, 4),
+    out_colour: Bit(u16, 5),
+    obj_bg: Bitfield(u16, 8, 4),
+    obj_obj: Bit(u16, 12),
+    obj_colour: Bit(u16, 13),
     raw: u16,
 };
 

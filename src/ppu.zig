@@ -24,6 +24,7 @@ pub const Ppu = struct {
 
     // Registers
 
+    win: Window,
     bg: [4]Background,
     aff_bg: [2]AffineBackground,
 
@@ -64,6 +65,7 @@ pub const Ppu = struct {
             .alloc = alloc,
 
             // Registers
+            .win = Window.init(),
             .bg = [_]Background{Background.init()} ** 4,
             .aff_bg = [_]AffineBackground{AffineBackground.init()} ** 2,
             .dispcnt = .{ .raw = 0x0000 },
@@ -768,6 +770,53 @@ const Oam = struct {
             u8 => return, // 8-bit writes are explicitly ignored
             else => @compileError("OAM: Unsupported write width"),
         }
+    }
+};
+
+const Window = struct {
+    const Self = @This();
+
+    h: [2]io.WinH,
+    v: [2]io.WinV,
+
+    out: io.WinOut,
+    in: io.WinIn,
+
+    fn init() Self {
+        return .{
+            .h = [_]io.WinH{.{ .raw = 0 }} ** 2,
+            .v = [_]io.WinV{.{ .raw = 0 }} ** 2,
+
+            .out = .{ .raw = 0 },
+            .in = .{ .raw = 0 },
+        };
+    }
+
+    pub fn setH(self: *Self, value: u32) void {
+        self.h[0].raw = @truncate(u16, value);
+        self.h[1].raw = @truncate(u16, value >> 16);
+    }
+
+    pub fn setV(self: *Self, value: u32) void {
+        self.v[0].raw = @truncate(u16, value);
+        self.v[1].raw = @truncate(u16, value >> 16);
+    }
+
+    pub fn setIo(self: *Self, value: u32) void {
+        self.in.raw = @truncate(u16, value);
+        self.out.raw = @truncate(u16, value >> 16);
+    }
+
+    pub fn setInL(self: *Self, value: u8) void {
+        self.in.raw = (self.in.raw & 0xFF00) | value;
+    }
+
+    pub fn setInH(self: *Self, value: u8) void {
+        self.in.raw = (self.in.raw & 0x00FF) | (@as(u16, value) << 8);
+    }
+
+    pub fn setOutL(self: *Self, value: u8) void {
+        self.out.raw = (self.out.raw & 0xFF00) | value;
     }
 };
 
