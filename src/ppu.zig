@@ -658,11 +658,8 @@ const Palette = struct {
         switch (T) {
             u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
             u8 => {
-                const halfword: u16 = @as(u16, value) * 0x0101;
-                // FIXME: I don't think my comment here makes sense?
-                const weird_addr = addr & ~@as(u32, 1); // *was* 8-bit read so address won't be aligned
-
-                std.mem.writeIntSliceLittle(u16, self.buf[weird_addr..(weird_addr + @sizeOf(u16))], halfword);
+                const align_addr = addr & ~@as(u32, 1); // Aligned to Halfword boundary
+                std.mem.writeIntSliceLittle(u16, self.buf[align_addr..][0..@sizeOf(u16)], @as(u16, value) * 0x101);
             },
             else => @compileError("PALRAM: Unsupported write width"),
         }
@@ -705,21 +702,19 @@ const Vram = struct {
 
     pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address: usize, value: T) void {
         const mode: u3 = dispcnt.bg_mode.read();
-        const addr = Self.mirror(address);
+        const idx = Self.mirror(address);
 
         switch (T) {
-            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
+            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[idx..][0..@sizeOf(T)], value),
             u8 => {
-                // Ignore if write is in OBJ
+                // Ignore write if it falls within the boundaries of OBJ VRAM
                 switch (mode) {
-                    0, 1, 2 => if (0x0601_0000 <= address and address < 0x0601_8000) return,
-                    else => if (0x0601_4000 <= address and address < 0x0601_8000) return,
+                    0, 1, 2 => if (0x0001_0000 <= idx) return,
+                    else => if (0x0001_4000 <= idx) return,
                 }
 
-                const halfword: u16 = @as(u16, value) * 0x0101;
-                const weird_addr = addr & ~@as(u32, 1);
-
-                std.mem.writeIntSliceLittle(u16, self.buf[weird_addr..(weird_addr + @sizeOf(u16))], halfword);
+                const align_idx = idx & ~@as(u32, 1); // Aligned to a halfword boundary
+                std.mem.writeIntSliceLittle(u16, self.buf[align_idx..][0..@sizeOf(u16)], @as(u16, value) * 0x101);
             },
             else => @compileError("VRAM: Unsupported write width"),
         }
