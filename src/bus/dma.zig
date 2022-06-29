@@ -182,10 +182,12 @@ fn DmaController(comptime id: u2) type {
             const transfer_type = is_fifo or self.cnt.transfer_type.read();
             const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
 
+            const mask = if (transfer_type) ~@as(u32, 3) else ~@as(u32, 1);
+
             if (transfer_type) {
-                cpu.bus.write(u32, self._dad, cpu.bus.read(u32, self._sad));
+                cpu.bus.write(u32, self._dad & mask, cpu.bus.read(u32, self._sad & mask));
             } else {
-                cpu.bus.write(u16, self._dad, cpu.bus.read(u16, self._sad));
+                cpu.bus.write(u16, self._dad & mask, cpu.bus.read(u16, self._sad & mask));
             }
 
             switch (sad_adj) {
