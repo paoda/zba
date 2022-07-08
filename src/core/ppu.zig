@@ -539,6 +539,59 @@ pub const Ppu = struct {
 
             const x = hofs + i;
 
+            const win0 = self.dispcnt.win_enable.read() & 1 == 1;
+            const win1 = (self.dispcnt.win_enable.read() >> 1) & 1 == 1;
+            const winObj = self.dispcnt.obj_win_enable.read();
+
+            if (win0 or win1 or winObj) blk: {
+                // Window is enabled
+                const win0_in = (self.win.in.w0_bg.read() >> n) & 1 == 1;
+                const win1_in = (self.win.in.w1_bg.read() >> n) & 1 == 1;
+                const win_out = (self.win.out.out_bg.read() >> n) & 1 == 1;
+
+                if (win0) {
+                    const h = self.win.h[0];
+                    const v = self.win.v[0];
+
+                    const y1 = v.y1.read();
+                    const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
+
+                    if (y1 <= y and y < y2) {
+                        // Within Y bounds
+                        const x1 = h.x1.read();
+                        const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
+
+                        // Within X and & bounds, render Win0 Pixel
+                        if (x1 <= x and x < x2) {
+                            if (win0_in) break :blk else continue;
+                        }
+                    }
+                }
+
+                if (win1) {
+                    const h = self.win.h[1];
+                    const v = self.win.v[1];
+
+                    const y1 = v.y1.read();
+                    const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
+
+                    if (y1 <= y and y < y2) {
+                        // Within Y bounds
+                        const x1 = h.x1.read();
+                        const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
+
+                        // Within X and & bounds, render Win1 Pixel
+                        if (x1 <= x and x < x2) {
+                            if (win1_in) break :blk else continue;
+                        }
+                    }
+                }
+
+                // If not Win0 nor Win1 and WinOut isn't enabled,
+                // then don't render this pixel
+                if (!win_out) continue;
+            }
+
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
             const entry = @bitCast(ScreenEntry, self.vram.read(u16, entry_addr));
