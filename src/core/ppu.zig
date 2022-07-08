@@ -515,7 +515,7 @@ pub const Ppu = struct {
         self.aff_bg[n - 2].y_latch.? += self.aff_bg[n - 2].pd; // PD is added to BGxY
     }
 
-    fn drawBackround(self: *Self, comptime n: u2) void {
+    fn drawBackground(self: *Self, comptime n: u2) void {
         // A Tile in a charblock is a byte, while a Screen Entry is a halfword
 
         const char_base = 0x4000 * @as(u32, self.bg[n].cnt.char_base.read());
@@ -589,10 +589,10 @@ pub const Ppu = struct {
                 var layer: usize = 0;
                 while (layer < 4) : (layer += 1) {
                     self.drawSprites(@truncate(u2, layer));
-                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
-                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
-                    if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackround(2);
-                    if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackround(3);
+                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackground(0);
+                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackground(1);
+                    if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackground(2);
+                    if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackground(3);
                 }
 
                 // Copy Drawn Scanline to Frame Buffer
@@ -617,8 +617,8 @@ pub const Ppu = struct {
                 var layer: usize = 0;
                 while (layer < 4) : (layer += 1) {
                     self.drawSprites(@truncate(u2, layer));
-                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackround(0);
-                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackround(1);
+                    if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackground(0);
+                    if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackground(1);
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
                 }
 
