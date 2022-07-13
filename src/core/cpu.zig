@@ -490,27 +490,26 @@ pub const Arm7tdmi = struct {
     pub fn handleInterrupt(self: *Self) void {
         const should_handle = self.bus.io.ie.raw & self.bus.io.irq.raw;
 
-        if (should_handle != 0) {
-            self.bus.io.haltcnt = .Execute;
-            // log.debug("An Interrupt was Fired!", .{});
+        // Return if IME is disabled, CPSR I is set or there is nothing to handle
+        if (!self.bus.io.ime or self.cpsr.i.read() or should_handle == 0) return;
 
-            // Either IME is not true or I in CPSR is true
-            // Don't handle interrupts
-            if (!self.bus.io.ime or self.cpsr.i.read()) return;
-            // log.debug("An interrupt was Handled!", .{});
+        // If pipeline isn't full, return but reschedule the handling of the event
+        if (!self.pipe.isFull()) return;
 
-            // FIXME: Is the return address ahead?
-            const r15 = self.r[15];
-            const cpsr = self.cpsr.raw;
+        // log.debug("Handling Interrupt!", .{});
+        self.bus.io.haltcnt = .Execute;
 
-            self.changeMode(.Irq);
-            self.cpsr.t.write(false);
-            self.cpsr.i.write(true);
+        const ret_addr = self.r[15] - if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        const new_spsr = self.cpsr.raw;
 
-            self.r[14] = r15;
-            self.spsr.raw = cpsr;
-            self.r[15] = 0x000_0018;
-        }
+        self.changeMode(.Irq);
+        self.cpsr.t.write(false);
+        self.cpsr.i.write(true);
+
+        self.r[14] = ret_addr;
+        self.spsr.raw = new_spsr;
+        self.r[15] = 0x0000_0018;
+        self.pipe.flush();
     }
 
     inline fn fetch(self: *Self, comptime T: type) T {
@@ -668,6 +667,10 @@ const Pipline = struct {
     pub fn flush(self: *Self) void {
         for (self.stage) |*opcode| opcode.* = null;
         self.flushed = true;
+    }
+
+    pub fn isFull(self: *const Self) bool {
+        return self.stage[0] != null and self.stage[1] != null;
     }
 
     pub fn step(self: *Self, cpu: *Arm7tdmi, comptime T: type) ?u32 {
