@@ -466,20 +466,20 @@ pub const WinV = extern union {
 pub const WinIn = extern union {
     w0_bg: Bitfield(u16, 0, 4),
     w0_obj: Bit(u16, 4),
-    w0_colour: Bit(u16, 5),
+    w0_bld: Bit(u16, 5),
     w1_bg: Bitfield(u16, 8, 4),
     w1_obj: Bit(u16, 12),
-    w1_colour: Bit(u16, 13),
+    w1_bld: Bit(u16, 13),
     raw: u16,
 };
 
 pub const WinOut = extern union {
     out_bg: Bitfield(u16, 0, 4),
     out_obj: Bit(u16, 4),
-    out_colour: Bit(u16, 5),
+    out_bld: Bit(u16, 5),
     obj_bg: Bitfield(u16, 8, 4),
     obj_obj: Bit(u16, 12),
-    obj_colour: Bit(u16, 13),
+    obj_bld: Bit(u16, 13),
     raw: u16,
 };
 

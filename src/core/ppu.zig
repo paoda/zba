@@ -487,15 +487,16 @@ pub const Ppu = struct {
             aff_x += self.aff_bg[n - 2].pa;
             aff_y += self.aff_bg[n - 2].pc;
 
-            if (!shouldDrawBackground(n, self.bld.cnt, &self.scanline, i)) continue;
+            const x = @bitCast(u32, ix);
+            const y = @bitCast(u32, iy);
+
+            const win_bounds = self.windowBounds(@truncate(u9, x), @truncate(u8, y));
+            if (!shouldDrawBackground(self, n, win_bounds, i)) continue;
 
             if (self.bg[n].cnt.display_overflow.read()) {
                 ix = if (ix > px_width) @rem(ix, px_width) else if (ix < 0) px_width + @rem(ix, px_width) else ix;
                 iy = if (iy > px_height) @rem(iy, px_height) else if (iy < 0) px_height + @rem(iy, px_height) else iy;
             } else if (ix > px_width or iy > px_height or ix < 0 or iy < 0) continue;
-
-            const x = @bitCast(u32, ix);
-            const y = @bitCast(u32, iy);
 
             const tile_id: u32 = self.vram.read(u8, screen_base + ((y / 8) * @bitCast(u32, tile_width) + (x / 8)));
             const row = y & 7;
@@ -506,7 +507,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                copyToBackgroundBuffer(n, self.bld.cnt, &self.scanline, i, bgr555);
+                self.copyToBackgroundBuffer(n, win_bounds, i, bgr555);
             }
         }
 
@@ -535,62 +536,10 @@ pub const Ppu = struct {
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
-            if (!shouldDrawBackground(n, self.bld.cnt, &self.scanline, i)) continue;
-
             const x = hofs + i;
 
-            const win0 = self.dispcnt.win_enable.read() & 1 == 1;
-            const win1 = (self.dispcnt.win_enable.read() >> 1) & 1 == 1;
-            const winObj = self.dispcnt.obj_win_enable.read();
-
-            if (win0 or win1 or winObj) blk: {
-                // Window is enabled
-                const win0_in = (self.win.in.w0_bg.read() >> n) & 1 == 1;
-                const win1_in = (self.win.in.w1_bg.read() >> n) & 1 == 1;
-                const win_out = (self.win.out.out_bg.read() >> n) & 1 == 1;
-
-                if (win0) {
-                    const h = self.win.h[0];
-                    const v = self.win.v[0];
-
-                    const y1 = v.y1.read();
-                    const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
-
-                    if (y1 <= y and y < y2) {
-                        // Within Y bounds
-                        const x1 = h.x1.read();
-                        const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
-
-                        // Within X and & bounds, render Win0 Pixel
-                        if (x1 <= x and x < x2) {
-                            if (win0_in) break :blk else continue;
-                        }
-                    }
-                }
-
-                if (win1) {
-                    const h = self.win.h[1];
-                    const v = self.win.v[1];
-
-                    const y1 = v.y1.read();
-                    const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
-
-                    if (y1 <= y and y < y2) {
-                        // Within Y bounds
-                        const x1 = h.x1.read();
-                        const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
-
-                        // Within X and & bounds, render Win1 Pixel
-                        if (x1 <= x and x < x2) {
-                            if (win1_in) break :blk else continue;
-                        }
-                    }
-                }
-
-                // If not Win0 nor Win1 and WinOut isn't enabled,
-                // then don't render this pixel
-                if (!win_out) continue;
-            }
+            const win_bounds = self.windowBounds(@truncate(u9, x), @truncate(u8, y));
+            if (!shouldDrawBackground(self, n, win_bounds, i)) continue;
 
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
@@ -616,7 +565,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                copyToBackgroundBuffer(n, self.bld.cnt, &self.scanline, i, bgr555);
+                self.copyToBackgroundBuffer(n, win_bounds, i, bgr555);
             }
         }
     }
@@ -794,6 +743,93 @@ pub const Ppu = struct {
 
         if (maybe_top) |top| return top;
         return self.palette.getBackdrop();
+    }
+
+    fn copyToBackgroundBuffer(self: *Self, comptime n: u2, bounds: ?WindowBounds, i: usize, bgr555: u16) void {
+        if (self.bld.cnt.mode.read() != 0b00) {
+            // Standard Alpha Blending
+            const a_layers = self.bld.cnt.layer_a.read();
+            const is_blend_enabled = (a_layers >> n) & 1 == 1;
+
+            // If Alpha Blending is enabled and we've found an eligible layer for
+            // Pixel A, store the pixel in the bottom pixel buffer
+
+            const win_part = if (bounds) |win| blk: {
+                // Window Enabled
+                break :blk switch (win) {
+                    .win0 => self.win.in.w0_bld.read(),
+                    .win1 => self.win.in.w1_bld.read(),
+                    .out => self.win.out.out_bld.read(),
+                };
+            } else true;
+
+            if (win_part and is_blend_enabled) {
+                self.scanline.btm()[i] = bgr555;
+                return;
+            }
+        }
+
+        self.scanline.top()[i] = bgr555;
+    }
+
+    const WindowBounds = enum { win0, win1, out };
+
+    fn windowBounds(self: *Self, x: u9, y: u8) ?WindowBounds {
+        const win0 = self.dispcnt.win_enable.read() & 1 == 1;
+        const win1 = (self.dispcnt.win_enable.read() >> 1) & 1 == 1;
+        const winObj = self.dispcnt.obj_win_enable.read();
+
+        if (!(win0 or win1 or winObj)) return null;
+
+        if (win0 and self.win.inRange(0, x, y)) return .win0;
+        if (win1 and self.win.inRange(1, x, y)) return .win1;
+
+        return .out;
+    }
+
+    fn shouldDrawBackground(self: *Self, comptime n: u2, bounds: ?WindowBounds, i: usize) bool {
+        // If a pixel has been drawn on the top layer, it's because:
+        // 1. The pixel is to be blended with a pixel on the bottom layer
+        // 2. The pixel is not to be blended at all
+        // Also, if we find a pixel on the top layer we don't need to bother with this I think?
+        if (self.scanline.top()[i] != null) return false;
+
+        if (bounds) |win| {
+            switch (win) {
+                .win0 => if ((self.win.in.w0_bg.read() >> n) & 1 == 0) return false,
+                .win1 => if ((self.win.in.w1_bg.read() >> n) & 1 == 0) return false,
+                .out => if ((self.win.out.out_bg.read() >> n) & 1 == 0) return false,
+            }
+        }
+
+        if (self.scanline.btm()[i] != null) {
+            // The pixel found in the bottom layer is:
+            // 1. From a higher priority background
+            // 2. From a background that is marked for blending (Pixel A)
+
+            // If Alpha Blending isn't enabled, then we've already found a higher prio
+            // pixel, we can return early
+            if (self.bld.cnt.mode.read() != 0b01) return false;
+
+            const b_layers = self.bld.cnt.layer_b.read();
+
+            const win_part = if (bounds) |win| blk: {
+                // Window Enabled
+                break :blk switch (win) {
+                    .win0 => self.win.in.w0_bld.read(),
+                    .win1 => self.win.in.w1_bld.read(),
+                    .out => self.win.out.out_bld.read(),
+                };
+            } else true;
+
+            // If the Background is not marked for blending, we've already found
+            // a higher priority pixel, move on.
+
+            const is_blend_enabled = win_part and ((b_layers >> n) & 1 == 1);
+            if (!is_blend_enabled) return false;
+        }
+
+        return true;
     }
 
     // TODO: Comment this + get a better understanding
@@ -1087,6 +1123,25 @@ const Window = struct {
 
     pub fn getOut(self: *const Self) u16 {
         return self.out.raw & 0x3F3F;
+    }
+
+    fn inRange(self: *const Self, comptime id: u1, x: u9, y: u8) bool {
+        const h = self.h[id];
+        const v = self.v[id];
+
+        const y1 = v.y1.read();
+        const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
+
+        if (y1 <= y and y < y2) {
+            // Within Y bounds
+            const x1 = h.x1.read();
+            const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
+
+            // Within X Bounds
+            return x1 <= x and x < x2;
+        }
+
+        return false;
     }
 
     pub fn setH(self: *Self, value: u32) void {
@@ -1396,37 +1451,6 @@ fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
     return (bld_b << 10) | (bld_g << 5) | bld_r;
 }
 
-fn shouldDrawBackground(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize) bool {
-    // If a pixel has been drawn on the top layer, it's because
-    // Either the pixel is to be blended with a pixel on the bottom layer
-    // or the pixel is not to be blended at all
-    // Consequentially, if we find a pixel on the top layer, there's no need
-    // to render anything I think?
-    if (scanline.top()[i] != null) return false;
-
-    if (scanline.btm()[i] != null) {
-        // The Pixel found in the Bottom layer is
-        // 1. From a higher priority
-        // 2. From a Backround that is marked for Blending (Pixel A)
-        //
-        // We now have to confirm whether this current Background can be used
-        // as Pixel B or not.
-
-        // If Alpha Blending isn't enabled, we've aready found a higher
-        // priority pixel to render. Move on
-        if (bldcnt.mode.read() != 0b01) return false;
-
-        const b_layers = bldcnt.layer_b.read();
-        const is_blend_enabled = (b_layers >> n) & 1 == 1;
-
-        // If the Background is not marked for blending, we've already found
-        // a higher priority pixel, move on.
-        if (!is_blend_enabled) return false;
-    }
-
-    return true;
-}
-
 fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
     if (scanline.top()[x] != null) return false;
 
@@ -1439,23 +1463,6 @@ fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
     }
 
     return true;
-}
-
-fn copyToBackgroundBuffer(comptime n: u2, bldcnt: io.BldCnt, scanline: *Scanline, i: usize, bgr555: u16) void {
-    if (bldcnt.mode.read() != 0b00) {
-        // Standard Alpha Blending
-        const a_layers = bldcnt.layer_a.read();
-        const is_blend_enabled = (a_layers >> n) & 1 == 1;
-
-        // If Alpha Blending is enabled and we've found an eligible layer for
-        // Pixel A, store the pixel in the bottom pixel buffer
-        if (is_blend_enabled) {
-            scanline.btm()[i] = bgr555;
-            return;
-        }
-    }
-
-    scanline.top()[i] = bgr555;
 }
 
 fn copyToSpriteBuffer(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
