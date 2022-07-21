@@ -10,7 +10,8 @@ const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
 
-const audio_sync = true;
+const sync_audio = false;
+const sync_video: RunKind = .UnlimitedFPS;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896
@@ -35,10 +36,10 @@ const RunKind = enum {
     LimitedBusy,
 };
 
-pub fn run(kind: RunKind, quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    if (audio_sync) log.info("Audio sync enabled", .{});
+pub fn run(quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7tdmi) void {
+    if (sync_audio) log.info("Audio sync enabled", .{});
 
-    switch (kind) {
+    switch (sync_video) {
         .Unlimited => runUnsynchronized(quit, sched, cpu, null),
         .Limited => runSynchronized(quit, sched, cpu, null),
         .UnlimitedFPS => runUnsynchronized(quit, sched, cpu, fps),
@@ -77,14 +78,14 @@ pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi,
 
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            if (audio_sync) syncToAudio(cpu);
+            if (sync_audio) syncToAudio(cpu);
 
             tracker.tick();
         }
     } else {
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            if (audio_sync) syncToAudio(cpu);
+            if (sync_audio) syncToAudio(cpu);
         }
     }
 }
@@ -105,7 +106,7 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
             // If we happen to also be syncing to audio, we choose to spin on
             // the amount of time needed for audio to catch up rather than
             // our expected wake-up time
-            if (audio_sync) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+            if (sync_audio) syncToAudio(cpu) else spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
 
             tracker.tick();
@@ -115,7 +116,7 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
             runFrame(sched, cpu);
             const new_wake_time = syncToVideo(&timer, wake_time);
             // see above comment
-            if (audio_sync) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+            if (sync_audio) syncToAudio(cpu) else spinLoop(&timer, wake_time);
 
             wake_time = new_wake_time;
         }

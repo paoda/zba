@@ -99,7 +99,7 @@ pub fn main() anyerror!void {
     // Run Emulator in it's separate thread
     // From this point on, interacting with Arm7tdmi or Scheduler
     // be justified, as it will require to be thread-afe
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ .LimitedFPS, &quit, &emu_rate, &scheduler, &cpu });
+    const emu_thread = try Thread.spawn(.{}, emu.run, .{ &quit, &emu_rate, &scheduler, &cpu });
     defer emu_thread.join();
 
     var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
