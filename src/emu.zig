@@ -51,14 +51,17 @@ pub fn run(quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7t
 pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
-    while (true) {
-        while (sched.tick < std.math.min(frame_end, sched.nextTimestamp())) {
-            if (cpu.stepDmaTransfer()) continue; // DMA is blocking, ticks scheduler
-            if (!cpu.isHalted()) cpu.step() else sched.tick += 1;
+    while (sched.tick < frame_end) {
+        if (!cpu.stepDmaTransfer()) {
+            if (cpu.isHalted()) {
+                // Fast-forward to next Event
+                sched.tick = sched.queue.peek().?.tick;
+            } else {
+                cpu.step();
+            }
         }
 
-        if (sched.tick >= frame_end) break;
-        sched.handleEvent(cpu);
+        if (sched.tick >= sched.nextTimestamp()) sched.handleEvent(cpu);
     }
 }
 
