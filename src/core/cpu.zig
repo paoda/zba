@@ -53,7 +53,7 @@ pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
 const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
-const enable_logging = @import("main.zig").enable_logging;
+const enable_logging = false;
 const log = std.log.scoped(.Arm7Tdmi);
 
 pub const Arm7tdmi = struct {

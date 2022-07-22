@@ -1,35 +1,21 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const SDL = @import("sdl2");
-const clap = @import("clap");
+
 const known_folders = @import("known_folders");
+const clap = @import("clap");
 
-const emu = @import("emu.zig");
-const Bus = @import("Bus.zig");
-const Apu = @import("apu.zig").Apu;
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const Scheduler = @import("scheduler.zig").Scheduler;
-const FpsTracker = @import("util.zig").FpsTracker;
+const Gui = @import("Gui.zig");
+const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
+const Scheduler = @import("core/scheduler.zig").Scheduler;
+const FilePaths = @import("core/util.zig").FilePaths;
 
-const Timer = std.time.Timer;
-const Thread = std.Thread;
-const Atomic = std.atomic.Atomic;
-const File = std.fs.File;
-
-const window_scale = 4;
-const gba_width = @import("ppu.zig").width;
-const gba_height = @import("ppu.zig").height;
-const framebuf_pitch = @import("ppu.zig").framebuf_pitch;
-const expected_rate = @import("emu.zig").frame_rate;
-
-const sample_rate = @import("apu.zig").host_sample_rate;
-
-pub const enable_logging: bool = false;
-const is_binary: bool = false;
-const log = std.log.scoped(.GUI);
+const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.CLI);
+const width = @import("core/ppu.zig").width;
+const height = @import("core/ppu.zig").height;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
-const asString = @import("util.zig").asString;
+// TODO: Reimpl Logging
 
 // CLI Arguments + Help Text
 const params = clap.parseParamsComptime(
@@ -40,251 +26,71 @@ const params = clap.parseParamsComptime(
 );
 
 pub fn main() anyerror!void {
-    // Allocator for Emulator + CLI
+    // Main Allocator for ZBA
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(!gpa.deinit());
-    const alloc = gpa.allocator();
+    const allocator = gpa.allocator();
 
-    // Setup CLI using zig-clap
-    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
-    defer res.deinit();
+    // Handle CLI Input
+    const result = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    defer result.deinit();
 
-    const stderr = std.io.getStdErr();
-    defer stderr.close();
+    const paths = try handleArguments(allocator, &result);
+    defer if (paths.save) |path| allocator.free(path);
 
-    // Display Help, if requested
-    // Grab ROM and BIOS paths if provided
-    if (res.args.help) return clap.help(stderr.writer(), clap.Help, &params, .{});
-    const rom_path = try getRomPath(res, stderr);
-    const bios_path: ?[]const u8 = if (res.args.bios) |p| p else null;
-
-    // Determine Save Directory
-    const save_dir = try getSavePath(alloc);
-    defer if (save_dir) |path| alloc.free(path);
-    log.info("Found save directory: {s}", .{save_dir});
-
-    // Initialize Scheduler and ARM7TDMI Emulator
-    // Provide GBA Bus (initialized with ARM7TDMI) with a valid ptr to ARM7TDMI
-    var scheduler = Scheduler.init(alloc);
+    // TODO: Take Emulator Init Code out of main.zig
+    var scheduler = Scheduler.init(allocator);
     defer scheduler.deinit();
 
-    const paths = .{ .bios = bios_path, .rom = rom_path, .save = save_dir };
-    var cpu = try Arm7tdmi.init(alloc, &scheduler, paths);
-    defer cpu.deinit();
-    cpu.bus.attach(&cpu);
-    // cpu.fastBoot(); // Uncomment to skip BIOS
+    var arm7tdmi = try Arm7tdmi.init(allocator, &scheduler, paths);
+    arm7tdmi.bus.attach(&arm7tdmi);
+    if (paths.bios == null) arm7tdmi.fastBoot();
+    defer arm7tdmi.deinit();
 
-    // Copy ROM title while Emulator still belongs to this thread
-    const title = cpu.bus.pak.title;
+    var gui = Gui.init(arm7tdmi.bus.pak.title, width, height);
+    gui.initAudio(&arm7tdmi.bus.apu);
+    defer gui.deinit();
 
-    // Initialize SDL2
-    initSdl2();
-    defer SDL.SDL_Quit();
-
-    const dev = initAudio(&cpu.bus.apu);
-    defer SDL.SDL_CloseAudioDevice(dev);
-
-    // TODO: Refactor or delete this Logging code
-    // I probably still need logging in some form though (e.g. Golden Sun IIRC)
-    const log_file: ?File = if (enable_logging) blk: {
-        const file = try std.fs.cwd().createFile(if (is_binary) "zba.bin" else "zba.log", .{});
-        cpu.useLogger(&file, is_binary);
-        break :blk file;
-    } else null;
-    defer if (log_file) |file| file.close();
-
-    var quit = Atomic(bool).init(false);
-    var emu_rate = FpsTracker.init();
-
-    // Run Emulator in it's separate thread
-    // From this point on, interacting with Arm7tdmi or Scheduler
-    // be justified, as it will require to be thread-afe
-    const emu_thread = try Thread.spawn(.{}, emu.run, .{ &quit, &emu_rate, &scheduler, &cpu });
-    defer emu_thread.join();
-
-    var title_buf: [0x20]u8 = std.mem.zeroes([0x20]u8);
-    const window_title = try std.fmt.bufPrint(&title_buf, "ZBA | {s}", .{asString(title)});
-
-    const window = createWindow(window_title, gba_width, gba_height);
-    defer SDL.SDL_DestroyWindow(window);
-
-    const renderer = createRenderer(window);
-    defer SDL.SDL_DestroyRenderer(renderer);
-
-    const texture = createTexture(renderer, gba_width, gba_height);
-    defer SDL.SDL_DestroyTexture(texture);
-
-    // Init FPS Timer
-    var dyn_title_buf: [0x100]u8 = [_]u8{0x00} ** 0x100;
-
-    emu_loop: while (true) {
-        var event: SDL.SDL_Event = undefined;
-        while (SDL.SDL_PollEvent(&event) != 0) {
-            switch (event.type) {
-                SDL.SDL_QUIT => break :emu_loop,
-                SDL.SDL_KEYDOWN => {
-                    const io = &cpu.bus.io;
-                    const key_code = event.key.keysym.sym;
-
-                    switch (key_code) {
-                        SDL.SDLK_UP => io.keyinput.up.unset(),
-                        SDL.SDLK_DOWN => io.keyinput.down.unset(),
-                        SDL.SDLK_LEFT => io.keyinput.left.unset(),
-                        SDL.SDLK_RIGHT => io.keyinput.right.unset(),
-                        SDL.SDLK_x => io.keyinput.a.unset(),
-                        SDL.SDLK_z => io.keyinput.b.unset(),
-                        SDL.SDLK_a => io.keyinput.shoulder_l.unset(),
-                        SDL.SDLK_s => io.keyinput.shoulder_r.unset(),
-                        SDL.SDLK_RETURN => io.keyinput.start.unset(),
-                        SDL.SDLK_RSHIFT => io.keyinput.select.unset(),
-                        else => {},
-                    }
-                },
-                SDL.SDL_KEYUP => {
-                    const io = &cpu.bus.io;
-                    const key_code = event.key.keysym.sym;
-
-                    switch (key_code) {
-                        SDL.SDLK_UP => io.keyinput.up.set(),
-                        SDL.SDLK_DOWN => io.keyinput.down.set(),
-                        SDL.SDLK_LEFT => io.keyinput.left.set(),
-                        SDL.SDLK_RIGHT => io.keyinput.right.set(),
-                        SDL.SDLK_x => io.keyinput.a.set(),
-                        SDL.SDLK_z => io.keyinput.b.set(),
-                        SDL.SDLK_a => io.keyinput.shoulder_l.set(),
-                        SDL.SDLK_s => io.keyinput.shoulder_r.set(),
-                        SDL.SDLK_RETURN => io.keyinput.start.set(),
-                        SDL.SDLK_RSHIFT => io.keyinput.select.set(),
-                        SDL.SDLK_i => log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))}),
-                        SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
-                        SDL.SDLK_k => {
-                            // Dump IWRAM to file
-                            log.info("PC: 0x{X:0>8}", .{cpu.r[15]});
-                            log.info("LR: 0x{X:0>8}", .{cpu.r[14]});
-                            // const iwram_file = try std.fs.cwd().createFile("iwram.bin", .{});
-                            // defer iwram_file.close();
-
-                            // try iwram_file.writeAll(cpu.bus.iwram.buf);
-                        },
-                        else => {},
-                    }
-                },
-                else => {},
-            }
-        }
-
-        // Emulator has an internal Double Buffer
-        const buf_ptr = cpu.bus.ppu.framebuf.get(.Renderer).ptr;
-        _ = SDL.SDL_UpdateTexture(texture, null, buf_ptr, framebuf_pitch);
-        _ = SDL.SDL_RenderCopy(renderer, texture, null, null);
-        SDL.SDL_RenderPresent(renderer);
-
-        const dyn_title = std.fmt.bufPrint(&dyn_title_buf, "{s} [Emu: {}fps] ", .{ window_title, emu_rate.value() }) catch unreachable;
-        SDL.SDL_SetWindowTitle(window, dyn_title.ptr);
-    }
-
-    quit.store(true, .SeqCst); // Terminate Emulator Thread
+    try gui.run(&arm7tdmi, &scheduler);
 }
 
-const CliError = error{
-    InsufficientOptions,
-    UnneededOptions,
-};
-
-fn sdlPanic() noreturn {
-    const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
-    @panic(std.mem.sliceTo(str, 0));
-}
-
-fn initSdl2() void {
-    const status = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
-    if (status < 0) sdlPanic();
-}
-
-fn createWindow(title: []u8, width: c_int, height: c_int) *SDL.SDL_Window {
-    return SDL.SDL_CreateWindow(
-        title.ptr,
-        SDL.SDL_WINDOWPOS_CENTERED,
-        SDL.SDL_WINDOWPOS_CENTERED,
-        width * window_scale,
-        height * window_scale,
-        SDL.SDL_WINDOW_SHOWN,
-    ) orelse sdlPanic();
-}
-
-fn createRenderer(window: *SDL.SDL_Window) *SDL.SDL_Renderer {
-    return SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse sdlPanic();
-}
-
-fn createTexture(renderer: *SDL.SDL_Renderer, width: c_int, height: c_int) *SDL.SDL_Texture {
-    return SDL.SDL_CreateTexture(
-        renderer,
-        SDL.SDL_PIXELFORMAT_RGBA8888,
-        SDL.SDL_TEXTUREACCESS_STREAMING,
-        width,
-        height,
-    ) orelse sdlPanic();
-}
-
-fn initAudio(apu: *Apu) SDL.SDL_AudioDeviceID {
-    var have: SDL.SDL_AudioSpec = undefined;
-    var want: SDL.SDL_AudioSpec = .{
-        .freq = sample_rate,
-        .format = SDL.AUDIO_U16,
-        .channels = 2,
-        .samples = 0x100,
-        .callback = audioCallback,
-        .userdata = apu,
-        .silence = undefined,
-        .size = undefined,
-        .padding = undefined,
-    };
-
-    const dev = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
-    if (dev == 0) sdlPanic();
-
-    // Start Playback on the Audio device
-    SDL.SDL_PauseAudioDevice(dev, 0);
-    return dev;
-}
-
-export fn audioCallback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
-    const apu = @ptrCast(*Apu, @alignCast(8, userdata));
-    const written = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
-
-    // If we don't write anything, play silence otherwise garbage will be played
-    // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
-    if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
-}
-
-fn getSavePath(alloc: std.mem.Allocator) !?[]const u8 {
+fn getSavePath(allocator: Allocator) !?[]const u8 {
     const save_subpath = "zba" ++ [_]u8{std.fs.path.sep} ++ "save";
 
-    const maybe_data_path = try known_folders.getPath(alloc, .data);
-    defer if (maybe_data_path) |path| alloc.free(path);
+    const maybe_data_path = try known_folders.getPath(allocator, .data);
+    defer if (maybe_data_path) |path| allocator.free(path);
 
-    const save_path = if (maybe_data_path) |base| try std.fs.path.join(alloc, &[_][]const u8{ base, "zba", "save" }) else null;
+    const save_path = if (maybe_data_path) |base| try std.fs.path.join(allocator, &[_][]const u8{ base, "zba", "save" }) else null;
 
     if (save_path) |_| {
         // If we've determined what our save path should be, ensure the prereq directories
         // are present so that we can successfully write to the path when necessary
-        const maybe_data_dir = try known_folders.open(alloc, .data, .{});
+        const maybe_data_dir = try known_folders.open(allocator, .data, .{});
         if (maybe_data_dir) |data_dir| try data_dir.makePath(save_subpath);
     }
 
     return save_path;
 }
 
-fn getRomPath(res: clap.Result(clap.Help, &params, clap.parsers.default), stderr: std.fs.File) ![]const u8 {
-    return switch (res.positionals.len) {
-        1 => res.positionals[0],
-        0 => {
-            try stderr.writeAll("ZBA requires a positional path to a GamePak ROM.\n");
-            return CliError.InsufficientOptions;
-        },
-        else => {
-            try stderr.writeAll("ZBA received too many arguments.\n");
-            return CliError.UnneededOptions;
-        },
+fn getRomPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) ![]const u8 {
+    return switch (result.positionals.len) {
+        1 => result.positionals[0],
+        0 => std.debug.panic("ZBA requires a positional path to a GamePak ROM.\n", .{}),
+        else => std.debug.panic("ZBA received too many arguments.\n", .{}),
+    };
+}
+
+pub fn handleArguments(allocator: Allocator, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
+    const rom_path = try getRomPath(result);
+    log.info("ROM path: {s}", .{rom_path});
+    const bios_path = result.args.bios;
+    if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.info("No BIOS provided", .{});
+    const save_path = try getSavePath(allocator);
+    if (save_path) |path| log.info("Save path: {s}", .{path});
+
+    return FilePaths{
+        .rom = rom_path,
+        .bios = bios_path,
+        .save = save_path,
     };
 }

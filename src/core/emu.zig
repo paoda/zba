@@ -5,10 +5,12 @@ const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const FpsTracker = @import("util.zig").FpsTracker;
+const FilePaths = @import("util.zig").FilePaths;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
+const Allocator = std.mem.Allocator;
 
 const sync_audio = false;
 const sync_video: RunKind = .UnlimitedFPS;
