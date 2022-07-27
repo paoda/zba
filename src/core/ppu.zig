@@ -573,7 +573,7 @@ pub const Ppu = struct {
         // See if HBlank DMA is present and not enabled
 
         if (!self.dispstat.vblank.read())
-            pollBlankingDma(&cpu.bus, .HBlank);
+            pollBlankingDma(cpu.bus, .HBlank);
 
         self.dispstat.hblank.set();
         self.sched.push(.HBlank, 68 * 4 -| late);
@@ -615,7 +615,7 @@ pub const Ppu = struct {
                 self.aff_bg[1].latchRefPoints();
 
                 // See if Vblank DMA is present and not enabled
-                pollBlankingDma(&cpu.bus, .VBlank);
+                pollBlankingDma(cpu.bus, .VBlank);
             }
 
             if (scanline == 227) self.dispstat.vblank.unset();

@@ -7,7 +7,6 @@ const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
 
-const Allocator = std.mem.Allocator;
 const File = std.fs.File;
 
 // ARM Instructions
@@ -234,7 +233,7 @@ pub const Arm7tdmi = struct {
 
     r: [16]u32,
     sched: *Scheduler,
-    bus: Bus,
+    bus: *Bus,
     cpsr: PSR,
     spsr: PSR,
 
@@ -252,11 +251,11 @@ pub const Arm7tdmi = struct {
     log_buf: [0x100]u8,
     binary_log: bool,
 
-    pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
+    pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return Self{
             .r = [_]u32{0x00} ** 16,
             .sched = sched,
-            .bus = try Bus.init(alloc, sched, paths),
+            .bus = bus,
             .cpsr = .{ .raw = 0x0000_001F },
             .spsr = .{ .raw = 0x0000_0000 },
             .banked_fiq = [_]u32{0x00} ** 10,
@@ -266,10 +265,6 @@ pub const Arm7tdmi = struct {
             .log_buf = undefined,
             .binary_log = false,
         };
-    }
-
-    pub fn deinit(self: Self) void {
-        self.bus.deinit();
     }
 
     pub fn useLogger(self: *Self, file: *const File, is_binary: bool) void {
@@ -433,13 +428,13 @@ pub const Arm7tdmi = struct {
             const opcode = self.fetch(u16);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
-            thumb.lut[thumbIdx(opcode)](self, &self.bus, opcode);
+            thumb.lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch(u32);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
-                arm.lut[armIdx(opcode)](self, &self.bus, opcode);
+                arm.lut[armIdx(opcode)](self, self.bus, opcode);
             }
         }
     }

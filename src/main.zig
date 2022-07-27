@@ -5,6 +5,7 @@ const known_folders = @import("known_folders");
 const clap = @import("clap");
 
 const Gui = @import("Gui.zig");
+const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("core/util.zig").FilePaths;
@@ -42,13 +43,16 @@ pub fn main() anyerror!void {
     var scheduler = Scheduler.init(allocator);
     defer scheduler.deinit();
 
-    var arm7tdmi = try Arm7tdmi.init(allocator, &scheduler, paths);
-    arm7tdmi.bus.attach(&arm7tdmi);
-    if (paths.bios == null) arm7tdmi.fastBoot();
-    defer arm7tdmi.deinit();
+    var bus = try Bus.init(allocator, &scheduler, paths);
+    defer bus.deinit();
 
-    var gui = Gui.init(arm7tdmi.bus.pak.title, width, height);
-    gui.initAudio(&arm7tdmi.bus.apu);
+    var arm7tdmi = Arm7tdmi.init(&scheduler, &bus);
+
+    bus.attach(&arm7tdmi); // TODO: Shrink Surface (only CPSR and  r15?)
+    if (paths.bios == null) arm7tdmi.fastBoot();
+
+    var gui = Gui.init(bus.pak.title, width, height);
+    gui.initAudio(&bus.apu);
     defer gui.deinit();
 
     try gui.run(&arm7tdmi, &scheduler);
