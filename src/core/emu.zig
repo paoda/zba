@@ -14,6 +14,7 @@ const Allocator = std.mem.Allocator;
 
 const sync_audio = false;
 const sync_video: RunKind = .UnlimitedFPS;
+pub const cpu_logging = false;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896

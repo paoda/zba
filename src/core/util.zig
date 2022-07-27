@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Log2Int = std.math.Log2Int;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 // Sign-Extend value of type `T` to type `U`
 pub fn sext(comptime T: type, comptime U: type, value: T) T {
@@ -112,3 +113,64 @@ pub fn writeUndefined(log: anytype, comptime format: []const u8, args: anytype) 
     log.warn(format, args);
     if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
 }
+
+pub const Logger = struct {
+    const Self = @This();
+
+    buf: std.io.BufferedWriter(4096 << 2, std.fs.File.Writer),
+
+    pub fn init(file: std.fs.File) Self {
+        return .{
+            .buf = .{ .unbuffered_writer = file.writer() },
+        };
+    }
+
+    pub fn print(self: *Self, comptime format: []const u8, args: anytype) !void {
+        try self.buf.writer().print(format, args);
+    }
+
+    pub fn mgbaLog(self: *Self, arm7tdmi: *const Arm7tdmi, opcode: u32) void {
+        const fmt_base = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ";
+        const thumb_fmt = fmt_base ++ "{X:0>4}:\n";
+        const arm_fmt = fmt_base ++ "{X:0>8}:\n";
+
+        if (arm7tdmi.cpsr.t.read()) {
+            if (opcode >> 11 == 0x1E) {
+                // Instruction 1 of a BL Opcode, print in ARM mode
+                const low = arm7tdmi.bus.debugRead(u16, arm7tdmi.r[15]);
+                const bl_opcode = @as(u32, opcode) << 16 | low;
+
+                self.print(arm_fmt, Self.fmtArgs(arm7tdmi, bl_opcode)) catch @panic("failed to write to log file");
+            } else {
+                self.print(thumb_fmt, Self.fmtArgs(arm7tdmi, opcode)) catch @panic("failed to write to log file");
+            }
+        } else {
+            self.print(arm_fmt, Self.fmtArgs(arm7tdmi, opcode)) catch @panic("failed to write to log file");
+        }
+    }
+
+    fn fmtArgs(arm7tdmi: *const Arm7tdmi, opcode: u32) FmtArgTuple {
+        return .{
+            arm7tdmi.r[0],
+            arm7tdmi.r[1],
+            arm7tdmi.r[2],
+            arm7tdmi.r[3],
+            arm7tdmi.r[4],
+            arm7tdmi.r[5],
+            arm7tdmi.r[6],
+            arm7tdmi.r[7],
+            arm7tdmi.r[8],
+            arm7tdmi.r[9],
+            arm7tdmi.r[10],
+            arm7tdmi.r[11],
+            arm7tdmi.r[12],
+            arm7tdmi.r[13],
+            arm7tdmi.r[14],
+            arm7tdmi.r[15],
+            arm7tdmi.cpsr.raw,
+            opcode,
+        };
+    }
+};
+
+const FmtArgTuple = std.meta.Tuple(&.{ u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 });

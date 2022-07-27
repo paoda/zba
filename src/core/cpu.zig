@@ -6,6 +6,7 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
+const Logger = @import("util.zig").Logger;
 
 const File = std.fs.File;
 
@@ -225,7 +226,7 @@ pub const thumb = struct {
     }
 };
 
-const enable_logging = false;
+const cpu_logging = @import("emu.zig").cpu_logging;
 const log = std.log.scoped(.Arm7Tdmi);
 
 pub const Arm7tdmi = struct {
@@ -247,9 +248,7 @@ pub const Arm7tdmi = struct {
 
     banked_spsr: [5]PSR,
 
-    log_file: ?*const File,
-    log_buf: [0x100]u8,
-    binary_log: bool,
+    logger: ?Logger,
 
     pub fn init(sched: *Scheduler, bus: *Bus) Self {
         return Self{
@@ -261,15 +260,12 @@ pub const Arm7tdmi = struct {
             .banked_fiq = [_]u32{0x00} ** 10,
             .banked_r = [_]u32{0x00} ** 12,
             .banked_spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
-            .log_file = null,
-            .log_buf = undefined,
-            .binary_log = false,
+            .logger = null,
         };
     }
 
-    pub fn useLogger(self: *Self, file: *const File, is_binary: bool) void {
-        self.log_file = file;
-        self.binary_log = is_binary;
+    pub fn attach(self: *Self, log_file: std.fs.File) void {
+        self.logger = Logger.init(log_file);
     }
 
     inline fn bankedIdx(mode: Mode, kind: BankedKind) usize {
@@ -426,12 +422,12 @@ pub const Arm7tdmi = struct {
     pub fn step(self: *Self) void {
         if (self.cpsr.t.read()) {
             const opcode = self.fetch(u16);
-            if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
+            if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
 
             thumb.lut[thumbIdx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch(u32);
-            if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
+            if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm.lut[armIdx(opcode)](self, self.bus, opcode);
@@ -509,14 +505,6 @@ pub const Arm7tdmi = struct {
         return self.r[15] + 4;
     }
 
-    fn debug_log(self: *const Self, file: *const File, opcode: u32) void {
-        if (self.binary_log) {
-            self.skyLog(file) catch unreachable;
-        } else {
-            self.mgbaLog(file, opcode) catch unreachable;
-        }
-    }
-
     pub fn panic(self: *const Self, comptime format: []const u8, args: anytype) noreturn {
         var i: usize = 0;
         while (i < 16) : (i += 4) {
@@ -572,25 +560,6 @@ pub const Arm7tdmi = struct {
             .Undefined => "und",
             .System => "sys",
         };
-    }
-
-    fn skyLog(self: *const Self, file: *const File) !void {
-        var buf: [18 * @sizeOf(u32)]u8 = undefined;
-
-        // Write Registers
-        var i: usize = 0;
-        while (i < 0x10) : (i += 1) {
-            skyWrite(&buf, i, self.r[i]);
-        }
-
-        skyWrite(&buf, 0x10, self.cpsr.raw);
-        skyWrite(&buf, 0x11, if (self.hasSPSR()) self.spsr.raw else self.cpsr.raw);
-        _ = try file.writeAll(&buf);
-    }
-
-    fn skyWrite(buf: []u8, i: usize, num: u32) void {
-        const j = @sizeOf(u32) * i;
-        std.mem.writeIntSliceNative(u32, buf[j..(j + @sizeOf(u32))], num);
     }
 
     fn mgbaLog(self: *const Self, file: *const File, opcode: u32) !void {
