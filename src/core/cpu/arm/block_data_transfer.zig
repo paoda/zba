@@ -1,6 +1,6 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ArmInstrFn;
+const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
 pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {

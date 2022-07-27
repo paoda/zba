@@ -10,22 +10,105 @@ const FilePaths = @import("util.zig").FilePaths;
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
 
-// ARM Instruction Groups
-const dataProcessing = @import("cpu/arm/data_processing.zig").dataProcessing;
-const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
-const singleDataTransfer = @import("cpu/arm/single_data_transfer.zig").singleDataTransfer;
-const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
-const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
-const armBranch = @import("cpu/arm/branch.zig").branch;
-const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
-const armSoftwareInterrupt = @import("cpu/arm/software_interrupt.zig").armSoftwareInterrupt;
-const singleDataSwap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
+// ARM Instructions
+pub const arm = struct {
+    pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
+    const lut: [0x1000]InstrFn = populate();
 
-const multiply = @import("cpu/arm/multiply.zig").multiply;
-const multiplyLong = @import("cpu/arm/multiply.zig").multiplyLong;
+    const processing = @import("cpu/arm/data_processing.zig").dataProcessing;
+    const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
+    const transfer = @import("cpu/arm/single_data_transfer.zig").singleDataTransfer;
+    const halfSignedTransfer = @import("cpu/arm/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
+    const blockTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
+    const branch = @import("cpu/arm/branch.zig").branch;
+    const branchExchange = @import("cpu/arm/branch.zig").branchAndExchange;
+    const swi = @import("cpu/arm/software_interrupt.zig").armSoftwareInterrupt;
+    const swap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
 
-// THUMB Instruction Groups
+    const multiply = @import("cpu/arm/multiply.zig").multiply;
+    const multiplyLong = @import("cpu/arm/multiply.zig").multiplyLong;
 
+    // Undefined ARM Instruction handler
+    fn und(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
+        const id = armIdx(opcode);
+        cpu.panic("[CPU/Decode] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
+    }
+
+    fn populate() [0x1000]InstrFn {
+        return comptime {
+            @setEvalBranchQuota(0xE000);
+            var ret = [_]InstrFn{und} ** 0x1000;
+
+            var i: usize = 0;
+            while (i < ret.len) : (i += 1) {
+                ret[i] = switch (@as(u2, i >> 10)) {
+                    0b00 => if (i == 0x121) blk: {
+                        break :blk branchExchange;
+                    } else if (i & 0xFCF == 0x009) blk: {
+                        const A = i >> 5 & 1 == 1;
+                        const S = i >> 4 & 1 == 1;
+                        break :blk multiply(A, S);
+                    } else if (i & 0xFBF == 0x109) blk: {
+                        const B = i >> 6 & 1 == 1;
+                        break :blk swap(B);
+                    } else if (i & 0xF8F == 0x089) blk: {
+                        const U = i >> 6 & 1 == 1;
+                        const A = i >> 5 & 1 == 1;
+                        const S = i >> 4 & 1 == 1;
+                        break :blk multiplyLong(U, A, S);
+                    } else if (i & 0xE49 == 0x009 or i & 0xE49 == 0x049) blk: {
+                        const P = i >> 8 & 1 == 1;
+                        const U = i >> 7 & 1 == 1;
+                        const I = i >> 6 & 1 == 1;
+                        const W = i >> 5 & 1 == 1;
+                        const L = i >> 4 & 1 == 1;
+                        break :blk halfSignedTransfer(P, U, I, W, L);
+                    } else if (i & 0xD90 == 0x100) blk: {
+                        const I = i >> 9 & 1 == 1;
+                        const R = i >> 6 & 1 == 1;
+                        const kind = i >> 4 & 0x3;
+                        break :blk psrTransfer(I, R, kind);
+                    } else blk: {
+                        const I = i >> 9 & 1 == 1;
+                        const S = i >> 4 & 1 == 1;
+                        const instrKind = i >> 5 & 0xF;
+                        break :blk processing(I, S, instrKind);
+                    },
+                    0b01 => if (i >> 9 & 1 == 1 and i & 1 == 1) und else blk: {
+                        const I = i >> 9 & 1 == 1;
+                        const P = i >> 8 & 1 == 1;
+                        const U = i >> 7 & 1 == 1;
+                        const B = i >> 6 & 1 == 1;
+                        const W = i >> 5 & 1 == 1;
+                        const L = i >> 4 & 1 == 1;
+                        break :blk transfer(I, P, U, B, W, L);
+                    },
+                    else => switch (@as(u2, i >> 9 & 0x3)) {
+                        // MSB is guaranteed to be 1
+                        0b00 => blk: {
+                            const P = i >> 8 & 1 == 1;
+                            const U = i >> 7 & 1 == 1;
+                            const S = i >> 6 & 1 == 1;
+                            const W = i >> 5 & 1 == 1;
+                            const L = i >> 4 & 1 == 1;
+                            break :blk blockTransfer(P, U, S, W, L);
+                        },
+                        0b01 => blk: {
+                            const L = i >> 8 & 1 == 1;
+                            break :blk branch(L);
+                        },
+                        0b10 => und, // COP Data Transfer
+                        0b11 => if (i >> 8 & 1 == 1) swi() else und, // COP Data Operation + Register Transfer
+                    },
+                };
+            }
+
+            return ret;
+        };
+    }
+};
+
+// THUMB Instructions
 pub const thumb = struct {
     pub const InstrFn = fn (*Arm7tdmi, *Bus, u16) void;
     const lut: [0x400]InstrFn = populate();
@@ -142,9 +225,6 @@ pub const thumb = struct {
         };
     }
 };
-
-pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
-const arm_lut: [0x1000]ArmInstrFn = armPopulate();
 
 const enable_logging = false;
 const log = std.log.scoped(.Arm7Tdmi);
@@ -359,7 +439,7 @@ pub const Arm7tdmi = struct {
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
-                arm_lut[armIdx(opcode)](self, &self.bus, opcode);
+                arm.lut[armIdx(opcode)](self, &self.bus, opcode);
             }
         }
     }
@@ -590,79 +670,6 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
     };
 }
 
-fn armPopulate() [0x1000]ArmInstrFn {
-    return comptime {
-        @setEvalBranchQuota(0xE000);
-        var lut = [_]ArmInstrFn{armUndefined} ** 0x1000;
-
-        var i: usize = 0;
-        while (i < lut.len) : (i += 1) {
-            lut[i] = switch (@as(u2, i >> 10)) {
-                0b00 => if (i == 0x121) blk: {
-                    break :blk branchAndExchange;
-                } else if (i & 0xFCF == 0x009) blk: {
-                    const A = i >> 5 & 1 == 1;
-                    const S = i >> 4 & 1 == 1;
-                    break :blk multiply(A, S);
-                } else if (i & 0xFBF == 0x109) blk: {
-                    const B = i >> 6 & 1 == 1;
-                    break :blk singleDataSwap(B);
-                } else if (i & 0xF8F == 0x089) blk: {
-                    const U = i >> 6 & 1 == 1;
-                    const A = i >> 5 & 1 == 1;
-                    const S = i >> 4 & 1 == 1;
-                    break :blk multiplyLong(U, A, S);
-                } else if (i & 0xE49 == 0x009 or i & 0xE49 == 0x049) blk: {
-                    const P = i >> 8 & 1 == 1;
-                    const U = i >> 7 & 1 == 1;
-                    const I = i >> 6 & 1 == 1;
-                    const W = i >> 5 & 1 == 1;
-                    const L = i >> 4 & 1 == 1;
-                    break :blk halfAndSignedDataTransfer(P, U, I, W, L);
-                } else if (i & 0xD90 == 0x100) blk: {
-                    const I = i >> 9 & 1 == 1;
-                    const R = i >> 6 & 1 == 1;
-                    const kind = i >> 4 & 0x3;
-                    break :blk psrTransfer(I, R, kind);
-                } else blk: {
-                    const I = i >> 9 & 1 == 1;
-                    const S = i >> 4 & 1 == 1;
-                    const instrKind = i >> 5 & 0xF;
-                    break :blk dataProcessing(I, S, instrKind);
-                },
-                0b01 => if (i >> 9 & 1 == 1 and i & 1 == 1) armUndefined else blk: {
-                    const I = i >> 9 & 1 == 1;
-                    const P = i >> 8 & 1 == 1;
-                    const U = i >> 7 & 1 == 1;
-                    const B = i >> 6 & 1 == 1;
-                    const W = i >> 5 & 1 == 1;
-                    const L = i >> 4 & 1 == 1;
-                    break :blk singleDataTransfer(I, P, U, B, W, L);
-                },
-                else => switch (@as(u2, i >> 9 & 0x3)) {
-                    // MSB is guaranteed to be 1
-                    0b00 => blk: {
-                        const P = i >> 8 & 1 == 1;
-                        const U = i >> 7 & 1 == 1;
-                        const S = i >> 6 & 1 == 1;
-                        const W = i >> 5 & 1 == 1;
-                        const L = i >> 4 & 1 == 1;
-                        break :blk blockDataTransfer(P, U, S, W, L);
-                    },
-                    0b01 => blk: {
-                        const L = i >> 8 & 1 == 1;
-                        break :blk armBranch(L);
-                    },
-                    0b10 => armUndefined, // COP Data Transfer
-                    0b11 => if (i >> 8 & 1 == 1) armSoftwareInterrupt() else armUndefined, // COP Data Operation + Register Transfer
-                },
-            };
-        }
-
-        return lut;
-    };
-}
-
 pub const PSR = extern union {
     mode: Bitfield(u32, 0, 5),
     t: Bit(u32, 5),
@@ -696,9 +703,4 @@ fn getMode(bits: u5) ?Mode {
 
 fn getModeChecked(cpu: *const Arm7tdmi, bits: u5) Mode {
     return getMode(bits) orelse cpu.panic("[CPU/CPSR] 0b{b:0>5} is an invalid CPU mode", .{bits});
-}
-
-fn armUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
-    const id = armIdx(opcode);
-    cpu.panic("[CPU/Decode] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
 }

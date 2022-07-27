@@ -1,6 +1,6 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ArmInstrFn;
+const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
 const rotateRight = @import("../barrel_shifter.zig").rotateRight;
 const execute = @import("../barrel_shifter.zig").execute;

@@ -1,6 +1,6 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ArmInstrFn;
+const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
 pub fn armSoftwareInterrupt() InstrFn {
     return struct {
