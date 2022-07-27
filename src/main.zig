@@ -14,6 +14,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.CLI);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
+const arm7tdmi_logging = @import("core/emu.zig").cpu_logging;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
 // TODO: Reimpl Logging
@@ -48,6 +49,10 @@ pub fn main() anyerror!void {
 
     var arm7tdmi = Arm7tdmi.init(&scheduler, &bus);
 
+    const log_file: ?std.fs.File = if (arm7tdmi_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
+    defer if (log_file) |file| file.close();
+
+    if (log_file) |file| arm7tdmi.attach(file);
     bus.attach(&arm7tdmi); // TODO: Shrink Surface (only CPSR and  r15?)
     if (paths.bios == null) arm7tdmi.fastBoot();
 
