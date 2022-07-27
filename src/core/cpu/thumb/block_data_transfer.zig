@@ -1,8 +1,8 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
+const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
-pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
+pub fn fmt14(comptime L: bool, comptime R: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const count = @boolToInt(R) + countRlist(opcode);
@@ -45,7 +45,7 @@ pub fn format14(comptime L: bool, comptime R: bool) InstrFn {
     }.inner;
 }
 
-pub fn format15(comptime L: bool, comptime rb: u3) InstrFn {
+pub fn fmt15(comptime L: bool, comptime rb: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             var address = cpu.r[rb];

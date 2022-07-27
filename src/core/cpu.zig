@@ -16,7 +16,7 @@ const psrTransfer = @import("cpu/arm/psr_transfer.zig").psrTransfer;
 const singleDataTransfer = @import("cpu/arm/single_data_transfer.zig").singleDataTransfer;
 const halfAndSignedDataTransfer = @import("cpu/arm/half_signed_data_transfer.zig").halfAndSignedDataTransfer;
 const blockDataTransfer = @import("cpu/arm/block_data_transfer.zig").blockDataTransfer;
-const branch = @import("cpu/arm/branch.zig").branch;
+const armBranch = @import("cpu/arm/branch.zig").branch;
 const branchAndExchange = @import("cpu/arm/branch.zig").branchAndExchange;
 const armSoftwareInterrupt = @import("cpu/arm/software_interrupt.zig").armSoftwareInterrupt;
 const singleDataSwap = @import("cpu/arm/single_data_swap.zig").singleDataSwap;
@@ -25,33 +25,126 @@ const multiply = @import("cpu/arm/multiply.zig").multiply;
 const multiplyLong = @import("cpu/arm/multiply.zig").multiplyLong;
 
 // THUMB Instruction Groups
-const format1 = @import("cpu/thumb/data_processing.zig").format1;
-const format2 = @import("cpu/thumb/data_processing.zig").format2;
-const format3 = @import("cpu/thumb/data_processing.zig").format3;
-const format12 = @import("cpu/thumb/data_processing.zig").format12;
-const format13 = @import("cpu/thumb/data_processing.zig").format13;
 
-const format4 = @import("cpu/thumb/alu.zig").format4;
-const format5 = @import("cpu/thumb/processing_branch.zig").format5;
+pub const thumb = struct {
+    pub const InstrFn = fn (*Arm7tdmi, *Bus, u16) void;
+    const lut: [0x400]InstrFn = populate();
 
-const format6 = @import("cpu/thumb/data_transfer.zig").format6;
-const format78 = @import("cpu/thumb/data_transfer.zig").format78;
-const format9 = @import("cpu/thumb/data_transfer.zig").format9;
-const format10 = @import("cpu/thumb/data_transfer.zig").format10;
-const format11 = @import("cpu/thumb/data_transfer.zig").format11;
-const format14 = @import("cpu/thumb/block_data_transfer.zig").format14;
-const format15 = @import("cpu/thumb/block_data_transfer.zig").format15;
+    const processing = @import("cpu/thumb/data_processing.zig");
+    const alu = @import("cpu/thumb/alu.zig").fmt4;
+    const transfer = @import("cpu/thumb/data_transfer.zig");
+    const block_transfer = @import("cpu/thumb/block_data_transfer.zig");
+    const swi = @import("cpu/thumb/software_interrupt.zig").fmt17;
+    const branch = @import("cpu/thumb/branch.zig");
 
-const format16 = @import("cpu/thumb/branch.zig").format16;
-const format18 = @import("cpu/thumb/branch.zig").format18;
-const format19 = @import("cpu/thumb/branch.zig").format19;
+    /// Undefined THUMB Instruction Handler
+    fn und(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
+        const id = thumbIdx(opcode);
+        cpu.panic("[CPU/Decode] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
+    }
 
-const thumbSoftwareInterrupt = @import("cpu/thumb/software_interrupt.zig").thumbSoftwareInterrupt;
+    fn populate() [0x400]InstrFn {
+        return comptime {
+            @setEvalBranchQuota(5025); // This is exact
+            var ret = [_]InstrFn{und} ** 0x400;
+
+            var i: usize = 0;
+            while (i < ret.len) : (i += 1) {
+                ret[i] = switch (@as(u3, i >> 7 & 0x7)) {
+                    0b000 => if (i >> 5 & 0x3 == 0b11) blk: {
+                        const I = i >> 4 & 1 == 1;
+                        const is_sub = i >> 3 & 1 == 1;
+                        const rn = i & 0x7;
+                        break :blk processing.fmt2(I, is_sub, rn);
+                    } else blk: {
+                        const op = i >> 5 & 0x3;
+                        const offset = i & 0x1F;
+                        break :blk processing.fmt1(op, offset);
+                    },
+                    0b001 => blk: {
+                        const op = i >> 5 & 0x3;
+                        const rd = i >> 2 & 0x7;
+                        break :blk processing.fmt3(op, rd);
+                    },
+                    0b010 => switch (@as(u2, i >> 5 & 0x3)) {
+                        0b00 => if (i >> 4 & 1 == 1) blk: {
+                            const op = i >> 2 & 0x3;
+                            const h1 = i >> 1 & 1;
+                            const h2 = i & 1;
+                            break :blk processing.fmt5(op, h1, h2);
+                        } else blk: {
+                            const op = i & 0xF;
+                            break :blk alu(op);
+                        },
+                        0b01 => blk: {
+                            const rd = i >> 2 & 0x7;
+                            break :blk transfer.fmt6(rd);
+                        },
+                        else => blk: {
+                            const op = i >> 4 & 0x3;
+                            const T = i >> 3 & 1 == 1;
+                            break :blk transfer.fmt78(op, T);
+                        },
+                    },
+                    0b011 => blk: {
+                        const B = i >> 6 & 1 == 1;
+                        const L = i >> 5 & 1 == 1;
+                        const offset = i & 0x1F;
+                        break :blk transfer.fmt9(B, L, offset);
+                    },
+                    else => switch (@as(u3, i >> 6 & 0x7)) {
+                        // MSB is guaranteed to be 1
+                        0b000 => blk: {
+                            const L = i >> 5 & 1 == 1;
+                            const offset = i & 0x1F;
+                            break :blk transfer.fmt10(L, offset);
+                        },
+                        0b001 => blk: {
+                            const L = i >> 5 & 1 == 1;
+                            const rd = i >> 2 & 0x7;
+                            break :blk transfer.fmt11(L, rd);
+                        },
+                        0b010 => blk: {
+                            const isSP = i >> 5 & 1 == 1;
+                            const rd = i >> 2 & 0x7;
+                            break :blk processing.fmt12(isSP, rd);
+                        },
+                        0b011 => if (i >> 4 & 1 == 1) blk: {
+                            const L = i >> 5 & 1 == 1;
+                            const R = i >> 2 & 1 == 1;
+                            break :blk block_transfer.fmt14(L, R);
+                        } else blk: {
+                            const S = i >> 1 & 1 == 1;
+                            break :blk processing.fmt13(S);
+                        },
+                        0b100 => blk: {
+                            const L = i >> 5 & 1 == 1;
+                            const rb = i >> 2 & 0x7;
+
+                            break :blk block_transfer.fmt15(L, rb);
+                        },
+                        0b101 => if (i >> 2 & 0xF == 0b1111) blk: {
+                            break :blk thumb.swi();
+                        } else blk: {
+                            const cond = i >> 2 & 0xF;
+                            break :blk branch.fmt16(cond);
+                        },
+                        0b110 => branch.fmt18(),
+                        0b111 => blk: {
+                            const is_low = i >> 5 & 1 == 1;
+                            break :blk branch.fmt19(is_low);
+                        },
+                    },
+                };
+            }
+
+            return ret;
+        };
+    }
+};
 
 pub const ArmInstrFn = fn (*Arm7tdmi, *Bus, u32) void;
-pub const ThumbInstrFn = fn (*Arm7tdmi, *Bus, u16) void;
 const arm_lut: [0x1000]ArmInstrFn = armPopulate();
-const thumb_lut: [0x400]ThumbInstrFn = thumbPopulate();
 
 const enable_logging = false;
 const log = std.log.scoped(.Arm7Tdmi);
@@ -260,7 +353,7 @@ pub const Arm7tdmi = struct {
             const opcode = self.fetch(u16);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
 
-            thumb_lut[thumbIdx(opcode)](self, &self.bus, opcode);
+            thumb.lut[thumbIdx(opcode)](self, &self.bus, opcode);
         } else {
             const opcode = self.fetch(u32);
             if (enable_logging) if (self.log_file) |file| self.debug_log(file, opcode);
@@ -497,105 +590,6 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
     };
 }
 
-fn thumbPopulate() [0x400]ThumbInstrFn {
-    return comptime {
-        @setEvalBranchQuota(5025); // This is exact
-        var lut = [_]ThumbInstrFn{thumbUndefined} ** 0x400;
-
-        var i: usize = 0;
-        while (i < lut.len) : (i += 1) {
-            lut[i] = switch (@as(u3, i >> 7 & 0x7)) {
-                0b000 => if (i >> 5 & 0x3 == 0b11) blk: {
-                    const I = i >> 4 & 1 == 1;
-                    const is_sub = i >> 3 & 1 == 1;
-                    const rn = i & 0x7;
-                    break :blk format2(I, is_sub, rn);
-                } else blk: {
-                    const op = i >> 5 & 0x3;
-                    const offset = i & 0x1F;
-                    break :blk format1(op, offset);
-                },
-                0b001 => blk: {
-                    const op = i >> 5 & 0x3;
-                    const rd = i >> 2 & 0x7;
-                    break :blk format3(op, rd);
-                },
-                0b010 => switch (@as(u2, i >> 5 & 0x3)) {
-                    0b00 => if (i >> 4 & 1 == 1) blk: {
-                        const op = i >> 2 & 0x3;
-                        const h1 = i >> 1 & 1;
-                        const h2 = i & 1;
-                        break :blk format5(op, h1, h2);
-                    } else blk: {
-                        const op = i & 0xF;
-                        break :blk format4(op);
-                    },
-                    0b01 => blk: {
-                        const rd = i >> 2 & 0x7;
-                        break :blk format6(rd);
-                    },
-                    else => blk: {
-                        const op = i >> 4 & 0x3;
-                        const T = i >> 3 & 1 == 1;
-                        break :blk format78(op, T);
-                    },
-                },
-                0b011 => blk: {
-                    const B = i >> 6 & 1 == 1;
-                    const L = i >> 5 & 1 == 1;
-                    const offset = i & 0x1F;
-                    break :blk format9(B, L, offset);
-                },
-                else => switch (@as(u3, i >> 6 & 0x7)) {
-                    // MSB is guaranteed to be 1
-                    0b000 => blk: {
-                        const L = i >> 5 & 1 == 1;
-                        const offset = i & 0x1F;
-                        break :blk format10(L, offset);
-                    },
-                    0b001 => blk: {
-                        const L = i >> 5 & 1 == 1;
-                        const rd = i >> 2 & 0x7;
-                        break :blk format11(L, rd);
-                    },
-                    0b010 => blk: {
-                        const isSP = i >> 5 & 1 == 1;
-                        const rd = i >> 2 & 0x7;
-                        break :blk format12(isSP, rd);
-                    },
-                    0b011 => if (i >> 4 & 1 == 1) blk: {
-                        const L = i >> 5 & 1 == 1;
-                        const R = i >> 2 & 1 == 1;
-                        break :blk format14(L, R);
-                    } else blk: {
-                        const S = i >> 1 & 1 == 1;
-                        break :blk format13(S);
-                    },
-                    0b100 => blk: {
-                        const L = i >> 5 & 1 == 1;
-                        const rb = i >> 2 & 0x7;
-
-                        break :blk format15(L, rb);
-                    },
-                    0b101 => if (i >> 2 & 0xF == 0b1111) blk: {
-                        break :blk thumbSoftwareInterrupt();
-                    } else blk: {
-                        const cond = i >> 2 & 0xF;
-                        break :blk format16(cond);
-                    },
-                    0b110 => format18(),
-                    0b111 => blk: {
-                        const is_low = i >> 5 & 1 == 1;
-                        break :blk format19(is_low);
-                    },
-                },
-            };
-        }
-
-        return lut;
-    };
-}
-
 fn armPopulate() [0x1000]ArmInstrFn {
     return comptime {
         @setEvalBranchQuota(0xE000);
@@ -657,7 +651,7 @@ fn armPopulate() [0x1000]ArmInstrFn {
                     },
                     0b01 => blk: {
                         const L = i >> 8 & 1 == 1;
-                        break :blk branch(L);
+                        break :blk armBranch(L);
                     },
                     0b10 => armUndefined, // COP Data Transfer
                     0b11 => if (i >> 8 & 1 == 1) armSoftwareInterrupt() else armUndefined, // COP Data Operation + Register Transfer
@@ -707,9 +701,4 @@ fn getModeChecked(cpu: *const Arm7tdmi, bits: u5) Mode {
 fn armUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
     const id = armIdx(opcode);
     cpu.panic("[CPU/Decode] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
-}
-
-fn thumbUndefined(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
-    const id = thumbIdx(opcode);
-    cpu.panic("[CPU/Decode] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
 }

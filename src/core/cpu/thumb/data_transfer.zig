@@ -2,11 +2,11 @@ const std = @import("std");
 
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
+const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const rotr = @import("../../util.zig").rotr;
 
-pub fn format6(comptime rd: u3) InstrFn {
+pub fn fmt6(comptime rd: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             // LDR
@@ -18,7 +18,7 @@ pub fn format6(comptime rd: u3) InstrFn {
 
 const sext = @import("../../util.zig").sext;
 
-pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
+pub fn fmt78(comptime op: u2, comptime T: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const ro = opcode >> 6 & 0x7;
@@ -78,7 +78,7 @@ pub fn format78(comptime op: u2, comptime T: bool) InstrFn {
     }.inner;
 }
 
-pub fn format9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn {
+pub fn fmt9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const rb = opcode >> 3 & 0x7;
@@ -110,7 +110,7 @@ pub fn format9(comptime B: bool, comptime L: bool, comptime offset: u5) InstrFn 
     }.inner;
 }
 
-pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
+pub fn fmt10(comptime L: bool, comptime offset: u5) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const rb = opcode >> 3 & 0x7;
@@ -130,7 +130,7 @@ pub fn format10(comptime L: bool, comptime offset: u5) InstrFn {
     }.inner;
 }
 
-pub fn format11(comptime L: bool, comptime rd: u3) InstrFn {
+pub fn fmt11(comptime L: bool, comptime rd: u3) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             const offset = (opcode & 0xFF) << 2;

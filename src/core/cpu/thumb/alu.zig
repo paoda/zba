@@ -1,6 +1,6 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
+const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const adc = @import("../arm/data_processing.zig").adc;
 const sbc = @import("../arm/data_processing.zig").sbc;
@@ -15,7 +15,7 @@ const logicalRight = @import("../barrel_shifter.zig").logicalRight;
 const arithmeticRight = @import("../barrel_shifter.zig").arithmeticRight;
 const rotateRight = @import("../barrel_shifter.zig").rotateRight;
 
-pub fn format4(comptime op: u4) InstrFn {
+pub fn fmt4(comptime op: u4) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             const rs = opcode >> 3 & 0x7;

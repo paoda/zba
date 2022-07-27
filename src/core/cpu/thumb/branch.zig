@@ -1,11 +1,11 @@
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
-const InstrFn = @import("../../cpu.zig").ThumbInstrFn;
+const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const checkCond = @import("../../cpu.zig").checkCond;
 const sext = @import("../../util.zig").sext;
 
-pub fn format16(comptime cond: u4) InstrFn {
+pub fn fmt16(comptime cond: u4) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             // B
@@ -23,7 +23,7 @@ pub fn format16(comptime cond: u4) InstrFn {
     }.inner;
 }
 
-pub fn format18() InstrFn {
+pub fn fmt18() InstrFn {
     return struct {
         // B but conditional
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
@@ -33,7 +33,7 @@ pub fn format18() InstrFn {
     }.inner;
 }
 
-pub fn format19(comptime is_low: bool) InstrFn {
+pub fn fmt19(comptime is_low: bool) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             // BL
