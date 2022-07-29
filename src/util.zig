@@ -215,7 +215,7 @@ pub const Logger = struct {
             cpu.r[12],
             cpu.r[13],
             cpu.r[14],
-            cpu.r[15] - 4,
+            cpu.r[15] - if (cpu.cpsr.t.read()) 2 else @as(u32, 4),
             cpu.cpsr.raw,
             opcode,
         };
