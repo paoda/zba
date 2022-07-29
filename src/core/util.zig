@@ -137,7 +137,7 @@ pub const Logger = struct {
         if (arm7tdmi.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const low = arm7tdmi.bus.debugRead(u16, arm7tdmi.r[15]);
+                const low = arm7tdmi.bus.debugRead(u16, arm7tdmi.r[15] - 2);
                 const bl_opcode = @as(u32, opcode) << 16 | low;
 
                 self.print(arm_fmt, Self.fmtArgs(arm7tdmi, bl_opcode)) catch @panic("failed to write to log file");
@@ -166,7 +166,7 @@ pub const Logger = struct {
             arm7tdmi.r[12],
             arm7tdmi.r[13],
             arm7tdmi.r[14],
-            arm7tdmi.r[15] - 4,
+            arm7tdmi.r[15] - if (arm7tdmi.cpsr.t.read()) 2 else @as(u32, 4),
             arm7tdmi.cpsr.raw,
             opcode,
         };
