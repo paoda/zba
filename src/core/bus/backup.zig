@@ -340,6 +340,10 @@ const Eeprom = struct {
         return self.reader.read();
     }
 
+    pub fn dbgRead(self: *const Self) u1 {
+        return self.reader.dbgRead();
+    }
+
     pub fn write(self: *Self, word_count: u16, buf: *[]u8, bit: u1) void {
         if (self.guessKind(word_count)) |found| {
             log.info("EEPROM Kind: {}", .{found});
@@ -489,6 +493,19 @@ const Eeprom = struct {
 
             self.i = (self.i + 1) % (64 + 4);
             if (self.i == 0) self.enabled = false;
+
+            return bit;
+        }
+
+        fn dbgRead(self: *const This) u1 {
+            if (!self.enabled) return 1;
+
+            const bit = if (self.i < 4) blk: {
+                break :blk 0;
+            } else blk: {
+                const idx = @intCast(u6, 63 - (self.i - 4));
+                break :blk @truncate(u1, self.data >> idx);
+            };
 
             return bit;
         }

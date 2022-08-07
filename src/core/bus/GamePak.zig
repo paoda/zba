@@ -90,6 +90,33 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
     };
 }
 
+pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
+    const addr = address & 0x1FF_FFFF;
+
+    if (self.backup.kind == .Eeprom) {
+        if (self.isLarge()) {
+            // Addresses 0x1FF_FF00 to 0x1FF_FFFF are reserved from EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Large ROM (Size is greater than 16MB)
+            if (addr > 0x1FF_FEFF)
+                return self.backup.eeprom.dbgRead();
+        } else {
+            // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
+            // * Backup type is EEPROM
+            // * Small ROM (less than 16MB)
+            if (@truncate(u8, address >> 24) == 0x0D)
+                return self.backup.eeprom.dbgRead();
+        }
+    }
+
+    return switch (T) {
+        u32 => (@as(T, self.get(addr + 3)) << 24) | (@as(T, self.get(addr + 2)) << 16) | (@as(T, self.get(addr + 1)) << 8) | (@as(T, self.get(addr))),
+        u16 => (@as(T, self.get(addr + 1)) << 8) | @as(T, self.get(addr)),
+        u8 => self.get(addr),
+        else => @compileError("GamePak: Unsupported read width"),
+    };
+}
+
 pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value: T) void {
     const addr = address & 0x1FF_FFFF;
 
