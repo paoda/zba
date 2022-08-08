@@ -8,12 +8,12 @@ const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("core/util.zig").FpsTracker;
 
 const pitch = @import("core/ppu.zig").framebuf_pitch;
+const scale = @import("core/emu.zig").win_scale;
 
 const emu = @import("core/emu.zig");
 const asString = @import("core/util.zig").asString;
 const log = std.log.scoped(.GUI);
 
-const scale = 4;
 const default_title: []const u8 = "ZBA";
 
 window: *SDL.SDL_Window,

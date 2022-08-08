@@ -12,9 +12,11 @@ const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
 const Allocator = std.mem.Allocator;
 
-const sync_audio = false;
-const sync_video: RunKind = .UnlimitedFPS;
-pub const cpu_logging = false;
+// TODO: Move these to a TOML File
+const sync_audio = true; // Enable Audio Sync
+const sync_video: RunKind = .LimitedFPS; // Configure Video Sync
+pub const win_scale = 3; // 1x, 2x, 3x, etc. Window Scaling
+pub const cpu_logging = false; // Enable detailed CPU logging
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896
