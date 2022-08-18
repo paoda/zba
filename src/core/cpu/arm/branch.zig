@@ -12,7 +12,7 @@ pub fn branch(comptime L: bool) InstrFn {
             if (L) cpu.r[14] = cpu.r[15] - 4;
 
             cpu.r[15] +%= sext(u32, u24, opcode) << 2;
-            cpu.pipe.flush();
+            cpu.pipe.reload(u32, cpu);
         }
     }.inner;
 }
@@ -22,6 +22,7 @@ pub fn branchAndExchange(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
 
     const thumb = cpu.r[rn] & 1 == 1;
     cpu.r[15] = cpu.r[rn] & if (thumb) ~@as(u32, 1) else ~@as(u32, 3);
+
     cpu.cpsr.t.write(thumb);
-    cpu.pipe.flush();
+    if (thumb) cpu.pipe.reload(u16, cpu) else cpu.pipe.reload(u32, cpu);
 }

@@ -34,7 +34,7 @@ pub fn fmt14(comptime L: bool, comptime R: bool) InstrFn {
                 if (L) {
                     const value = bus.read(u32, address);
                     cpu.r[15] = value & ~@as(u32, 1);
-                    cpu.pipe.flush();
+                    cpu.pipe.reload(u16, cpu);
                 } else {
                     bus.write(u32, address, cpu.r[14]);
                 }
@@ -55,7 +55,7 @@ pub fn fmt15(comptime L: bool, comptime rb: u3) InstrFn {
             if (opcode & 0xFF == 0) {
                 if (L) {
                     cpu.r[15] = bus.read(u32, address);
-                    cpu.pipe.flush();
+                    cpu.pipe.reload(u16, cpu);
                 } else {
                     bus.write(u32, address, cpu.r[15] + 2);
                 }

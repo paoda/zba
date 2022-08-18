@@ -176,6 +176,7 @@ pub const Logger = struct {
 
     pub fn print(self: *Self, comptime format: []const u8, args: anytype) !void {
         try self.buf.writer().print(format, args);
+        try self.buf.flush(); // FIXME: On panics, whatever is in the buffer isn't written to file
     }
 
     pub fn mgbaLog(self: *Self, cpu: *const Arm7tdmi, opcode: u32) void {

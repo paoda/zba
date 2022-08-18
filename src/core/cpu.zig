@@ -335,7 +335,7 @@ pub const Arm7tdmi = struct {
         if (self.cpsr.t.read() != new.t.read()) {
             // If THUMB to ARM or ARM to THUMB, flush pipeline
             self.r[15] &= if (new.t.read()) ~@as(u32, 1) else ~@as(u32, 3);
-            self.pipe.flush();
+            if (new.t.read()) self.pipe.reload(u16, self) else self.pipe.reload(u32, self);
         }
 
         self.cpsr.raw = value;
@@ -428,15 +428,16 @@ pub const Arm7tdmi = struct {
     pub fn fastBoot(self: *Self) void {
         self.r = std.mem.zeroes([16]u32);
 
-        self.r[0] = 0x08000000;
-        self.r[1] = 0x000000EA;
+        // self.r[0] = 0x08000000;
+        // self.r[1] = 0x000000EA;
         self.r[13] = 0x0300_7F00;
         self.r[15] = 0x0800_0000;
 
         self.banked_r[bankedIdx(.Irq, .R13)] = 0x0300_7FA0;
         self.banked_r[bankedIdx(.Supervisor, .R13)] = 0x0300_7FE0;
 
-        self.cpsr.raw = 0x6000001F;
+        // self.cpsr.raw = 0x6000001F;
+        self.cpsr.raw = 0x0000_001F;
     }
 
     pub fn step(self: *Self) void {
@@ -454,7 +455,8 @@ pub const Arm7tdmi = struct {
             }
         }
 
-        if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        if (self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
         self.pipe.flushed = false;
     }
 
@@ -509,7 +511,7 @@ pub const Arm7tdmi = struct {
         self.r[14] = ret_addr;
         self.spsr.raw = new_spsr;
         self.r[15] = 0x0000_0018;
-        self.pipe.flush();
+        self.pipe.reload(u32, self);
     }
 
     inline fn fetch(self: *Self, comptime T: type) T {
@@ -667,6 +669,10 @@ const Pipline = struct {
     pub fn flush(self: *Self) void {
         for (self.stage) |*opcode| opcode.* = null;
         self.flushed = true;
+
+        // Note: If using this, add
+        // if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        // to the end of Arm7tdmi.step
     }
 
     pub fn isFull(self: *const Self) bool {
@@ -684,13 +690,17 @@ const Pipline = struct {
         return opcode;
     }
 
-    fn reload(self: *Self, cpu: *Arm7tdmi, comptime T: type) void {
+    pub fn reload(self: *Self, comptime T: type, cpu: *Arm7tdmi) void {
         comptime std.debug.assert(T == u32 or T == u16);
-        const inc = if (T == u32) 4 else 2;
+
+        // Sometimes, the pipeline can be reloaded twice in the same instruction
+        // This can happen if:
+        // 1. R15 is written to
+        // 2. The CPSR is written to (and T changes), so R15 is written to again
 
         self.stage[0] = cpu.bus.read(T, cpu.r[15]);
-        self.stage[1] = cpu.bus.read(T, cpu.r[15] + inc);
-        cpu.r[15] += inc * 2;
+        self.stage[1] = cpu.bus.read(T, cpu.r[15] + if (T == u32) 4 else @as(u32, 2));
+        self.flushed = true;
     }
 };
 

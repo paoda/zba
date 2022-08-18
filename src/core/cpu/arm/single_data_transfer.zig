@@ -47,13 +47,13 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
             address = modified_base;
             if (W and P or !P) {
                 cpu.r[rn] = address;
-                if (rn == 0xF) cpu.pipe.flush();
+                if (rn == 0xF) cpu.pipe.reload(u32, cpu);
             }
 
             if (L) {
                 // This emulates the LDR rd == rn behaviour
                 cpu.r[rd] = result;
-                if (rd == 0xF) cpu.pipe.flush();
+                if (rd == 0xF) cpu.pipe.reload(u32, cpu);
             }
         }
     }.inner;

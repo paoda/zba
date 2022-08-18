@@ -77,10 +77,18 @@ pub fn fmt5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
                 },
                 0b11 => {
                     // BX
-                    cpu.cpsr.t.write(src & 1 == 1);
-                    cpu.r[15] = src & 0xFFFF_FFFE;
+                    const thumb = src & 1 == 1;
+                    cpu.r[15] = src & ~@as(u32, 1);
+                    cpu.cpsr.t.write(thumb);
+
+                    if (thumb) cpu.pipe.reload(u16, cpu) else cpu.pipe.reload(u32, cpu);
+
+                    // Pipeline alrady flushed
+                    return; // FIXME: Is this necessary? (Refactor out?)
                 },
             }
+
+            if (dst_idx == 0xF) cpu.pipe.reload(u16, cpu);
         }
     }.inner;
 }
