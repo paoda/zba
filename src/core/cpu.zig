@@ -12,7 +12,7 @@ const File = std.fs.File;
 
 // ARM Instructions
 pub const arm = struct {
-    pub const InstrFn = fn (*Arm7tdmi, *Bus, u32) void;
+    pub const InstrFn = *const fn (*Arm7tdmi, *Bus, u32) void;
     const lut: [0x1000]InstrFn = populate();
 
     const processing = @import("cpu/arm/data_processing.zig").dataProcessing;
@@ -110,7 +110,7 @@ pub const arm = struct {
 
 // THUMB Instructions
 pub const thumb = struct {
-    pub const InstrFn = fn (*Arm7tdmi, *Bus, u16) void;
+    pub const InstrFn = *const fn (*Arm7tdmi, *Bus, u16) void;
     const lut: [0x400]InstrFn = populate();
 
     const processing = @import("cpu/thumb/data_processing.zig");
