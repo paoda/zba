@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
 const escape = @import("../util.zig").escape;
-const asString = @import("../util.zig").asString;
+const asStringSlice = @import("../util.zig").asStringSlice;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -72,7 +72,7 @@ pub const Backup = struct {
     }
 
     fn loadSaveFromDisk(self: *Self, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(path);
+        const file_path = try self.getSaveFilePath(self.alloc, path);
         defer self.alloc.free(file_path);
 
         // FIXME: Don't rely on this lol
@@ -111,22 +111,22 @@ pub const Backup = struct {
         }
     }
 
-    fn getSaveFilePath(self: *const Self, path: []const u8) ![]const u8 {
-        const filename = try self.getSaveFilename();
-        defer self.alloc.free(filename);
+    fn getSaveFilePath(self: *const Self, allocator: Allocator, path: []const u8) ![]const u8 {
+        const filename = try self.getSaveFilename(allocator);
+        defer allocator.free(filename);
 
-        return try std.fs.path.join(self.alloc, &[_][]const u8{ path, filename });
+        return try std.fs.path.join(allocator, &[_][]const u8{ path, filename });
     }
 
-    fn getSaveFilename(self: *const Self) ![]const u8 {
-        const title = asString(escape(self.title));
-        const name = if (title.len != 0) title else "untitled";
+    fn getSaveFilename(self: *const Self, allocator: Allocator) ![]const u8 {
+        const title_str = asStringSlice(&escape(self.title));
+        const name = if (title_str.len != 0) title_str else "untitled";
 
-        return try std.mem.concat(self.alloc, u8, &[_][]const u8{ name, ".sav" });
+        return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });
     }
 
     fn writeSaveToDisk(self: Self, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(path);
+        const file_path = try self.getSaveFilePath(self.alloc, path);
         defer self.alloc.free(file_path);
 
         switch (self.kind) {

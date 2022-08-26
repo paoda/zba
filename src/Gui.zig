@@ -11,7 +11,6 @@ const pitch = @import("core/ppu.zig").framebuf_pitch;
 const scale = @import("core/emu.zig").win_scale;
 
 const emu = @import("core/emu.zig");
-const asString = @import("core/util.zig").asString;
 const log = std.log.scoped(.GUI);
 
 const default_title: []const u8 = "ZBA";

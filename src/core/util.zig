@@ -69,7 +69,7 @@ pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
 ///
 /// This function returns a slice of everything just before the first
 /// `\0`
-pub fn asString(title: [12]u8) []const u8 {
+pub fn asStringSlice(title: *const [12]u8) []const u8 {
     var len = title.len;
     for (title) |char, i| {
         if (char == 0) {
