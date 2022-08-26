@@ -26,7 +26,7 @@ pub const Backup = struct {
     flash: Flash,
     eeprom: Eeprom,
 
-    pub fn init(alloc: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
+    pub fn init(allocator: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
         log.info("Kind: {}", .{kind});
 
         const buf_size: usize = switch (kind) {
@@ -36,20 +36,20 @@ pub const Backup = struct {
             .None, .Eeprom => 0, // EEPROM is handled upon first Read Request to it
         };
 
-        const buf = try alloc.alloc(u8, buf_size);
+        const buf = try allocator.alloc(u8, buf_size);
         std.mem.set(u8, buf, 0xFF);
 
         var backup = Self{
             .buf = buf,
-            .alloc = alloc,
+            .alloc = allocator,
             .kind = kind,
             .title = title,
             .save_path = path,
             .flash = Flash.init(),
-            .eeprom = Eeprom.init(alloc),
+            .eeprom = Eeprom.init(allocator),
         };
 
-        if (backup.save_path) |p| backup.loadSaveFromDisk(p) catch |e| log.err("Failed to load save: {}", .{e});
+        if (backup.save_path) |p| backup.loadSaveFromDisk(allocator, p) catch |e| log.err("Failed to load save: {}", .{e});
         return backup;
     }
 
@@ -67,13 +67,13 @@ pub const Backup = struct {
     }
 
     pub fn deinit(self: Self) void {
-        if (self.save_path) |path| self.writeSaveToDisk(path) catch |e| log.err("Failed to write save: {}", .{e});
+        if (self.save_path) |path| self.writeSaveToDisk(self.alloc, path) catch |e| log.err("Failed to write save: {}", .{e});
         self.alloc.free(self.buf);
     }
 
-    fn loadSaveFromDisk(self: *Self, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(self.alloc, path);
-        defer self.alloc.free(file_path);
+    fn loadSaveFromDisk(self: *Self, allocator: Allocator, path: []const u8) !void {
+        const file_path = try self.getSaveFilePath(allocator, path);
+        defer allocator.free(file_path);
 
         // FIXME: Don't rely on this lol
         if (std.mem.eql(u8, file_path[file_path.len - 12 .. file_path.len], "untitled.sav")) {
@@ -81,8 +81,8 @@ pub const Backup = struct {
         }
 
         const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
-        const file_buf = try file.readToEndAlloc(self.alloc, try file.getEndPos());
-        defer self.alloc.free(file_buf);
+        const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
+        defer allocator.free(file_buf);
 
         switch (self.kind) {
             .Sram, .Flash, .Flash1M => {
@@ -97,7 +97,7 @@ pub const Backup = struct {
                 if (file_buf.len == 0x200 or file_buf.len == 0x2000) {
                     self.eeprom.kind = if (file_buf.len == 0x200) .Small else .Large;
 
-                    self.buf = try self.alloc.alloc(u8, file_buf.len);
+                    self.buf = try allocator.alloc(u8, file_buf.len);
                     std.mem.copy(u8, self.buf, file_buf);
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
@@ -125,9 +125,9 @@ pub const Backup = struct {
         return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });
     }
 
-    fn writeSaveToDisk(self: Self, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(self.alloc, path);
-        defer self.alloc.free(file_path);
+    fn writeSaveToDisk(self: Self, allocator: Allocator, path: []const u8) !void {
+        const file_path = try self.getSaveFilePath(allocator, path);
+        defer allocator.free(file_path);
 
         switch (self.kind) {
             .Sram, .Flash, .Flash1M, .Eeprom => {
