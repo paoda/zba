@@ -13,12 +13,12 @@ alloc: Allocator,
 addr_latch: u32,
 
 pub fn init(alloc: Allocator, maybe_path: ?[]const u8) !Self {
-    var buf: ?[]u8 = null;
-    if (maybe_path) |path| {
+    const buf: ?[]u8 = if (maybe_path) |path| blk: {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
-        buf = try file.readToEndAlloc(alloc, try file.getEndPos());
-    }
+
+        break :blk try file.readToEndAlloc(alloc, try file.getEndPos());
+    } else null;
 
     return Self{
         .buf = buf,

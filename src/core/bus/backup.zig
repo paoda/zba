@@ -18,7 +18,7 @@ pub const Backup = struct {
 
     buf: []u8,
     alloc: Allocator,
-    kind: BackupKind,
+    kind: Kind,
 
     title: [12]u8,
     save_path: ?[]const u8,
@@ -26,7 +26,15 @@ pub const Backup = struct {
     flash: Flash,
     eeprom: Eeprom,
 
-    pub fn init(allocator: Allocator, kind: BackupKind, title: [12]u8, path: ?[]const u8) !Self {
+    const Kind = enum {
+        Eeprom,
+        Sram,
+        Flash,
+        Flash1M,
+        None,
+    };
+
+    pub fn init(allocator: Allocator, kind: Kind, title: [12]u8, path: ?[]const u8) !Self {
         log.info("Kind: {}", .{kind});
 
         const buf_size: usize = switch (kind) {
@@ -53,7 +61,7 @@ pub const Backup = struct {
         return backup;
     }
 
-    pub fn guessKind(rom: []const u8) ?BackupKind {
+    pub fn guessKind(rom: []const u8) ?Kind {
         for (backup_kinds) |needle| {
             const needle_len = needle.str.len;
 
@@ -201,21 +209,13 @@ pub const Backup = struct {
     }
 };
 
-const BackupKind = enum {
-    Eeprom,
-    Sram,
-    Flash,
-    Flash1M,
-    None,
-};
-
 const Needle = struct {
     const Self = @This();
 
     str: []const u8,
-    kind: BackupKind,
+    kind: Backup.Kind,
 
-    fn init(str: []const u8, kind: BackupKind) Self {
+    fn init(str: []const u8, kind: Backup.Kind) Self {
         return .{
             .str = str,
             .kind = kind,
@@ -230,7 +230,7 @@ const SaveError = error{
 const Flash = struct {
     const Self = @This();
 
-    state: FlashState,
+    state: State,
 
     id_mode: bool,
     set_bank: bool,
@@ -238,6 +238,12 @@ const Flash = struct {
     prep_write: bool,
 
     bank: u1,
+
+    const State = enum {
+        Ready,
+        Set,
+        Command,
+    };
 
     fn init() Self {
         return .{
@@ -291,12 +297,6 @@ const Flash = struct {
     inline fn baseAddress(self: *const Self) usize {
         return if (self.bank == 1) 0x10000 else @as(usize, 0);
     }
-};
-
-const FlashState = enum {
-    Ready,
-    Set,
-    Command,
 };
 
 const Eeprom = struct {
