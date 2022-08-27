@@ -682,7 +682,8 @@ const Pipline = struct {
     pub fn step(self: *Self, cpu: *Arm7tdmi, comptime T: type) ?u32 {
         comptime std.debug.assert(T == u32 or T == u16);
 
-        const opcode = self.stage[0];
+        // FIXME: https://github.com/ziglang/zig/issues/12642
+        const opcode = self.stage[0..1][0];
 
         self.stage[0] = self.stage[1];
         self.stage[1] = cpu.bus.read(T, cpu.r[15]);
