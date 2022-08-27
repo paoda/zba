@@ -547,6 +547,8 @@ pub const Arm7tdmi = struct {
         std.debug.print("spsr: 0x{X:0>8} ", .{self.spsr.raw});
         prettyPrintPsr(&self.spsr);
 
+        std.debug.print("pipeline: {??X:0>8}\n", .{self.pipe.stage});
+
         if (self.cpsr.t.read()) {
             const opcode = self.bus.dbgRead(u16, self.r[15] - 4);
             const id = thumb.idx(opcode);
