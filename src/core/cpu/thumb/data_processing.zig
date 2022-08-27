@@ -10,8 +10,6 @@ const sub = @import("../arm/data_processing.zig").sub;
 const cmp = @import("../arm/data_processing.zig").cmp;
 const setLogicOpFlags = @import("../arm/data_processing.zig").setLogicOpFlags;
 
-const log = std.log.scoped(.Thumb1);
-
 pub fn fmt1(comptime op: u2, comptime offset: u5) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
@@ -58,37 +56,38 @@ pub fn fmt1(comptime op: u2, comptime offset: u5) InstrFn {
 pub fn fmt5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
-            const src_idx = @as(u4, h2) << 3 | (opcode >> 3 & 0x7);
-            const dst_idx = @as(u4, h1) << 3 | (opcode & 0x7);
+            const rs = @as(u4, h2) << 3 | (opcode >> 3 & 0x7);
+            const rd = @as(u4, h1) << 3 | (opcode & 0x7);
 
-            const src = if (src_idx == 0xF) (cpu.r[src_idx] + 2) & 0xFFFF_FFFE else cpu.r[src_idx];
-            const dst = if (dst_idx == 0xF) (cpu.r[dst_idx] + 2) & 0xFFFF_FFFE else cpu.r[dst_idx];
+            const rs_value = if (rs == 0xF) cpu.r[rs] & ~@as(u32, 1) else cpu.r[rs];
+            const rd_value = if (rd == 0xF) cpu.r[rd] & ~@as(u32, 1) else cpu.r[rd];
 
             switch (op) {
                 0b00 => {
                     // ADD
-                    const sum = add(false, cpu, dst, src);
-                    cpu.r[dst_idx] = if (dst_idx == 0xF) sum & 0xFFFF_FFFE else sum;
+                    const sum = add(false, cpu, rd_value, rs_value);
+                    cpu.r[rd] = if (rd == 0xF) sum & ~@as(u32, 1) else sum;
                 },
-                0b01 => cmp(cpu, dst, src), // CMP
+                0b01 => cmp(cpu, rd_value, rs_value), // CMP
                 0b10 => {
                     // MOV
-                    cpu.r[dst_idx] = if (dst_idx == 0xF) src & 0xFFFF_FFFE else src;
+                    cpu.r[rd] = if (rd == 0xF) rs_value & ~@as(u32, 1) else rs_value;
                 },
                 0b11 => {
                     // BX
-                    const thumb = src & 1 == 1;
-                    cpu.r[15] = src & ~@as(u32, 1);
-                    cpu.cpsr.t.write(thumb);
+                    const thumb = rs_value & 1 == 1;
+                    cpu.r[15] = rs_value & ~@as(u32, 1);
 
+                    cpu.cpsr.t.write(thumb);
                     if (thumb) cpu.pipe.reload(u16, cpu) else cpu.pipe.reload(u32, cpu);
 
-                    // Pipeline alrady flushed
-                    return; // FIXME: Is this necessary? (Refactor out?)
+                    // TODO: We shouldn't need to worry about the if statement
+                    // below, because in BX, rd SBZ (and H1 is guaranteed to be 0)
+                    return;
                 },
             }
 
-            if (dst_idx == 0xF) cpu.pipe.reload(u16, cpu);
+            if (rd == 0xF) cpu.pipe.reload(u16, cpu);
         }
     }.inner;
 }
