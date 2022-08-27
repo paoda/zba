@@ -455,8 +455,7 @@ pub const Arm7tdmi = struct {
             }
         }
 
-        if (self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
-        self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
         self.pipe.flushed = false;
     }
 
@@ -703,6 +702,8 @@ const Pipline = struct {
 
         self.stage[0] = cpu.bus.read(T, cpu.r[15]);
         self.stage[1] = cpu.bus.read(T, cpu.r[15] + if (T == u32) 4 else @as(u32, 2));
+
+        cpu.r[15] += if (T == u32) 8 else @as(u32, 4);
         self.flushed = true;
     }
 };
