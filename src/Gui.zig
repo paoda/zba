@@ -136,12 +136,13 @@ pub fn initAudio(self: *Self, apu: *Apu) void {
     self.audio.?.play();
 }
 
-pub fn deinit(self: Self) void {
-    if (self.audio) |aud| aud.deinit();
+pub fn deinit(self: *Self) void {
+    if (self.audio) |*aud| aud.deinit();
     SDL.SDL_DestroyTexture(self.texture);
     SDL.SDL_DestroyRenderer(self.renderer);
     SDL.SDL_DestroyWindow(self.window);
     SDL.SDL_Quit();
+    self.* = undefined;
 }
 
 const Audio = struct {
@@ -168,8 +169,9 @@ const Audio = struct {
         };
     }
 
-    fn deinit(this: This) void {
-        SDL.SDL_CloseAudioDevice(this.device);
+    fn deinit(self: *This) void {
+        SDL.SDL_CloseAudioDevice(self.device);
+        self.* = undefined;
     }
 
     pub fn play(this: *This) void {

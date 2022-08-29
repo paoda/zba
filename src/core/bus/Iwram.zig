@@ -17,8 +17,9 @@ pub fn init(alloc: Allocator) !Self {
     };
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.alloc.free(self.buf);
+    self.* = undefined;
 }
 
 pub fn read(self: *const Self, comptime T: type, address: usize) T {

@@ -40,21 +40,19 @@ pub fn main() anyerror!void {
     const paths = try handleArguments(allocator, &result);
     defer if (paths.save) |path| allocator.free(path);
 
+    const log_file: ?std.fs.File = if (arm7tdmi_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
+    defer if (log_file) |file| file.close();
+
     // TODO: Take Emulator Init Code out of main.zig
     var scheduler = Scheduler.init(allocator);
     defer scheduler.deinit();
 
-    var bus = try Bus.init(allocator, &scheduler, paths);
-    defer bus.deinit();
-
-    var arm7tdmi = Arm7tdmi.init(&scheduler, &bus);
-
-    const log_file: ?std.fs.File = if (arm7tdmi_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
-    defer if (log_file) |file| file.close();
-
-    if (log_file) |file| arm7tdmi.attach(file);
-    bus.attach(&arm7tdmi); // TODO: Shrink Surface (only CPSR and  r15?)
+    var bus: Bus = undefined;
+    var arm7tdmi = Arm7tdmi.init(&scheduler, &bus, log_file);
     if (paths.bios == null) arm7tdmi.fastBoot();
+
+    try bus.init(allocator, &scheduler, &arm7tdmi, paths);
+    defer bus.deinit();
 
     var gui = Gui.init(bus.pak.title, width, height);
     gui.initAudio(&bus.apu);

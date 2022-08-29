@@ -21,8 +21,9 @@ pub const Scheduler = struct {
         return sched;
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         self.queue.deinit();
+        self.* = undefined;
     }
 
     pub inline fn now(self: *const Self) u64 {

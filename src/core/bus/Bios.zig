@@ -27,8 +27,9 @@ pub fn init(alloc: Allocator, maybe_path: ?[]const u8) !Self {
     };
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     if (self.buf) |buf| self.alloc.free(buf);
+    self.* = undefined;
 }
 
 pub fn read(self: *Self, comptime T: type, r15: u32, addr: u32) T {

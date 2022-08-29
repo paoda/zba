@@ -74,9 +74,10 @@ pub const Backup = struct {
         return null;
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         if (self.save_path) |path| self.writeSaveToDisk(self.alloc, path) catch |e| log.err("Failed to write save: {}", .{e});
         self.alloc.free(self.buf);
+        self.* = undefined;
     }
 
     fn loadSaveFromDisk(self: *Self, allocator: Allocator, path: []const u8) !void {

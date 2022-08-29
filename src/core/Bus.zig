@@ -49,8 +49,8 @@ io: Io,
 cpu: ?*Arm7tdmi,
 sched: *Scheduler,
 
-pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
-    return Self{
+pub fn init(self: *Self, alloc: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
+    self.* = .{
         .pak = try GamePak.init(alloc, paths.rom, paths.save),
         .bios = try Bios.init(alloc, paths.bios),
         .ppu = try Ppu.init(alloc, sched),
@@ -60,21 +60,34 @@ pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
         .dma = createDmaTuple(),
         .tim = createTimerTuple(sched),
         .io = Io.init(),
-        .cpu = null,
+        .cpu = cpu,
         .sched = sched,
     };
 }
 
-pub fn deinit(self: Self) void {
+// pub fn init(alloc: Allocator, sched: *Scheduler, paths: FilePaths) !Self {
+//     return Self{
+//         .pak = try GamePak.init(alloc, paths.rom, paths.save),
+//         .bios = try Bios.init(alloc, paths.bios),
+//         .ppu = try Ppu.init(alloc, sched),
+//         .apu = Apu.init(sched),
+//         .iwram = try Iwram.init(alloc),
+//         .ewram = try Ewram.init(alloc),
+//         .dma = createDmaTuple(),
+//         .tim = createTimerTuple(sched),
+//         .io = Io.init(),
+//         .cpu = null,
+//         .sched = sched,
+//     };
+// }
+
+pub fn deinit(self: *Self) void {
     self.iwram.deinit();
     self.ewram.deinit();
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
-}
-
-pub fn attach(self: *Self, cpu: *Arm7tdmi) void {
-    self.cpu = cpu;
+    self.* = undefined;
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {

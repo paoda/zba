@@ -250,7 +250,7 @@ pub const Arm7tdmi = struct {
 
     logger: ?Logger,
 
-    pub fn init(sched: *Scheduler, bus: *Bus) Self {
+    pub fn init(sched: *Scheduler, bus: *Bus, log_file: ?std.fs.File) Self {
         return Self{
             .r = [_]u32{0x00} ** 16,
             .sched = sched,
@@ -260,12 +260,8 @@ pub const Arm7tdmi = struct {
             .banked_fiq = [_]u32{0x00} ** 10,
             .banked_r = [_]u32{0x00} ** 12,
             .banked_spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
-            .logger = null,
+            .logger = if (log_file) |file| Logger.init(file) else null,
         };
-    }
-
-    pub fn attach(self: *Self, log_file: std.fs.File) void {
-        self.logger = Logger.init(log_file);
     }
 
     inline fn bankedIdx(mode: Mode, kind: BankedKind) usize {

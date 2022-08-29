@@ -46,23 +46,17 @@ pub const Ppu = struct {
     scanline_sprites: [128]?Sprite,
     scanline: Scanline,
 
-    pub fn init(alloc: Allocator, sched: *Scheduler) !Self {
+    pub fn init(allocator: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
         sched.push(.Draw, 240 * 4);
 
-        const framebufs = try alloc.alloc(u8, (framebuf_pitch * height) * 2);
-        std.mem.set(u8, framebufs, 0);
-
-        const scanline_buf = try alloc.alloc(?u16, width * 2);
-        std.mem.set(?u16, scanline_buf, null);
-
         return Self{
-            .vram = try Vram.init(alloc),
-            .palette = try Palette.init(alloc),
-            .oam = try Oam.init(alloc),
+            .vram = try Vram.init(allocator),
+            .palette = try Palette.init(allocator),
+            .oam = try Oam.init(allocator),
             .sched = sched,
-            .framebuf = FrameBuffer.init(framebufs),
-            .alloc = alloc,
+            .framebuf = try FrameBuffer.init(allocator),
+            .alloc = allocator,
 
             // Registers
             .win = Window.init(),
@@ -75,17 +69,18 @@ pub const Ppu = struct {
             .bldalpha = .{ .raw = 0x0000 },
             .bldy = .{ .raw = 0x0000 },
 
-            .scanline = Scanline.init(scanline_buf),
+            .scanline = try Scanline.init(allocator),
             .scanline_sprites = [_]?Sprite{null} ** 128,
         };
     }
 
-    pub fn deinit(self: Self) void {
-        self.framebuf.deinit(self.alloc);
-        self.scanline.deinit(self.alloc);
+    pub fn deinit(self: *Self) void {
+        self.framebuf.deinit();
+        self.scanline.deinit();
         self.vram.deinit();
         self.palette.deinit();
         self.oam.deinit();
+        self.* = undefined;
     }
 
     pub fn setBgOffsets(self: *Self, comptime n: u2, word: u32) void {
@@ -641,8 +636,9 @@ const Palette = struct {
         };
     }
 
-    fn deinit(self: Self) void {
+    fn deinit(self: *Self) void {
         self.alloc.free(self.buf);
+        self.* = undefined;
     }
 
     pub fn read(self: *const Self, comptime T: type, address: usize) T {
@@ -689,8 +685,9 @@ const Vram = struct {
         };
     }
 
-    fn deinit(self: Self) void {
+    fn deinit(self: *Self) void {
         self.alloc.free(self.buf);
+        self.* = undefined;
     }
 
     pub fn read(self: *const Self, comptime T: type, address: usize) T {
@@ -749,8 +746,9 @@ const Oam = struct {
         };
     }
 
-    fn deinit(self: Self) void {
+    fn deinit(self: *Self) void {
         self.alloc.free(self.buf);
+        self.* = undefined;
     }
 
     pub fn read(self: *const Self, comptime T: type, address: usize) T {
@@ -1213,35 +1211,38 @@ fn copyToSpriteBuffer(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16
 const Scanline = struct {
     const Self = @This();
 
-    buf: [2][]?u16,
-    original: []?u16,
+    layers: [2][]?u16,
+    buf: []?u16,
 
-    fn init(buf: []?u16) Self {
-        std.debug.assert(buf.len == width * 2);
+    allocator: Allocator,
 
-        const top_slice = buf[0..][0..width];
-        const btm_slice = buf[width..][0..width];
+    fn init(allocator: Allocator) !Self {
+        const buf = try allocator.alloc(?u16, width * 2); // Top & Bottom Scanline
+        std.mem.set(?u16, buf, null);
 
         return .{
-            .buf = [_][]?u16{ top_slice, btm_slice },
-            .original = buf,
+            // Top & Bototm Layers
+            .layers = [_][]?u16{ buf[0..][0..width], buf[width..][0..width] },
+            .buf = buf,
+            .allocator = allocator,
         };
     }
 
     fn reset(self: *Self) void {
-        std.mem.set(?u16, self.original, null);
+        std.mem.set(?u16, self.buf, null);
     }
 
-    fn deinit(self: Self, alloc: Allocator) void {
-        alloc.free(self.original);
+    fn deinit(self: *Self) void {
+        self.allocator.free(self.buf);
+        self.* = undefined;
     }
 
     fn top(self: *Self) []?u16 {
-        return self.buf[0];
+        return self.layers[0];
     }
 
     fn btm(self: *Self) []?u16 {
-        return self.buf[1];
+        return self.layers[1];
     }
 };
 
@@ -1249,9 +1250,11 @@ const Scanline = struct {
 const FrameBuffer = struct {
     const Self = @This();
 
-    buf: [2][]u8,
-    original: []u8,
+    layers: [2][]u8,
+    buf: []u8,
     current: u1,
+
+    allocator: Allocator,
 
     // TODO: Rename
     const Device = enum {
@@ -1259,21 +1262,24 @@ const FrameBuffer = struct {
         Renderer,
     };
 
-    pub fn init(bufs: []u8) Self {
-        std.debug.assert(bufs.len == framebuf_pitch * height * 2);
-
-        const front = bufs[0 .. framebuf_pitch * height];
-        const back = bufs[framebuf_pitch * height ..];
+    pub fn init(allocator: Allocator) !Self {
+        const framebuf_len = framebuf_pitch * height;
+        const buf = try allocator.alloc(u8, framebuf_len * 2);
+        std.mem.set(u8, buf, 0);
 
         return .{
-            .buf = [2][]u8{ front, back },
-            .original = bufs,
+            // Front and Back Framebuffers
+            .layers = [_][]u8{ buf[0..][0..framebuf_len], buf[framebuf_len..][0..framebuf_len] },
+            .buf = buf,
             .current = 0,
+
+            .allocator = allocator,
         };
     }
 
-    fn deinit(self: Self, alloc: Allocator) void {
-        alloc.free(self.original);
+    fn deinit(self: *Self) void {
+        self.allocator.free(self.buf);
+        self.* = undefined;
     }
 
     pub fn swap(self: *Self) void {
@@ -1281,6 +1287,6 @@ const FrameBuffer = struct {
     }
 
     pub fn get(self: *Self, comptime dev: Device) []u8 {
-        return self.buf[if (dev == .Emulator) self.current else ~self.current];
+        return self.layers[if (dev == .Emulator) self.current else ~self.current];
     }
 };

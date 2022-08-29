@@ -58,9 +58,10 @@ inline fn isLarge(self: *const Self) bool {
     return self.buf.len > 0x100_0000;
 }
 
-pub fn deinit(self: Self) void {
-    self.alloc.free(self.buf);
+pub fn deinit(self: *Self) void {
     self.backup.deinit();
+    self.alloc.free(self.buf);
+    self.* = undefined;
 }
 
 pub fn read(self: *Self, comptime T: type, address: u32) T {
