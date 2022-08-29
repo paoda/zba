@@ -43,12 +43,15 @@ pub const Ppu = struct {
     framebuf: FrameBuffer,
     alloc: Allocator,
 
-    scanline_sprites: [128]?Sprite,
+    scanline_sprites: *[128]?Sprite,
     scanline: Scanline,
 
     pub fn init(allocator: Allocator, sched: *Scheduler) !Self {
         // Queue first Hblank
         sched.push(.Draw, 240 * 4);
+
+        const sprites = try allocator.create([128]?Sprite);
+        sprites.* = [_]?Sprite{null} ** 128;
 
         return Self{
             .vram = try Vram.init(allocator),
@@ -70,11 +73,12 @@ pub const Ppu = struct {
             .bldy = .{ .raw = 0x0000 },
 
             .scanline = try Scanline.init(allocator),
-            .scanline_sprites = [_]?Sprite{null} ** 128,
+            .scanline_sprites = sprites,
         };
     }
 
     pub fn deinit(self: *Self) void {
+        self.alloc.destroy(self.scanline_sprites);
         self.framebuf.deinit();
         self.scanline.deinit();
         self.vram.deinit();
@@ -394,7 +398,7 @@ pub const Ppu = struct {
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
                 self.scanline.reset();
-                std.mem.set(?Sprite, &self.scanline_sprites, null);
+                std.mem.set(?Sprite, self.scanline_sprites, null);
             },
             0x1 => {
                 const fb_base = framebuf_pitch * @as(usize, scanline);
@@ -421,7 +425,7 @@ pub const Ppu = struct {
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
                 self.scanline.reset();
-                std.mem.set(?Sprite, &self.scanline_sprites, null);
+                std.mem.set(?Sprite, self.scanline_sprites, null);
             },
             0x2 => {
                 const fb_base = framebuf_pitch * @as(usize, scanline);
@@ -447,7 +451,7 @@ pub const Ppu = struct {
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
                 // in prep for next scanline
                 self.scanline.reset();
-                std.mem.set(?Sprite, &self.scanline_sprites, null);
+                std.mem.set(?Sprite, self.scanline_sprites, null);
             },
             0x3 => {
                 const vram_base = width * @sizeOf(u16) * @as(usize, scanline);
