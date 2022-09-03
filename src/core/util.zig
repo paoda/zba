@@ -129,45 +129,45 @@ pub const Logger = struct {
         try self.buf.writer().print(format, args);
     }
 
-    pub fn mgbaLog(self: *Self, arm7tdmi: *const Arm7tdmi, opcode: u32) void {
+    pub fn mgbaLog(self: *Self, cpu: *const Arm7tdmi, opcode: u32) void {
         const fmt_base = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | ";
         const thumb_fmt = fmt_base ++ "{X:0>4}:\n";
         const arm_fmt = fmt_base ++ "{X:0>8}:\n";
 
-        if (arm7tdmi.cpsr.t.read()) {
+        if (cpu.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const low = arm7tdmi.bus.dbgRead(u16, arm7tdmi.r[15]);
+                const low = cpu.bus.dbgRead(u16, cpu.r[15]);
                 const bl_opcode = @as(u32, opcode) << 16 | low;
 
-                self.print(arm_fmt, Self.fmtArgs(arm7tdmi, bl_opcode)) catch @panic("failed to write to log file");
+                self.print(arm_fmt, Self.fmtArgs(cpu, bl_opcode)) catch @panic("failed to write to log file");
             } else {
-                self.print(thumb_fmt, Self.fmtArgs(arm7tdmi, opcode)) catch @panic("failed to write to log file");
+                self.print(thumb_fmt, Self.fmtArgs(cpu, opcode)) catch @panic("failed to write to log file");
             }
         } else {
-            self.print(arm_fmt, Self.fmtArgs(arm7tdmi, opcode)) catch @panic("failed to write to log file");
+            self.print(arm_fmt, Self.fmtArgs(cpu, opcode)) catch @panic("failed to write to log file");
         }
     }
 
-    fn fmtArgs(arm7tdmi: *const Arm7tdmi, opcode: u32) FmtArgTuple {
+    fn fmtArgs(cpu: *const Arm7tdmi, opcode: u32) FmtArgTuple {
         return .{
-            arm7tdmi.r[0],
-            arm7tdmi.r[1],
-            arm7tdmi.r[2],
-            arm7tdmi.r[3],
-            arm7tdmi.r[4],
-            arm7tdmi.r[5],
-            arm7tdmi.r[6],
-            arm7tdmi.r[7],
-            arm7tdmi.r[8],
-            arm7tdmi.r[9],
-            arm7tdmi.r[10],
-            arm7tdmi.r[11],
-            arm7tdmi.r[12],
-            arm7tdmi.r[13],
-            arm7tdmi.r[14],
-            arm7tdmi.r[15],
-            arm7tdmi.cpsr.raw,
+            cpu.r[0],
+            cpu.r[1],
+            cpu.r[2],
+            cpu.r[3],
+            cpu.r[4],
+            cpu.r[5],
+            cpu.r[6],
+            cpu.r[7],
+            cpu.r[8],
+            cpu.r[9],
+            cpu.r[10],
+            cpu.r[11],
+            cpu.r[12],
+            cpu.r[13],
+            cpu.r[14],
+            cpu.r[15],
+            cpu.cpsr.raw,
             opcode,
         };
     }

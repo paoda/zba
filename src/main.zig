@@ -14,7 +14,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.CLI);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
-const arm7tdmi_logging = @import("core/emu.zig").cpu_logging;
+const cpu_logging = @import("core/emu.zig").cpu_logging;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
 // TODO: Reimpl Logging
@@ -40,7 +40,7 @@ pub fn main() anyerror!void {
     const paths = try handleArguments(allocator, &result);
     defer if (paths.save) |path| allocator.free(path);
 
-    const log_file: ?std.fs.File = if (arm7tdmi_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
+    const log_file: ?std.fs.File = if (cpu_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
     defer if (log_file) |file| file.close();
 
     // TODO: Take Emulator Init Code out of main.zig
@@ -48,17 +48,17 @@ pub fn main() anyerror!void {
     defer scheduler.deinit();
 
     var bus: Bus = undefined;
-    var arm7tdmi = Arm7tdmi.init(&scheduler, &bus, log_file);
-    if (paths.bios == null) arm7tdmi.fastBoot();
+    var cpu = Arm7tdmi.init(&scheduler, &bus, log_file);
+    if (paths.bios == null) cpu.fastBoot();
 
-    try bus.init(allocator, &scheduler, &arm7tdmi, paths);
+    try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
 
     var gui = Gui.init(bus.pak.title, width, height);
     gui.initAudio(&bus.apu);
     defer gui.deinit();
 
-    try gui.run(&arm7tdmi, &scheduler);
+    try gui.run(&cpu, &scheduler);
 }
 
 fn getSavePath(allocator: Allocator) !?[]const u8 {

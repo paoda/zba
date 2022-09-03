@@ -444,29 +444,29 @@ const ToneSweep = struct {
             };
         }
 
-        pub fn tick(this: *This, ch1: *Self) void {
-            if (this.timer != 0) this.timer -= 1;
+        pub fn tick(self: *This, ch1: *Self) void {
+            if (self.timer != 0) self.timer -= 1;
 
-            if (this.timer == 0) {
+            if (self.timer == 0) {
                 const period = ch1.sweep.period.read();
-                this.timer = if (period == 0) 8 else period;
-                if (!this.calc_performed) this.calc_performed = true;
+                self.timer = if (period == 0) 8 else period;
+                if (!self.calc_performed) self.calc_performed = true;
 
-                if (this.enabled and period != 0) {
-                    const new_freq = this.calcFrequency(ch1);
+                if (self.enabled and period != 0) {
+                    const new_freq = self.calcFrequency(ch1);
 
                     if (new_freq <= 0x7FF and ch1.sweep.shift.read() != 0) {
                         ch1.freq.frequency.write(@truncate(u11, new_freq));
-                        this.shadow = @truncate(u11, new_freq);
+                        self.shadow = @truncate(u11, new_freq);
 
-                        _ = this.calcFrequency(ch1);
+                        _ = self.calcFrequency(ch1);
                     }
                 }
             }
         }
 
-        fn calcFrequency(this: *This, ch1: *Self) u12 {
-            const shadow = @as(u12, this.shadow);
+        fn calcFrequency(self: *This, ch1: *Self) u12 {
+            const shadow = @as(u12, self.shadow);
             const shadow_shifted = shadow >> ch1.sweep.shift.read();
             const decrease = ch1.sweep.direction.read();
 

@@ -53,11 +53,11 @@ pub fn init(title: [12]u8, width: i32, height: i32) Self {
     };
 }
 
-pub fn run(self: *Self, arm7tdmi: *Arm7tdmi, scheduler: *Scheduler) !void {
+pub fn run(self: *Self, cpu: *Arm7tdmi, scheduler: *Scheduler) !void {
     var quit = std.atomic.Atomic(bool).init(false);
     var frame_rate = FpsTracker.init();
 
-    const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, &frame_rate, scheduler, arm7tdmi });
+    const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, &frame_rate, scheduler, cpu });
     defer thread.join();
 
     var title_buf: [0x100]u8 = [_]u8{0} ** 0x100;
@@ -68,7 +68,7 @@ pub fn run(self: *Self, arm7tdmi: *Arm7tdmi, scheduler: *Scheduler) !void {
             switch (event.type) {
                 SDL.SDL_QUIT => break :emu_loop,
                 SDL.SDL_KEYDOWN => {
-                    const io = &arm7tdmi.bus.io;
+                    const io = &cpu.bus.io;
                     const key_code = event.key.keysym.sym;
 
                     switch (key_code) {
@@ -86,7 +86,7 @@ pub fn run(self: *Self, arm7tdmi: *Arm7tdmi, scheduler: *Scheduler) !void {
                     }
                 },
                 SDL.SDL_KEYUP => {
-                    const io = &arm7tdmi.bus.io;
+                    const io = &cpu.bus.io;
                     const key_code = event.key.keysym.sym;
 
                     switch (key_code) {
@@ -100,12 +100,12 @@ pub fn run(self: *Self, arm7tdmi: *Arm7tdmi, scheduler: *Scheduler) !void {
                         SDL.SDLK_s => io.keyinput.shoulder_r.set(),
                         SDL.SDLK_RETURN => io.keyinput.start.set(),
                         SDL.SDLK_RSHIFT => io.keyinput.select.set(),
-                        SDL.SDLK_i => log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(arm7tdmi.bus.apu.stream)) / (2 * @sizeOf(u16))}),
+                        SDL.SDLK_i => log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))}),
                         SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
                         SDL.SDLK_k => {
                             // Dump IWRAM to file
-                            log.info("PC: 0x{X:0>8}", .{arm7tdmi.r[15]});
-                            log.info("LR: 0x{X:0>8}", .{arm7tdmi.r[14]});
+                            log.info("PC: 0x{X:0>8}", .{cpu.r[15]});
+                            log.info("LR: 0x{X:0>8}", .{cpu.r[14]});
                             // const iwram_file = try std.fs.cwd().createFile("iwram.bin", .{});
                             // defer iwram_file.close();
 
@@ -119,7 +119,7 @@ pub fn run(self: *Self, arm7tdmi: *Arm7tdmi, scheduler: *Scheduler) !void {
         }
 
         // Emulator has an internal Double Buffer
-        const framebuf = arm7tdmi.bus.ppu.framebuf.get(.Renderer);
+        const framebuf = cpu.bus.ppu.framebuf.get(.Renderer);
         _ = SDL.SDL_UpdateTexture(self.texture, null, framebuf.ptr, pitch);
         _ = SDL.SDL_RenderCopy(self.renderer, self.texture, null, null);
         SDL.SDL_RenderPresent(self.renderer);
@@ -174,8 +174,8 @@ const Audio = struct {
         self.* = undefined;
     }
 
-    pub fn play(this: *This) void {
-        SDL.SDL_PauseAudioDevice(this.device, 0);
+    pub fn play(self: *This) void {
+        SDL.SDL_PauseAudioDevice(self.device, 0);
     }
 
     export fn callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
