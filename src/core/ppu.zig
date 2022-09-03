@@ -41,7 +41,7 @@ pub const Ppu = struct {
     oam: Oam,
     sched: *Scheduler,
     framebuf: FrameBuffer,
-    alloc: Allocator,
+    allocator: Allocator,
 
     scanline_sprites: *[128]?Sprite,
     scanline: Scanline,
@@ -59,7 +59,7 @@ pub const Ppu = struct {
             .oam = try Oam.init(allocator),
             .sched = sched,
             .framebuf = try FrameBuffer.init(allocator),
-            .alloc = allocator,
+            .allocator = allocator,
 
             // Registers
             .win = Window.init(),
@@ -78,7 +78,7 @@ pub const Ppu = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.alloc.destroy(self.scanline_sprites);
+        self.allocator.destroy(self.scanline_sprites);
         self.framebuf.deinit();
         self.scanline.deinit();
         self.vram.deinit();
@@ -628,20 +628,20 @@ const Palette = struct {
     const Self = @This();
 
     buf: []u8,
-    alloc: Allocator,
+    allocator: Allocator,
 
-    fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, palram_size);
+    fn init(allocator: Allocator) !Self {
+        const buf = try allocator.alloc(u8, palram_size);
         std.mem.set(u8, buf, 0);
 
         return Self{
             .buf = buf,
-            .alloc = alloc,
+            .allocator = allocator,
         };
     }
 
     fn deinit(self: *Self) void {
-        self.alloc.free(self.buf);
+        self.allocator.free(self.buf);
         self.* = undefined;
     }
 
@@ -677,20 +677,20 @@ const Vram = struct {
     const Self = @This();
 
     buf: []u8,
-    alloc: Allocator,
+    allocator: Allocator,
 
-    fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, vram_size);
+    fn init(allocator: Allocator) !Self {
+        const buf = try allocator.alloc(u8, vram_size);
         std.mem.set(u8, buf, 0);
 
         return Self{
             .buf = buf,
-            .alloc = alloc,
+            .allocator = allocator,
         };
     }
 
     fn deinit(self: *Self) void {
-        self.alloc.free(self.buf);
+        self.allocator.free(self.buf);
         self.* = undefined;
     }
 
@@ -738,20 +738,20 @@ const Oam = struct {
     const Self = @This();
 
     buf: []u8,
-    alloc: Allocator,
+    allocator: Allocator,
 
-    fn init(alloc: Allocator) !Self {
-        const buf = try alloc.alloc(u8, oam_size);
+    fn init(allocator: Allocator) !Self {
+        const buf = try allocator.alloc(u8, oam_size);
         std.mem.set(u8, buf, 0);
 
         return Self{
             .buf = buf,
-            .alloc = alloc,
+            .allocator = allocator,
         };
     }
 
     fn deinit(self: *Self) void {
-        self.alloc.free(self.buf);
+        self.allocator.free(self.buf);
         self.* = undefined;
     }
 

@@ -5,20 +5,20 @@ const iwram_size = 0x8000;
 const Self = @This();
 
 buf: []u8,
-alloc: Allocator,
+allocator: Allocator,
 
-pub fn init(alloc: Allocator) !Self {
-    const buf = try alloc.alloc(u8, iwram_size);
+pub fn init(allocator: Allocator) !Self {
+    const buf = try allocator.alloc(u8, iwram_size);
     std.mem.set(u8, buf, 0);
 
     return Self{
         .buf = buf,
-        .alloc = alloc,
+        .allocator = allocator,
     };
 }
 
 pub fn deinit(self: *Self) void {
-    self.alloc.free(self.buf);
+    self.allocator.free(self.buf);
     self.* = undefined;
 }
 

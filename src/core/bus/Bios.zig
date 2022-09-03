@@ -8,27 +8,27 @@ pub const size = 0x4000;
 const Self = @This();
 
 buf: ?[]u8,
-alloc: Allocator,
+allocator: Allocator,
 
 addr_latch: u32,
 
-pub fn init(alloc: Allocator, maybe_path: ?[]const u8) !Self {
+pub fn init(allocator: Allocator, maybe_path: ?[]const u8) !Self {
     const buf: ?[]u8 = if (maybe_path) |path| blk: {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 
-        break :blk try file.readToEndAlloc(alloc, try file.getEndPos());
+        break :blk try file.readToEndAlloc(allocator, try file.getEndPos());
     } else null;
 
     return Self{
         .buf = buf,
-        .alloc = alloc,
+        .allocator = allocator,
         .addr_latch = 0,
     };
 }
 
 pub fn deinit(self: *Self) void {
-    if (self.buf) |buf| self.alloc.free(buf);
+    if (self.buf) |buf| self.allocator.free(buf);
     self.* = undefined;
 }
 

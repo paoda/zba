@@ -8,22 +8,22 @@ const Self = @This();
 
 title: [12]u8,
 buf: []u8,
-alloc: Allocator,
+allocator: Allocator,
 backup: Backup,
 
-pub fn init(alloc: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Self {
+pub fn init(allocator: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Self {
     const file = try std.fs.cwd().openFile(rom_path, .{});
     defer file.close();
 
-    const file_buf = try file.readToEndAlloc(alloc, try file.getEndPos());
+    const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
     const title = parseTitle(file_buf);
     const kind = Backup.guessKind(file_buf) orelse .None;
 
     const pak = Self{
         .buf = file_buf,
-        .alloc = alloc,
+        .allocator = allocator,
         .title = title,
-        .backup = try Backup.init(alloc, kind, title, save_path),
+        .backup = try Backup.init(allocator, kind, title, save_path),
     };
     pak.parseHeader();
 
@@ -60,7 +60,7 @@ inline fn isLarge(self: *const Self) bool {
 
 pub fn deinit(self: *Self) void {
     self.backup.deinit();
-    self.alloc.free(self.buf);
+    self.allocator.free(self.buf);
     self.* = undefined;
 }
 

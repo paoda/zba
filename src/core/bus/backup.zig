@@ -17,7 +17,7 @@ pub const Backup = struct {
     const Self = @This();
 
     buf: []u8,
-    alloc: Allocator,
+    allocator: Allocator,
     kind: Kind,
 
     title: [12]u8,
@@ -49,7 +49,7 @@ pub const Backup = struct {
 
         var backup = Self{
             .buf = buf,
-            .alloc = allocator,
+            .allocator = allocator,
             .kind = kind,
             .title = title,
             .save_path = path,
@@ -75,8 +75,8 @@ pub const Backup = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        if (self.save_path) |path| self.writeSaveToDisk(self.alloc, path) catch |e| log.err("Failed to write save: {}", .{e});
-        self.alloc.free(self.buf);
+        if (self.save_path) |path| self.writeSaveToDisk(self.allocator, path) catch |e| log.err("Failed to write save: {}", .{e});
+        self.allocator.free(self.buf);
         self.* = undefined;
     }
 
@@ -310,7 +310,7 @@ const Eeprom = struct {
     writer: Writer,
     reader: Reader,
 
-    alloc: Allocator,
+    allocator: Allocator,
 
     const Kind = enum {
         Unknown,
@@ -326,14 +326,14 @@ const Eeprom = struct {
         RequestEnd,
     };
 
-    fn init(alloc: Allocator) Self {
+    fn init(allocator: Allocator) Self {
         return .{
             .kind = .Unknown,
             .state = .Ready,
             .writer = Writer.init(),
             .reader = Reader.init(),
             .addr = 0,
-            .alloc = alloc,
+            .allocator = allocator,
         };
     }
 
@@ -361,7 +361,7 @@ const Eeprom = struct {
                     else => unreachable,
                 };
 
-                buf.* = self.alloc.alloc(u8, len) catch |e| {
+                buf.* = self.allocator.alloc(u8, len) catch |e| {
                     log.err("Failed to resize EEPROM buf to {} bytes", .{len});
                     std.debug.panic("EEPROM entered irrecoverable state {}", .{e});
                 };
