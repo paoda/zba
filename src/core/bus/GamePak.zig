@@ -469,10 +469,10 @@ const Clock = struct {
     };
 
     const GpioData = extern union {
-        sck: Bit(u4, 0),
-        sio: Bit(u4, 1),
-        cs: Bit(u4, 2),
-        raw: u4,
+        sck: Bit(u8, 0),
+        sio: Bit(u8, 1),
+        cs: Bit(u8, 2),
+        raw: u8,
     };
 
     const Control = extern union {
