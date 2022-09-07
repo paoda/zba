@@ -28,9 +28,14 @@ pub const arm = struct {
     const multiply = @import("cpu/arm/multiply.zig").multiply;
     const multiplyLong = @import("cpu/arm/multiply.zig").multiplyLong;
 
+    /// Determine index into ARM InstrFn LUT
+    fn idx(opcode: u32) u12 {
+        return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
+    }
+
     // Undefined ARM Instruction handler
     fn und(cpu: *Arm7tdmi, _: *Bus, opcode: u32) void {
-        const id = armIdx(opcode);
+        const id = idx(opcode);
         cpu.panic("[CPU/Decode] ID: 0x{X:0>3} 0x{X:0>8} is an illegal opcode", .{ id, opcode });
     }
 
@@ -120,9 +125,14 @@ pub const thumb = struct {
     const swi = @import("cpu/thumb/software_interrupt.zig").fmt17;
     const branch = @import("cpu/thumb/branch.zig");
 
+    /// Determine index into THUMB InstrFn LUT 
+    fn idx(opcode: u16) u10 {
+        return @truncate(u10, opcode >> 6);
+    }
+
     /// Undefined THUMB Instruction Handler
     fn und(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
-        const id = thumbIdx(opcode);
+        const id = idx(opcode);
         cpu.panic("[CPU/Decode] ID: 0b{b:0>10} 0x{X:0>2} is an illegal opcode", .{ id, opcode });
     }
 
@@ -420,13 +430,13 @@ pub const Arm7tdmi = struct {
             const opcode = self.fetch(u16);
             if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
 
-            thumb.lut[thumbIdx(opcode)](self, self.bus, opcode);
+            thumb.lut[thumb.idx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch(u32);
             if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
-                arm.lut[armIdx(opcode)](self, self.bus, opcode);
+                arm.lut[arm.idx(opcode)](self, self.bus, opcode);
             }
         }
     }
@@ -517,11 +527,11 @@ pub const Arm7tdmi = struct {
 
         if (self.cpsr.t.read()) {
             const opcode = self.bus.dbgRead(u16, self.r[15] - 4);
-            const id = thumbIdx(opcode);
+            const id = thumb.idx(opcode);
             std.debug.print("opcode: ID: 0x{b:0>10} 0x{X:0>4}\n", .{ id, opcode });
         } else {
             const opcode = self.bus.dbgRead(u32, self.r[15] - 4);
-            const id = armIdx(opcode);
+            const id = arm.idx(opcode);
             std.debug.print("opcode: ID: 0x{X:0>3} 0x{X:0>8}\n", .{ id, opcode });
         }
 
@@ -600,14 +610,6 @@ pub const Arm7tdmi = struct {
         _ = try file.writeAll(log_str);
     }
 };
-
-inline fn armIdx(opcode: u32) u12 {
-    return @truncate(u12, opcode >> 20 & 0xFF) << 4 | @truncate(u12, opcode >> 4 & 0xF);
-}
-
-inline fn thumbIdx(opcode: u16) u10 {
-    return @truncate(u10, opcode >> 6);
-}
 
 pub fn checkCond(cpsr: PSR, cond: u4) bool {
     return switch (cond) {
