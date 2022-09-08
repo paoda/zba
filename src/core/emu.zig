@@ -70,12 +70,21 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn syncToAudio(cpu: *const Arm7tdmi) void {
-    const stream = cpu.bus.apu.stream;
-    const min_sample_count = 0x800;
+fn syncToAudio(stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
+    const sample_size = 2 * @sizeOf(u16);
+    const max_buf_size: c_int = 0x400;
 
-    // Busy Loop while we wait for the Audio system to catch up
-    while (SDL.SDL_AudioStreamAvailable(stream) > (@sizeOf(u16) * 2) * min_sample_count) {}
+    // Determine whether the APU is busy right at this moment
+    var still_full: bool = SDL.SDL_AudioStreamAvailable(stream) > sample_size * if (is_buffer_full.*) max_buf_size >> 1 else max_buf_size;
+    defer is_buffer_full.* = still_full; // Update APU Busy status right before exiting scope
+
+    // If Busy is false, there's no need to sync here
+    if (!still_full) return;
+
+    while (true) {
+        still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
+        if (!sync_audio or !still_full) break;
+    }
 }
 
 pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
@@ -86,21 +95,21 @@ pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi,
 
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            if (sync_audio) syncToAudio(cpu);
+            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
             tracker.tick();
         }
     } else {
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            if (sync_audio) syncToAudio(cpu);
+            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
         }
     }
 }
 
 pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
     log.info("Emulation thread w/ video sync", .{});
-    var timer = Timer.start() catch unreachable;
+    var timer = Timer.start() catch std.debug.panic("Failed to initialize std.timer.Timer", .{});
     var wake_time: u64 = frame_period;
 
     if (fps) |tracker| {
@@ -108,13 +117,14 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
 
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            const new_wake_time = syncToVideo(&timer, wake_time);
+            const new_wake_time = blockOnVideo(&timer, wake_time);
 
             // Spin to make up the difference of OS scheduler innacuracies
             // If we happen to also be syncing to audio, we choose to spin on
             // the amount of time needed for audio to catch up rather than
             // our expected wake-up time
-            if (sync_audio) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            if (!sync_audio) spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
 
             tracker.tick();
@@ -122,16 +132,17 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
     } else {
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            const new_wake_time = syncToVideo(&timer, wake_time);
-            // see above comment
-            if (sync_audio) syncToAudio(cpu) else spinLoop(&timer, wake_time);
+            const new_wake_time = blockOnVideo(&timer, wake_time);
 
+            // see above comment
+            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            if (!sync_audio) spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
         }
     }
 }
 
-inline fn syncToVideo(timer: *Timer, wake_time: u64) u64 {
+inline fn blockOnVideo(timer: *Timer, wake_time: u64) u64 {
     // Use the OS scheduler to put the emulation thread to sleep
     const maybe_recalc_wake_time = sleep(timer, wake_time);
 
@@ -148,6 +159,8 @@ pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void 
     while (!quit.load(.SeqCst)) {
         runFrame(sched, cpu);
         spinLoop(&timer, wake_time);
+
+        syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
         // Update to the new wake time
         wake_time += frame_period;

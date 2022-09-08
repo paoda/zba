@@ -180,11 +180,11 @@ const Audio = struct {
 
     export fn callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
         const apu = @ptrCast(*Apu, @alignCast(@alignOf(*Apu), userdata));
-        const written = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+        _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
 
         // If we don't write anything, play silence otherwise garbage will be played
         // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
-        if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
+        // if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
     }
 };
 

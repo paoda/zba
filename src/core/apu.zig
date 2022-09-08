@@ -163,6 +163,8 @@ pub const Apu = struct {
     fs: FrameSequencer,
     capacitor: f32,
 
+    is_buffer_full: bool,
+
     pub fn init(sched: *Scheduler) Self {
         const apu: Self = .{
             .ch1 = ToneSweep.init(sched),
@@ -178,11 +180,12 @@ pub const Apu = struct {
             .bias = .{ .raw = 0x0200 },
 
             .sampling_cycle = 0b00,
-            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, 1 << 15, SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable,
+            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, 1 << 15, SDL.AUDIO_U16, 2, host_sample_rate).?,
             .sched = sched,
 
             .capacitor = 0,
             .fs = FrameSequencer.init(),
+            .is_buffer_full = false,
         };
 
         sched.push(.SampleAudio, apu.sampleTicks());
@@ -277,6 +280,13 @@ pub const Apu = struct {
     }
 
     pub fn sampleAudio(self: *Self, late: u64) void {
+        self.sched.push(.SampleAudio, self.sampleTicks() -| late);
+
+        // Whether the APU is busy or not is determined  by the main loop in emu.zig
+        // This should only ever be true (because this side of the emu is single threaded)
+        // When audio sync is disaabled
+        if (self.is_buffer_full) return;
+
         var left: i16 = 0;
         var right: i16 = 0;
 
@@ -325,28 +335,30 @@ pub const Apu = struct {
         left += bias;
         right += bias;
 
-        const tmp_left = std.math.clamp(@bitCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
-        const tmp_right = std.math.clamp(@bitCast(u16, right), std.math.minInt(u11), std.math.maxInt(u11));
+        const clamped_left = std.math.clamp(@bitCast(u16, left), std.math.minInt(u11), std.math.maxInt(u11));
+        const clamped_right = std.math.clamp(@bitCast(u16, right), std.math.minInt(u11), std.math.maxInt(u11));
 
         // Extend to 16-bit signed audio samples
-        const final_left = (tmp_left << 5) | (tmp_left >> 6);
-        const final_right = (tmp_right << 5) | (tmp_right >> 6);
+        const ext_left = (clamped_left << 5) | (clamped_left >> 6);
+        const ext_right = (clamped_right << 5) | (clamped_right >> 6);
 
-        if (self.sampling_cycle != self.bias.sampling_cycle.read()) {
-            const new_sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
-            log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), new_sample_rate });
+        // FIXME: This rarely happens
+        if (self.sampling_cycle != self.bias.sampling_cycle.read()) self.replaceSDLResampler();
 
-            // Sample Rate Changed, Create a new Resampler since i can't figure out how to change
-            // the parameters of the old one
-            const old = self.stream;
-            defer SDL.SDL_FreeAudioStream(old);
+        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ ext_left, ext_right }, 2 * @sizeOf(u16));
+    }
 
-            self.sampling_cycle = self.bias.sampling_cycle.read();
-            self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, new_sample_rate), SDL.AUDIO_U16, 2, host_sample_rate) orelse unreachable;
-        }
+    fn replaceSDLResampler(self: *Self) void {
+        const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
+        log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
 
-        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ final_left, final_right }, 2 * @sizeOf(u16));
-        self.sched.push(.SampleAudio, self.sampleTicks() -| late);
+        // Sampling Cycle (Sample Rate) changed, Craete a new SDL Audio Resampler
+        // FIXME: Replace SDL's Audio Resampler with either a custom or more reliable one
+        const old_stream = self.stream;
+        defer SDL.SDL_FreeAudioStream(old_stream);
+
+        self.sampling_cycle = self.bias.sampling_cycle.read();
+        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, sample_rate), SDL.AUDIO_U16, 2, host_sample_rate).?;
     }
 
     fn sampleTicks(self: *const Self) u64 {
