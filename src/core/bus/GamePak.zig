@@ -44,8 +44,7 @@ pub fn init(allocator: Allocator, rom_path: []const u8, save_path: ?[]const u8) 
 pub fn setupGpio(self: *Self) void {
     switch (self.gpio.device.kind) {
         .Rtc => {
-            const ptr = self.gpio.device.ptr orelse @panic("RTC ptr is missing despite GPIO Device Kind");
-            const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), ptr));
+            const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.gpio.device.ptr.?));
             Clock.init(clock, &self.gpio);
         },
         .None => {},
@@ -265,8 +264,7 @@ const Gpio = struct {
         fn step(self: *Device, value: u4) void {
             switch (self.kind) {
                 .Rtc => {
-                    const ptr = self.ptr orelse @panic("Device.ptr should != null when Device.kind == .Rtc");
-                    const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), ptr));
+                    const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.ptr.?));
 
                     clock.step(Clock.GpioData{ .raw = value });
                 },
@@ -304,8 +302,7 @@ const Gpio = struct {
     fn deinit(self: This, allocator: Allocator) void {
         switch (self.device.kind) {
             .Rtc => {
-                const ptr = self.device.ptr orelse @panic("Device.ptr should != null when Device.kind == .Rtc");
-                allocator.destroy(@ptrCast(*Clock, @alignCast(@alignOf(*Clock), ptr)));
+                allocator.destroy(@ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.device.ptr.?)));
             },
             .None => {},
         }
