@@ -1,5 +1,5 @@
 # ZBA (working title)
-An in-progress Gameboy Advance Emulator written in Zig ⚡!
+An in-progress Game Boy Advance Emulator written in Zig ⚡!
 
 ## Tests 
 - [ ] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
@@ -10,8 +10,7 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
     - [x] `bios.gba`
     - [ ] `nes.gba`
 - [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
-    - [x] `eeprom-test`
-    - [x] `flash-test`
+    - [x] `eeprom-test` and `flash-test`
     - [x] `midikey2freq`
     - [ ] `swi-tests-random`
 - [ ] [destoer's GBA Tests](https://github.com/destoer/gba_tests)
@@ -36,14 +35,14 @@ An in-progress Gameboy Advance Emulator written in Zig ⚡!
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [0.10.0-dev.2978+803376708](https://github.com/ziglang/zig/tree/803376708)
+Most recently built on Zig [0.10.0-dev.3900+ab4b26d8a](https://github.com/ziglang/zig/tree/ab4b26d8a)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
     * [SDL2](https://www.libsdl.org/download-2.0.php)
 * [zig-clap](https://github.com/Hejsil/zig-clap)
 * [known-folders](https://github.com/ziglibs/known-folders)
-* [`bitfields.zig`](https://github.com/FlorenceOS/Florence/blob/f6044db788d35d43d66c1d7e58ef1e3c79f10d6f/lib/util/bitfields.zig)
+* [`bitfields.zig`](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/lib/util/bitfields.zig)
 
 `bitfields.zig` from [FlorenceOS](https://github.com/FlorenceOS) is included under `lib/util/bitfield.zig`.
 
