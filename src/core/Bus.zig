@@ -116,28 +116,38 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
 fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
     const r15 = self.cpu.?.r[15];
 
-    const word = if (self.cpu.?.cpsr.t.read()) blk: {
+    const word = blk: {
+        // If u32 Open Bus, read recently fetched opcode (PC + 8)
+        if (!self.cpu.?.cpsr.t.read()) break :blk self.dbgRead(u32, r15 + 4);
         const page = @truncate(u8, r15 >> 24);
 
         switch (page) {
             // EWRAM, PALRAM, VRAM, and Game ROM (16-bit)
             0x02, 0x05, 0x06, 0x08...0x0D => {
+                // (PC + 4)
                 const halfword = self.dbgRead(u16, r15 + 2);
+
                 break :blk @as(u32, halfword) << 16 | halfword;
             },
             // BIOS or OAM (32-bit)
             0x00, 0x07 => {
+                // Aligned: (PC + 6) | (PC + 4)
+                // Unaligned: (PC + 4) | (PC + 2)
                 const offset: u32 = if (address & 3 == 0b00) 2 else 0;
-                break :blk @as(u32, self.dbgRead(u16, (r15 + 2) + offset)) << 16 | self.dbgRead(u16, r15 + offset);
+
+                break :blk @as(u32, self.dbgRead(u16, r15 + 2 + offset)) << 16 | self.dbgRead(u16, r15 + offset);
             },
             // IWRAM (16-bit but special)
             0x03 => {
+                // Aligned: (PC + 2) | (PC + 4)
+                // Unaligned: (PC + 4) | (PC + 2)
                 const offset: u32 = if (address & 3 == 0b00) 2 else 0;
-                break :blk @as(u32, self.dbgRead(u16, (r15 + 2) - offset)) << 16 | self.dbgRead(u16, r15 + offset);
+
+                break :blk @as(u32, self.dbgRead(u16, r15 + 2 - offset)) << 16 | self.dbgRead(u16, r15 + offset);
             },
             else => unreachable,
         }
-    } else self.dbgRead(u32, r15 + 4);
+    };
 
     return @truncate(T, rotr(u32, word, 8 * (address & 3)));
 }
