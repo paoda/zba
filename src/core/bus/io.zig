@@ -1,5 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const timer = @import("timer.zig");
+const dma = @import("dma.zig");
+const apu = @import("../apu.zig");
+const util = @import("../util.zig");
 
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
@@ -7,12 +11,6 @@ const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
-const timer = @import("timer.zig");
-const dma = @import("dma.zig");
-const apu = @import("../apu.zig");
-
-const readUndefined = @import("../util.zig").readUndefined;
-const writeUndefined = @import("../util.zig").writeUndefined;
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -43,7 +41,7 @@ pub const Io = struct {
     }
 };
 
-pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
+pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
     return switch (T) {
         u32 => switch (address) {
             // Display
@@ -58,18 +56,18 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0100...0x0400_010C => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
-            0x0400_0128 => readTodo("Read {} from SIOCNT and SIOMLT_SEND", .{T}),
+            0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT and SIOMLT_SEND", .{T}),
 
             // Keypad Input
-            0x0400_0130 => readTodo("Read {} from KEYINPUT", .{T}),
+            0x0400_0130 => util.io.read.todo(log, "Read {} from KEYINPUT", .{T}),
 
             // Serial Communication 2
-            0x0400_0150 => readTodo("Read {} from JOY_RECV", .{T}),
+            0x0400_0150 => util.io.read.todo(log, "Read {} from JOY_RECV", .{T}),
 
             // Interrupts
             0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u16 => switch (address) {
             // Display
@@ -80,7 +78,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_000A => bus.ppu.bg[1].cnt.raw,
             0x0400_000C => bus.ppu.bg[2].cnt.raw,
             0x0400_000E => bus.ppu.bg[3].cnt.raw,
-            0x0400_004C => readTodo("Read {} from MOSAIC", .{T}),
+            0x0400_004C => util.io.read.todo(log, "Read {} from MOSAIC", .{T}),
             0x0400_0050 => bus.ppu.bldcnt.raw,
 
             // Sound
@@ -93,20 +91,20 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0100...0x0400_010E => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
-            0x0400_0128 => readTodo("Read {} from SIOCNT", .{T}),
+            0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT", .{T}),
 
             // Keypad Input
             0x0400_0130 => bus.io.keyinput.raw,
 
             // Serial Communication 2
-            0x0400_0134 => readTodo("Read {} from RCNT", .{T}),
+            0x0400_0134 => util.io.read.todo(log, "Read {} from RCNT", .{T}),
 
             // Interrupts
             0x0400_0200 => bus.io.ie.raw,
             0x0400_0202 => bus.io.irq.raw,
-            0x0400_0204 => readTodo("Read {} from WAITCNT", .{T}),
+            0x0400_0204 => util.io.read.todo(log, "Read {} from WAITCNT", .{T}),
             0x0400_0208 => @boolToInt(bus.io.ime),
-            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
             // Display
@@ -123,18 +121,18 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0060...0x0400_00A7 => apu.read(T, &bus.apu, address),
 
             // Serial Communication 1
-            0x0400_0128 => readTodo("Read {} from SIOCNT_L", .{T}),
+            0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT_L", .{T}),
 
             // Keypad Input
-            0x0400_0130 => readTodo("read {} from KEYINPUT_L", .{T}),
+            0x0400_0130 => util.io.read.todo(log, "read {} from KEYINPUT_L", .{T}),
 
             // Serial Communication 2
-            0x0400_0135 => readTodo("Read {} from RCNT_H", .{T}),
+            0x0400_0135 => util.io.read.todo(log, "Read {} from RCNT_H", .{T}),
 
             // Interrupts
             0x0400_0200 => @truncate(T, bus.io.ie.raw),
             0x0400_0300 => @enumToInt(bus.io.postflg),
-            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         else => @compileError("I/O: Unsupported read width"),
     };
@@ -210,7 +208,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_020C...0x0400_021C => {}, // Unused
-            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, address }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u16 => switch (address) {
             // Display
@@ -292,7 +290,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0204 => log.debug("Wrote 0x{X:0>4} to WAITCNT", .{value}),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0206, 0x0400_020A => {}, // Not Used
-            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, address }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u8 => switch (address) {
             // Display
@@ -325,15 +323,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
 
             0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),
-            else => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, address }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         else => @compileError("I/O: Unsupported write width"),
     };
-}
-
-fn readTodo(comptime format: []const u8, args: anytype) u8 {
-    log.debug(format, args);
-    return 0;
 }
 
 /// Read / Write

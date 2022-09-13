@@ -88,7 +88,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
         },
         0x02 => self.ewram.read(T, aligned_addr),
         0x03 => self.iwram.read(T, aligned_addr),
-        0x04 => io.read(self, T, aligned_addr),
+        0x04 => self.readIo(T, address),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.read(T, aligned_addr),
@@ -111,6 +111,11 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
         },
         else => self.readOpenBus(T, address),
     };
+}
+
+fn readIo(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const maybe_value = io.read(self, T, forceAlign(T, unaligned_address));
+    return if (maybe_value) |value| value else self.readOpenBus(T, unaligned_address);
 }
 
 fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
@@ -168,7 +173,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
         },
         0x02 => self.ewram.read(T, aligned_addr),
         0x03 => self.iwram.read(T, aligned_addr),
-        0x04 => io.read(self, T, aligned_addr),
+        0x04 => self.readIo(T, address),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.read(T, aligned_addr),

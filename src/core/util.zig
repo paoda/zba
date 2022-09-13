@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 const Log2Int = std.math.Log2Int;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
+const allow_unhandled_io = @import("emu.zig").allow_unhandled_io;
+
 // Sign-Extend value of type `T` to type `U`
 pub fn sext(comptime T: type, comptime U: type, value: T) T {
     // U must have less bits than T
@@ -102,6 +104,28 @@ pub const FilePaths = struct {
     save: ?[]const u8,
 };
 
+pub const io = struct {
+    pub const read = struct {
+        pub fn todo(comptime log: anytype, comptime format: []const u8, args: anytype) u8 {
+            log.debug(format, args);
+            return 0;
+        }
+
+        pub fn undef(comptime T: type, log: anytype, comptime format: []const u8, args: anytype) ?T {
+            log.warn(format, args);
+            if (builtin.mode == .Debug and !allow_unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
+
+            return null;
+        }
+    };
+
+    pub const write = struct {
+        pub fn undef(log: anytype, comptime format: []const u8, args: anytype) void {
+            log.warn(format, args);
+            if (builtin.mode == .Debug and !allow_unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
+        }
+    };
+};
 pub fn readUndefined(log: anytype, comptime format: []const u8, args: anytype) u8 {
     log.warn(format, args);
     if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});

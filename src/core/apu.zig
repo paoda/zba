@@ -1,6 +1,7 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const io = @import("bus/io.zig");
+const util = @import("util.zig");
 
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
@@ -9,13 +10,11 @@ const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 const AudioDeviceId = SDL.SDL_AudioDeviceID;
 
 const intToBytes = @import("util.zig").intToBytes;
-const readUndefined = @import("util.zig").readUndefined;
-const writeUndefined = @import("util.zig").writeUndefined;
 const log = std.log.scoped(.APU);
 
 pub const host_sample_rate = 1 << 15;
 
-pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
+pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
     const byte = @truncate(u8, addr);
 
     return switch (T) {
@@ -38,7 +37,7 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
             0x84 => apu.getSoundCntX(),
             0x88 => apu.bias.raw, // SOUNDBIAS
             0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
-            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
             0x60 => apu.ch1.getSoundCntL(), // NR10
@@ -52,9 +51,9 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) T {
             0x81 => @truncate(u8, apu.psg_cnt.raw >> 8), // NR51
             0x84 => apu.getSoundCntX(),
             0x89 => @truncate(u8, apu.bias.raw >> 8), // SOUNDBIAS_H
-            else => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u32 => readUndefined(log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        u32 => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         else => @compileError("APU: Unsupported read width"),
     };
 }
@@ -78,7 +77,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
             0xA0 => apu.chA.push(value), // FIFO_A
             0xA4 => apu.chB.push(value), // FIFO_B
-            else => writeUndefined(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
             0x60 => apu.ch1.setSoundCntL(@truncate(u8, value)), // SOUND1CNT_L
@@ -101,7 +100,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x88 => apu.bias.raw = value, // SOUNDBIAS
             // WAVE_RAM
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            else => writeUndefined(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => switch (byte) {
             0x60 => apu.ch1.setSoundCntL(value),
@@ -133,7 +132,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
             0x89 => apu.setSoundBiasH(value),
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            else => writeUndefined(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         else => @compileError("APU: Unsupported write width"),
     }
