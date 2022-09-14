@@ -80,6 +80,8 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_000E => bus.ppu.bg[3].cnt.raw,
             0x0400_004C => util.io.read.todo(log, "Read {} from MOSAIC", .{T}),
             0x0400_0050 => bus.ppu.bldcnt.raw,
+            0x0400_0052 => bus.ppu.bldalpha.raw,
+            0x0400_0054 => bus.ppu.bldy.raw,
 
             // Sound
             0x0400_0060...0x0400_009E => apu.read(T, &bus.apu, address),
