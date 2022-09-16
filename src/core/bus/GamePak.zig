@@ -316,7 +316,7 @@ const Gpio = struct {
 };
 
 /// GBA Real Time Clock
-const Clock = struct {
+pub const Clock = struct {
     const This = @This();
 
     writer: Writer,
@@ -501,11 +501,14 @@ const Clock = struct {
             .cpu = cpu,
             .gpio = gpio, // Can't use Arm7tdmi ptr b/c not initialized yet
         };
+
+        cpu.sched.push(.RealTimeClock, 1 << 24); // Every Second
     }
 
-    fn updateRealTime(self: *This) void {
-        const now = DateTime.now();
+    pub fn updateTime(self: *This) void {
+        self.cpu.sched.push(.RealTimeClock, 1 << 24); // Reschedule
 
+        const now = DateTime.now();
         self.year = toBcd(u8, @intCast(u8, now.date.year - 2000));
         self.month = toBcd(u5, now.date.month);
         self.day = toBcd(u3, now.date.day);
