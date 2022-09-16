@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Backup = @import("backup.zig").Backup;
@@ -14,7 +15,7 @@ allocator: Allocator,
 backup: Backup,
 gpio: *Gpio,
 
-pub fn init(allocator: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Self {
+pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_path: ?[]const u8) !Self {
     const file = try std.fs.cwd().openFile(rom_path, .{});
     defer file.close();
 
@@ -28,7 +29,7 @@ pub fn init(allocator: Allocator, rom_path: []const u8, save_path: ?[]const u8) 
         .allocator = allocator,
         .title = title,
         .backup = try Backup.init(allocator, kind, title, save_path),
-        .gpio = try Gpio.init(allocator, .Rtc),
+        .gpio = try Gpio.init(allocator, cpu, .Rtc),
     };
 }
 
@@ -242,8 +243,7 @@ const Gpio = struct {
             switch (self.kind) {
                 .Rtc => {
                     const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.ptr.?));
-
-                    clock.step(Clock.GpioData{ .raw = value });
+                    clock.step(Clock.Data{ .raw = value });
                 },
                 .None => {},
             }
@@ -260,7 +260,7 @@ const Gpio = struct {
         Control,
     };
 
-    fn init(allocator: Allocator, kind: Device.Kind) !*This {
+    fn init(allocator: Allocator, cpu: *Arm7tdmi, kind: Device.Kind) !*This {
         const self = try allocator.create(This);
 
         self.* = .{
@@ -271,7 +271,7 @@ const Gpio = struct {
             .device = switch (kind) {
                 .Rtc => blk: {
                     const clock = try allocator.create(Clock);
-                    clock.init(self);
+                    clock.init(cpu, self);
 
                     break :blk Device{ .kind = kind, .ptr = clock };
                 },
@@ -339,6 +339,7 @@ const Clock = struct {
     minute: u7,
     second: u7,
 
+    cpu: *Arm7tdmi,
     gpio: *const Gpio,
 
     const Register = enum {
@@ -418,8 +419,8 @@ const Clock = struct {
         }
 
         fn handleCommand(self: *const Command, rtc: *Clock) State {
-            log.info("RTC: Failed to handle Command 0b{b:0>8} aka 0x{X:0>2}", .{ self.buf, self.buf });
             const command = self.getCommand();
+            log.info("RTC: Failed to handle Command 0b{b:0>8} aka 0x{X:0>2}", .{ command, command });
 
             const is_write = command & 1 == 0;
             const rtc_register = @intCast(u3, command >> 1 & 0x7); // TODO: Make Truncate
@@ -450,7 +451,7 @@ const Clock = struct {
         }
     };
 
-    const GpioData = extern union {
+    const Data = extern union {
         sck: Bit(u8, 0),
         sio: Bit(u8, 1),
         cs: Bit(u8, 2),
@@ -473,7 +474,7 @@ const Clock = struct {
         raw: u8,
     };
 
-    fn init(ptr: *This, gpio: *const Gpio) void {
+    fn init(ptr: *This, cpu: *Arm7tdmi, gpio: *const Gpio) void {
         ptr.* = .{
             .cmd = .{ .buf = 0, .i = 0 },
             .writer = .{ .buf = 0, .i = 0, .count = 0 },
@@ -486,16 +487,13 @@ const Clock = struct {
             .hour = 0,
             .minute = 0,
             .second = 0,
-            .gpio = gpio,
+            .cpu = cpu,
+            .gpio = gpio, // Can't use Arm7tdmi ptr b/c not initialized yet
         };
     }
 
-    fn attachGpio(self: *This, gpio: *const Gpio) void {
-        self.gpio = gpio;
-    }
-
-    fn step(self: *This, value: GpioData) void {
-        const cache: GpioData = .{ .raw = self.gpio.data };
+    fn step(self: *This, value: Data) void {
+        const cache: Data = .{ .raw = self.gpio.data };
 
         switch (self.state) {
             .Idle => {
@@ -558,8 +556,11 @@ const Clock = struct {
         log.info("RTC: Reset executed (control register was zeroed)", .{});
     }
 
-    fn irq(_: *const This) void {
-        // TODO: Force GamePak IRQ
-        log.err("RTC: TODO: Force GamePak IRQ", .{});
+    fn irq(self: *This) void {
+        // TODO: Confirm that this is the right behaviour
+
+        log.debug("RTC: Force GamePak IRQ", .{});
+        self.cpu.bus.io.irq.game_pak.set();
+        self.cpu.handleInterrupt();
     }
 };
