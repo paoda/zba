@@ -318,7 +318,6 @@ const Gpio = struct {
 const Clock = struct {
     const This = @This();
 
-    cmd: Command,
     writer: Writer,
     reader: Reader,
     state: State,
@@ -343,7 +342,7 @@ const Clock = struct {
 
     const State = union(enum) {
         Idle,
-        CommandInput,
+        Command,
         Write: Register,
         Read: Register,
     };
@@ -499,72 +498,6 @@ const Clock = struct {
         }
     };
 
-    const Command = struct {
-        buf: u8,
-        i: u4,
-
-        fn write(self: *Command, value: u1) void {
-            const idx = @intCast(u3, self.i);
-            self.buf = (self.buf & ~(@as(u8, 1) << idx)) | @as(u8, value) << idx;
-            self.i += 1;
-        }
-
-        fn reset(self: *Command) void {
-            self.buf = 0;
-            self.i = 0;
-        }
-
-        fn isFinished(self: *const Command) bool {
-            return self.i >= 8;
-        }
-
-        fn getCommand(self: *const Command) u8 {
-            // If High Nybble is 0x6, no need to switch the endianness
-            if (self.buf >> 4 & 0xF == 0x6) return self.buf;
-
-            // Turns out reversing the order of bits isn't trivial at all
-            // https://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to-reverse-the-order-of-bits-in-a-byte
-            var ret = self.buf;
-            ret = (ret & 0xF0) >> 4 | (ret & 0x0F) << 4;
-            ret = (ret & 0xCC) >> 2 | (ret & 0x33) << 2;
-            ret = (ret & 0xAA) >> 1 | (ret & 0x55) << 1;
-
-            return ret;
-        }
-
-        fn handleCommand(self: *const Command, rtc: *Clock) State {
-            const command = self.getCommand();
-            log.debug("RTC: Handling Command 0x{X:0>2} [0b{b:0>8}]", .{ command, command });
-
-            const is_write = command & 1 == 0;
-            const rtc_register = @truncate(u3, command >> 1 & 0x7);
-
-            if (is_write) {
-                return switch (rtc_register) {
-                    0 => blk: {
-                        rtc.reset();
-                        break :blk .Idle;
-                    },
-                    1 => .{ .Write = .Control },
-                    2 => .{ .Write = .DateTime },
-                    3 => .{ .Write = .Time },
-                    6 => blk: {
-                        rtc.irq();
-                        break :blk .Idle;
-                    },
-                    4, 5, 7 => .Idle,
-                };
-            } else {
-                return switch (rtc_register) {
-                    1 => .{ .Read = .Control },
-                    2 => .{ .Read = .DateTime },
-                    3 => .{ .Read = .Time },
-                    0, 4, 5, 6, 7 => .Idle, // Do Nothing
-                };
-            }
-        }
-    };
-
     const Data = extern union {
         sck: Bit(u8, 0),
         sio: Bit(u8, 1),
@@ -590,7 +523,6 @@ const Clock = struct {
 
     fn init(ptr: *This, cpu: *Arm7tdmi, gpio: *const Gpio) void {
         ptr.* = .{
-            .cmd = .{ .buf = 0, .i = 0 },
             .writer = .{ .buf = 0, .i = 0, .count = 0 },
             .reader = .{ .i = 0, .count = 0 },
             .state = .Idle,
@@ -616,22 +548,23 @@ const Clock = struct {
                 if (cache.sck.read()) {
                     if (!cache.cs.read() and value.cs.read()) {
                         log.debug("RTC: Entering Command Mode", .{});
-                        self.state = .CommandInput;
-                        self.cmd.reset();
+                        self.state = .Command;
                     }
                 }
 
                 break :blk @truncate(u4, value.raw);
             },
-            .CommandInput => blk: {
+            .Command => blk: {
                 if (!value.cs.read()) log.err("RTC: Expected CS to be set during {}, however CS was cleared", .{self.state});
 
                 // If SCK rises, sample SIO
                 if (!cache.sck.read() and value.sck.read()) {
-                    self.cmd.write(@boolToInt(value.sio.read()));
+                    self.writer.push(@boolToInt(value.sio.read()));
 
-                    if (self.cmd.isFinished()) {
-                        self.state = self.cmd.handleCommand(self);
+                    if (self.writer.finished()) {
+                        self.state = self.processCommand(self.writer.buf);
+                        self.writer.reset();
+
                         log.debug("RTC: Switching to {}", .{self.state});
                     }
                 }
@@ -706,5 +639,49 @@ const Clock = struct {
 
         self.cpu.bus.io.irq.game_pak.set();
         self.cpu.handleInterrupt();
+    }
+
+    fn processCommand(self: *This, raw_command: u8) State {
+        const command = blk: {
+            // If High Nybble is 0x6, no need to switch the endianness
+            if (raw_command >> 4 & 0xF == 0x6) break :blk raw_command;
+
+            // Turns out reversing the order of bits isn't trivial at all
+            // https://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to-reverse-the-order-of-bits-in-a-byte
+            var ret = raw_command;
+            ret = (ret & 0xF0) >> 4 | (ret & 0x0F) << 4;
+            ret = (ret & 0xCC) >> 2 | (ret & 0x33) << 2;
+            ret = (ret & 0xAA) >> 1 | (ret & 0x55) << 1;
+
+            break :blk ret;
+        };
+        log.debug("RTC: Handling Command 0x{X:0>2} [0b{b:0>8}]", .{ command, command });
+
+        const is_write = command & 1 == 0;
+        const rtc_register = @truncate(u3, command >> 1 & 0x7);
+
+        if (is_write) {
+            return switch (rtc_register) {
+                0 => blk: {
+                    self.reset();
+                    break :blk .Idle;
+                },
+                1 => .{ .Write = .Control },
+                2 => .{ .Write = .DateTime },
+                3 => .{ .Write = .Time },
+                6 => blk: {
+                    self.irq();
+                    break :blk .Idle;
+                },
+                4, 5, 7 => .Idle,
+            };
+        } else {
+            return switch (rtc_register) {
+                1 => .{ .Read = .Control },
+                2 => .{ .Read = .DateTime },
+                3 => .{ .Read = .Time },
+                0, 4, 5, 6, 7 => .Idle, // Do Nothing
+            };
+        }
     }
 };
