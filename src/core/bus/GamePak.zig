@@ -1,4 +1,5 @@
 const std = @import("std");
+const DateTime = @import("datetime").datetime.Datetime;
 
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const Bit = @import("bitfield").Bit;
@@ -326,7 +327,7 @@ const Clock = struct {
     year: u8,
     month: u5,
     day: u6,
-    day_of_week: u3,
+    weekday: u3,
     hour: u6,
     minute: u7,
     second: u7,
@@ -371,7 +372,7 @@ const Clock = struct {
                     0 => clock.year >> idx,
                     1 => @as(u8, clock.month) >> idx,
                     2 => @as(u8, clock.day) >> idx,
-                    3 => @as(u8, clock.day_of_week) >> idx,
+                    3 => @as(u8, clock.weekday) >> idx,
 
                     // Time
                     4 => @as(u8, clock.hour) >> idx,
@@ -490,16 +491,28 @@ const Clock = struct {
             .reader = .{ .i = 0, .count = 0 },
             .state = .Idle,
             .cnt = .{ .raw = 0 },
-            .year = 0,
-            .month = 0,
-            .day = 0,
-            .day_of_week = 0,
-            .hour = 0,
-            .minute = 0,
-            .second = 0,
+            .year = 0x01,
+            .month = 0x6,
+            .day = 0x13,
+            .weekday = 0x3,
+            .hour = 0x23,
+            .minute = 0x59,
+            .second = 0x59,
             .cpu = cpu,
             .gpio = gpio, // Can't use Arm7tdmi ptr b/c not initialized yet
         };
+    }
+
+    fn updateRealTime(self: *This) void {
+        const now = DateTime.now();
+
+        self.year = toBcd(u8, @intCast(u8, now.date.year - 2000));
+        self.month = toBcd(u5, now.date.month);
+        self.day = toBcd(u3, now.date.day);
+        self.weekday = toBcd(u3, (now.date.weekday() + 1) % 7); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
+        self.hour = toBcd(u6, now.time.hour);
+        self.minute = toBcd(u7, now.time.minute);
+        self.second = toBcd(u7, now.time.second);
     }
 
     fn step(self: *This, value: Data) u4 {
@@ -648,3 +661,17 @@ const Clock = struct {
         }
     }
 };
+
+fn toBcd(comptime T: type, value: u8) T {
+    var input = value;
+    var ret: u8 = 0;
+    var shift: u3 = 0;
+
+    while (input > 0) {
+        ret |= (input % 10) << (shift << 2);
+        shift += 1;
+        input /= 10;
+    }
+
+    return @truncate(T, ret);
+}

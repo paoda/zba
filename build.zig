@@ -13,9 +13,11 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("zba", "src/main.zig");
-    
     // Known Folders (%APPDATA%, XDG, etc.)
     exe.addPackagePath("known_folders", "lib/known-folders/known-folders.zig");
+
+    // DateTime Library
+    exe.addPackagePath("datetime", "lib/zig-datetime/src/main.zig");
 
     // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
     // exe.addPackage(.{ .name = "bitfield", .path = .{ .path = "lib/util/bitfield.zig" } });
