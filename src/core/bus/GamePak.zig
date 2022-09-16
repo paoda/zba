@@ -231,22 +231,18 @@ const Gpio = struct {
 
     const Device = struct {
         ptr: ?*anyopaque,
-        // TODO: Maybe make this comptime known? Removes some if statements
-        kind: Kind,
+        kind: Kind, // TODO: Make comptime known?
 
-        const Kind = enum {
-            Rtc,
-            None,
-        };
+        const Kind = enum { Rtc, None };
 
-        fn step(self: *Device, value: u4) void {
-            switch (self.kind) {
-                .Rtc => {
+        fn step(self: *Device, value: u4) u4 {
+            return switch (self.kind) {
+                .Rtc => blk: {
                     const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.ptr.?));
-                    clock.step(Clock.Data{ .raw = value });
+                    break :blk clock.step(Clock.Data{ .raw = value });
                 },
-                .None => {},
-            }
+                .None => value,
+            };
         }
 
         fn init(kind: Kind, ptr: ?*anyopaque) Device {
@@ -294,17 +290,13 @@ const Gpio = struct {
     }
 
     fn write(self: *This, comptime reg: Register, value: if (reg == .Control) u1 else u4) void {
-        log.debug("RTC: Wrote 0b{b:0>4} to {}", .{ value, reg });
-
-        // if (reg == .Data)
-        // log.err("original: 0b{b:0>4} masked: 0b{b:0>4} result: 0b{b:0>4}", .{ self.data, value & self.direction, self.data | (value & self.direction) });
-
         switch (reg) {
             .Data => {
                 const masked_value = value & self.direction;
 
-                self.device.step(masked_value);
-                self.data = masked_value;
+                // The value which is actually stored in the GPIO register
+                // might be modified by the device implementing the GPIO interface e.g. RTC reads
+                self.data = self.device.step(masked_value);
             },
             .Direction => self.direction = value,
             .Control => self.cnt = value,
@@ -328,6 +320,7 @@ const Clock = struct {
 
     cmd: Command,
     writer: Writer,
+    reader: Reader,
     state: State,
     cnt: Control,
 
@@ -355,41 +348,154 @@ const Clock = struct {
         Read: Register,
     };
 
+    const Reader = struct {
+        i: u4,
+        count: u8,
+
+        /// Reads a bit from RTC registers. Which bit it reads is dependent on
+        ///
+        /// 1. The RTC State Machine, whitch tells us which register we're accessing
+        /// 2. A `count`, which keeps track of which byte is currently being read
+        /// 3. An index, which keeps track of which bit of the byte determined by `count` is being read
+        fn read(self: *Reader, clock: *const Clock, register: Register) u1 {
+            const idx = @intCast(u3, self.i);
+            defer self.i += 1;
+
+            // FIXME: What do I do about the unused bits?
+            return switch (register) {
+                .Control => @truncate(u1, switch (self.count) {
+                    0 => clock.cnt.raw >> idx,
+                    else => {
+                        log.err("RTC: {} is only 1 byte wide", .{register});
+                        @panic("Out-of-bounds RTC read");
+                    },
+                }),
+                .DateTime => @truncate(u1, switch (self.count) {
+                    // Date
+                    0 => clock.year >> idx,
+                    1 => @as(u8, clock.month) >> idx,
+                    2 => @as(u8, clock.day) >> idx,
+                    3 => @as(u8, clock.day_of_week) >> idx,
+
+                    // Time
+                    4 => @as(u8, clock.hour) >> idx,
+                    5 => @as(u8, clock.minute) >> idx,
+                    6 => @as(u8, clock.second) >> idx,
+                    else => {
+                        log.err("RTC: {} is only 7 bytes wide", .{register});
+                        @panic("Out-of-bounds RTC read");
+                    },
+                }),
+                .Time => @truncate(u1, switch (self.count) {
+                    0 => @as(u8, clock.hour) >> idx,
+                    1 => @as(u8, clock.minute) >> idx,
+                    2 => @as(u8, clock.second) >> idx,
+                    else => {
+                        log.err("RTC: {} is only 3 bytes wide", .{register});
+                        @panic("Out-of-bounds RTC read");
+                    },
+                }),
+            };
+        }
+
+        /// Is true when a Reader has read a u8's worth of bits
+        fn finished(self: *const Reader) bool {
+            return self.i >= 8;
+        }
+
+        /// Resets the index used to shift bits out of RTC registers
+        /// and `count`, which is used to keep track of which byte we're reading
+        /// is incremeneted
+        fn lap(self: *Reader) void {
+            self.i = 0;
+            self.count += 1;
+        }
+
+        /// Resets the state of a `Reader` in preparation for a future
+        /// read command
+        fn reset(self: *Reader) void {
+            self.i = 0;
+            self.count = 0;
+        }
+    };
+
     const Writer = struct {
         buf: u8,
         i: u4,
 
-        /// The Number of bytes written to since last reset
+        /// The Number of bytes written since last reset
         count: u8,
 
+        /// Append a bit to the internal bit buffer (aka an integer)
         fn push(self: *Writer, value: u1) void {
             const idx = @intCast(u3, self.i);
             self.buf = (self.buf & ~(@as(u8, 1) << idx)) | @as(u8, value) << idx;
             self.i += 1;
         }
 
+        /// Takes the contents of the internal buffer and writes it to an RTC register
+        /// Where it writes to is dependent on:
+        ///
+        /// 1. The RTC State Machine, whitch tells us which register we're accessing
+        /// 2. A `count`, which keeps track of which byte is currently being read
+        fn write(self: *const Writer, clock: *Clock, register: Register) void {
+            // FIXME: What do do about unused bits?
+            switch (register) {
+                .Control => switch (self.count) {
+                    0 => clock.cnt.raw = self.buf,
+                    else => {
+                        log.err("RTC :{} is only 1 byte wide", .{register});
+                        @panic("Out-of-bounds RTC write");
+                    },
+                },
+                .DateTime => switch (self.count) {
+                    // Date
+                    0 => clock.year = @truncate(@TypeOf(clock.year), self.buf),
+                    1 => clock.month = @truncate(@TypeOf(clock.month), self.buf),
+                    2 => clock.day = @truncate(@TypeOf(clock.day), self.buf),
+                    3 => clock.day_of_week = @truncate(@TypeOf(clock.day_of_week), self.buf),
+
+                    // Time
+                    4 => clock.hour = @truncate(@TypeOf(clock.hour), self.buf),
+                    5 => clock.minute = @truncate(@TypeOf(clock.minute), self.buf),
+                    6 => clock.second = @truncate(@TypeOf(clock.second), self.buf),
+                    else => {
+                        log.err("RTC :{} is only 1 byte wide", .{register});
+                        @panic("Out-of-bounds RTC write");
+                    },
+                },
+                .Time => switch (self.count) {
+                    // Time
+                    0 => clock.hour = @truncate(@TypeOf(clock.hour), self.buf),
+                    1 => clock.minute = @truncate(@TypeOf(clock.minute), self.buf),
+                    2 => clock.second = @truncate(@TypeOf(clock.second), self.buf),
+                    else => {
+                        log.err("RTC :{} is only 1 byte wide", .{register});
+                        @panic("Out-of-bounds RTC write");
+                    },
+                },
+            }
+        }
+
+        /// Is true when 8 bits have been shifted into the internal buffer
+        fn finished(self: *const Writer) bool {
+            return self.i >= 8;
+        }
+
+        /// Resets the internal buffer
+        /// resets the index used to shift bits into the internal buffer
+        /// increments `count` (which keeps track of byte offsets) by one
         fn lap(self: *Writer) void {
             self.buf = 0;
             self.i = 0;
             self.count += 1;
         }
 
+        /// Resets `Writer` to a clean state in preparation for a future write command
         fn reset(self: *Writer) void {
             self.buf = 0;
             self.i = 0;
             self.count = 0;
-        }
-
-        fn isFinished(self: *const Writer) bool {
-            return self.i >= 8;
-        }
-
-        fn getCount(self: *const Writer) u8 {
-            return self.count;
-        }
-
-        fn getValue(self: *const Writer) u8 {
-            return self.buf;
         }
     };
 
@@ -397,7 +503,7 @@ const Clock = struct {
         buf: u8,
         i: u4,
 
-        fn push(self: *Command, value: u1) void {
+        fn write(self: *Command, value: u1) void {
             const idx = @intCast(u3, self.i);
             self.buf = (self.buf & ~(@as(u8, 1) << idx)) | @as(u8, value) << idx;
             self.i += 1;
@@ -413,17 +519,25 @@ const Clock = struct {
         }
 
         fn getCommand(self: *const Command) u8 {
-            // If high Nybble does not contain 0x6, reverse the order of the nybbles.
-            // For some reason RTC commands can be LSB or MSB which is funny
-            return if (self.buf >> 4 & 0xF == 0x6) self.buf else (self.buf & 0xF) << 4 | (self.buf >> 4 & 0xF);
+            // If High Nybble is 0x6, no need to switch the endianness
+            if (self.buf >> 4 & 0xF == 0x6) return self.buf;
+
+            // Turns out reversing the order of bits isn't trivial at all
+            // https://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to-reverse-the-order-of-bits-in-a-byte
+            var ret = self.buf;
+            ret = (ret & 0xF0) >> 4 | (ret & 0x0F) << 4;
+            ret = (ret & 0xCC) >> 2 | (ret & 0x33) << 2;
+            ret = (ret & 0xAA) >> 1 | (ret & 0x55) << 1;
+
+            return ret;
         }
 
         fn handleCommand(self: *const Command, rtc: *Clock) State {
             const command = self.getCommand();
-            log.info("RTC: Failed to handle Command 0b{b:0>8} aka 0x{X:0>2}", .{ command, command });
+            log.debug("RTC: Handling Command 0x{X:0>2} [0b{b:0>8}]", .{ command, command });
 
             const is_write = command & 1 == 0;
-            const rtc_register = @intCast(u3, command >> 1 & 0x7); // TODO: Make Truncate
+            const rtc_register = @truncate(u3, command >> 1 & 0x7);
 
             if (is_write) {
                 return switch (rtc_register) {
@@ -478,6 +592,7 @@ const Clock = struct {
         ptr.* = .{
             .cmd = .{ .buf = 0, .i = 0 },
             .writer = .{ .buf = 0, .i = 0, .count = 0 },
+            .reader = .{ .i = 0, .count = 0 },
             .state = .Idle,
             .cnt = .{ .raw = 0 },
             .year = 0,
@@ -492,74 +607,103 @@ const Clock = struct {
         };
     }
 
-    fn step(self: *This, value: Data) void {
+    fn step(self: *This, value: Data) u4 {
         const cache: Data = .{ .raw = self.gpio.data };
 
-        switch (self.state) {
-            .Idle => {
-                // If SCK is high and CS rises, then prepare for Command
+        return switch (self.state) {
+            .Idle => blk: {
                 // FIXME: Maybe check incoming value to see if SCK is also high?
                 if (cache.sck.read()) {
                     if (!cache.cs.read() and value.cs.read()) {
-                        log.err("RTC: Entering Command Mode", .{});
+                        log.debug("RTC: Entering Command Mode", .{});
                         self.state = .CommandInput;
                         self.cmd.reset();
                     }
                 }
+
+                break :blk @truncate(u4, value.raw);
             },
-            .CommandInput => {
+            .CommandInput => blk: {
                 if (!value.cs.read()) log.err("RTC: Expected CS to be set during {}, however CS was cleared", .{self.state});
 
+                // If SCK rises, sample SIO
                 if (!cache.sck.read() and value.sck.read()) {
-                    // If SCK rises, sample SIO
-                    log.debug("RTC: Sampled 0b{b:0>1} from SIO", .{@boolToInt(value.sio.read())});
-                    self.cmd.push(@boolToInt(value.sio.read()));
+                    self.cmd.write(@boolToInt(value.sio.read()));
 
                     if (self.cmd.isFinished()) {
                         self.state = self.cmd.handleCommand(self);
+                        log.debug("RTC: Switching to {}", .{self.state});
                     }
                 }
+
+                break :blk @truncate(u4, value.raw);
             },
-            State{ .Write = .Control } => {
+            .Write => |register| blk: {
                 if (!value.cs.read()) log.err("RTC: Expected CS to be set during {}, however CS was cleared", .{self.state});
 
+                // If SCK rises, sample SIO
                 if (!cache.sck.read() and value.sck.read()) {
-                    // If SCK rises, sample SIO
-
-                    log.debug("RTC: Sampled 0b{b:0>1} from SIO", .{@boolToInt(value.sio.read())});
                     self.writer.push(@boolToInt(value.sio.read()));
 
-                    if (self.writer.isFinished()) {
-                        self.writer.lap();
-                        self.cnt.raw = self.writer.getValue();
+                    const register_width: u32 = switch (register) {
+                        .Control => 1,
+                        .DateTime => 7,
+                        .Time => 3,
+                    };
 
-                        // FIXME: Move this to a constant or something
-                        if (self.writer.getCount() == 1) {
+                    if (self.writer.finished()) {
+                        self.writer.write(self, register); // write inner buffer to RTC register
+                        self.writer.lap();
+
+                        if (self.writer.count == register_width) {
                             self.writer.reset();
                             self.state = .Idle;
                         }
                     }
                 }
+
+                break :blk @truncate(u4, value.raw);
             },
-            else => {
-                // TODO: Implement Read/Writes for Date/Time and Time and Control
-                log.err("RTC: Ignored request to handle {} command", .{self.state});
-                self.state = .Idle;
+            .Read => |register| blk: {
+                if (!value.cs.read()) log.err("RTC: Expected CS to be set during {}, however CS was cleared", .{self.state});
+                var ret = value;
+
+                // if SCK rises, sample SIO
+                if (!cache.sck.read() and value.sck.read()) {
+                    ret.sio.write(self.reader.read(self, register) == 0b1);
+
+                    const register_width: u32 = switch (register) {
+                        .Control => 1,
+                        .DateTime => 7,
+                        .Time => 3,
+                    };
+
+                    if (self.reader.finished()) {
+                        self.reader.lap();
+
+                        if (self.reader.count == register_width) {
+                            self.reader.reset();
+                            self.state = .Idle;
+                        }
+                    }
+                }
+
+                break :blk @truncate(u4, ret.raw);
             },
-        }
+        };
     }
 
     fn reset(self: *This) void {
-        // mGBA and NBA only zero the control register
-        // we'll do the same
+        // mGBA and NBA only zero the control register. We will do the same
+        log.debug("RTC: Reset  (control register was zeroed)", .{});
+
         self.cnt.raw = 0;
-        log.info("RTC: Reset executed (control register was zeroed)", .{});
     }
 
     fn irq(self: *This) void {
         // TODO: Confirm that this is the right behaviour
-
         log.debug("RTC: Force GamePak IRQ", .{});
+
         self.cpu.bus.io.irq.game_pak.set();
         self.cpu.handleInterrupt();
     }
