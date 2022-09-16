@@ -52,7 +52,6 @@ pub fn main() anyerror!void {
     if (paths.bios == null) cpu.fastBoot();
 
     try bus.init(allocator, &scheduler, &cpu, paths);
-    bus.pak.setupGpio(); // FIXME: Can I not call this in main()?
     defer bus.deinit();
 
     var gui = Gui.init(bus.pak.title, width, height);

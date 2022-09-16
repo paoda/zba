@@ -12,59 +12,35 @@ title: [12]u8,
 buf: []u8,
 allocator: Allocator,
 backup: Backup,
-gpio: Gpio,
+gpio: *Gpio,
 
 pub fn init(allocator: Allocator, rom_path: []const u8, save_path: ?[]const u8) !Self {
     const file = try std.fs.cwd().openFile(rom_path, .{});
     defer file.close();
 
     const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
-    const title = parseTitle(file_buf);
+    const title = file_buf[0xA0..0xAC].*;
     const kind = Backup.guessKind(file_buf) orelse .None;
+    logHeader(file_buf, &title);
 
-    var pak = Self{
+    return .{
         .buf = file_buf,
         .allocator = allocator,
         .title = title,
         .backup = try Backup.init(allocator, kind, title, save_path),
-        .gpio = Gpio.init(allocator, .Rtc),
+        .gpio = try Gpio.init(allocator, .Rtc),
     };
-    pak.parseHeader();
-
-    return pak;
 }
 
-/// Configures any GPIO Device that may be enabled
-///
-/// Fundamentally, this just passes a pointer to the initialized GPIO struct to whatever heap allocated GPIO Device struct
-/// we happen to be using
-///
-/// WARNIG: As far as I know, this method must be called in main() or else we'll have a dangling pointer issue
-/// Despite using the General Purpose Allocator, Zig doesn't prevent me from doing this :sadface:
-pub fn setupGpio(self: *Self) void {
-    switch (self.gpio.device.kind) {
-        .Rtc => {
-            const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.gpio.device.ptr.?));
-            Clock.init(clock, &self.gpio);
-        },
-        .None => {},
-    }
-}
-
-fn parseHeader(self: *const Self) void {
-    const title = parseTitle(self.buf);
-    const code = self.buf[0xAC..0xB0];
-    const maker = self.buf[0xB0..0xB2];
-    const version = self.buf[0xBC];
+fn logHeader(buf: []const u8, title: *const [12]u8) void {
+    const code = buf[0xAC..0xB0];
+    const maker = buf[0xB0..0xB2];
+    const version = buf[0xBC];
 
     log.info("Title: {s}", .{title});
     if (version != 0) log.info("Version: {}", .{version});
     log.info("Game Code: {s}", .{code});
     if (lookupMaker(maker)) |c| log.info("Maker: {s}", .{c}) else log.info("Maker Code: {s}", .{maker});
-}
-
-fn parseTitle(buf: []u8) [12]u8 {
-    return buf[0xA0..0xAC].*;
 }
 
 fn lookupMaker(slice: *const [2]u8) ?[]const u8 {
@@ -82,6 +58,7 @@ inline fn isLarge(self: *const Self) bool {
 pub fn deinit(self: *Self) void {
     self.backup.deinit();
     self.gpio.deinit(self.allocator);
+    self.allocator.destroy(self.gpio);
     self.allocator.free(self.buf);
     self.* = undefined;
 }
@@ -283,29 +260,37 @@ const Gpio = struct {
         Control,
     };
 
-    fn init(allocator: Allocator, kind: Device.Kind) This {
-        return .{
+    fn init(allocator: Allocator, kind: Device.Kind) !*This {
+        const self = try allocator.create(This);
+
+        self.* = .{
             .data = 0b0000,
-            .direction = 0b1111, // TODO: What is GPIO Direction set to by default?
+            .direction = 0b1111, // TODO: What is GPIO DIrection set to by default?
             .cnt = 0b0,
 
             .device = switch (kind) {
                 .Rtc => blk: {
-                    const ptr = allocator.create(Clock) catch @panic("Failed to allocate RTC struct on heap");
-                    break :blk Device{ .kind = kind, .ptr = ptr };
+                    const clock = try allocator.create(Clock);
+                    clock.init(self);
+
+                    break :blk Device{ .kind = kind, .ptr = clock };
                 },
                 .None => Device{ .kind = kind, .ptr = null },
             },
         };
+
+        return self;
     }
 
-    fn deinit(self: This, allocator: Allocator) void {
+    fn deinit(self: *This, allocator: Allocator) void {
         switch (self.device.kind) {
             .Rtc => {
                 allocator.destroy(@ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.device.ptr.?)));
             },
             .None => {},
         }
+
+        self.* = undefined;
     }
 
     fn write(self: *This, comptime reg: Register, value: if (reg == .Control) u1 else u4) void {
