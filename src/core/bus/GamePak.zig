@@ -511,7 +511,7 @@ pub const Clock = struct {
         const now = DateTime.now();
         self.year = toBcd(u8, @intCast(u8, now.date.year - 2000));
         self.month = toBcd(u5, now.date.month);
-        self.day = toBcd(u3, now.date.day);
+        self.day = toBcd(u6, now.date.day);
         self.weekday = toBcd(u3, (now.date.weekday() + 1) % 7); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
         self.hour = toBcd(u6, now.time.hour);
         self.minute = toBcd(u7, now.time.minute);
