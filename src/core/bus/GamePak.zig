@@ -364,10 +364,7 @@ const Clock = struct {
             return switch (register) {
                 .Control => @truncate(u1, switch (self.count) {
                     0 => clock.cnt.raw >> idx,
-                    else => {
-                        log.err("RTC: {} is only 1 byte wide", .{register});
-                        @panic("Out-of-bounds RTC read");
-                    },
+                    else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 1 byte)", .{ self.count, register }),
                 }),
                 .DateTime => @truncate(u1, switch (self.count) {
                     // Date
@@ -380,19 +377,13 @@ const Clock = struct {
                     4 => @as(u8, clock.hour) >> idx,
                     5 => @as(u8, clock.minute) >> idx,
                     6 => @as(u8, clock.second) >> idx,
-                    else => {
-                        log.err("RTC: {} is only 7 bytes wide", .{register});
-                        @panic("Out-of-bounds RTC read");
-                    },
+                    else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 7 bytes)", .{ self.count, register }),
                 }),
                 .Time => @truncate(u1, switch (self.count) {
                     0 => @as(u8, clock.hour) >> idx,
                     1 => @as(u8, clock.minute) >> idx,
                     2 => @as(u8, clock.second) >> idx,
-                    else => {
-                        log.err("RTC: {} is only 3 bytes wide", .{register});
-                        @panic("Out-of-bounds RTC read");
-                    },
+                    else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 3 bytes)", .{ self.count, register }),
                 }),
             };
         }
@@ -441,38 +432,10 @@ const Clock = struct {
             // FIXME: What do do about unused bits?
             switch (register) {
                 .Control => switch (self.count) {
-                    0 => clock.cnt.raw = self.buf,
-                    else => {
-                        log.err("RTC :{} is only 1 byte wide", .{register});
-                        @panic("Out-of-bounds RTC write");
-                    },
+                    0 => clock.cnt.raw = (clock.cnt.raw & 0x80) | (self.buf & 0x7F), // Bit 7 read-only
+                    else => std.debug.panic("Tried to write to byte #{} of {} (hint: there's only 1 byte)", .{ self.count, register }),
                 },
-                .DateTime => switch (self.count) {
-                    // Date
-                    0 => clock.year = @truncate(@TypeOf(clock.year), self.buf),
-                    1 => clock.month = @truncate(@TypeOf(clock.month), self.buf),
-                    2 => clock.day = @truncate(@TypeOf(clock.day), self.buf),
-                    3 => clock.day_of_week = @truncate(@TypeOf(clock.day_of_week), self.buf),
-
-                    // Time
-                    4 => clock.hour = @truncate(@TypeOf(clock.hour), self.buf),
-                    5 => clock.minute = @truncate(@TypeOf(clock.minute), self.buf),
-                    6 => clock.second = @truncate(@TypeOf(clock.second), self.buf),
-                    else => {
-                        log.err("RTC :{} is only 1 byte wide", .{register});
-                        @panic("Out-of-bounds RTC write");
-                    },
-                },
-                .Time => switch (self.count) {
-                    // Time
-                    0 => clock.hour = @truncate(@TypeOf(clock.hour), self.buf),
-                    1 => clock.minute = @truncate(@TypeOf(clock.minute), self.buf),
-                    2 => clock.second = @truncate(@TypeOf(clock.second), self.buf),
-                    else => {
-                        log.err("RTC :{} is only 1 byte wide", .{register});
-                        @panic("Out-of-bounds RTC write");
-                    },
-                },
+                .DateTime, .Time => log.debug("RTC: Ignoring {} write", .{register}),
             }
         }
 
@@ -628,7 +591,7 @@ const Clock = struct {
 
     fn reset(self: *This) void {
         // mGBA and NBA only zero the control register. We will do the same
-        log.debug("RTC: Reset  (control register was zeroed)", .{});
+        log.debug("RTC: Reset (control register was zeroed)", .{});
 
         self.cnt.raw = 0;
     }
