@@ -22,7 +22,9 @@ pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_pat
 
     const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
     const title = file_buf[0xA0..0xAC].*;
-    const kind = Backup.guessKind(file_buf) orelse .None;
+    const kind = Backup.guessKind(file_buf);
+    const device = guessDevice(file_buf);
+
     logHeader(file_buf, &title);
 
     return .{
@@ -30,8 +32,24 @@ pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_pat
         .allocator = allocator,
         .title = title,
         .backup = try Backup.init(allocator, kind, title, save_path),
-        .gpio = try Gpio.init(allocator, cpu, .Rtc),
+        .gpio = try Gpio.init(allocator, cpu, device),
     };
+}
+
+/// Searches the ROM to see if it can determine whether the ROM it's searching uses
+/// any GPIO device, like a RTC for example.
+fn guessDevice(buf: []const u8) Gpio.Device.Kind {
+    // Try to Guess if ROM uses RTC
+    const needle = "RTC_V"; // I was told SIIRTC_V, though Pokemen Firered (USA) is a false negative
+
+    var i: usize = 0;
+    while ((i + needle.len) < buf.len) : (i += 1) {
+        if (std.mem.eql(u8, needle, buf[i..(i + needle.len)])) return .Rtc;
+    }
+
+    // TODO: Detect other GPIO devices
+
+    return .None;
 }
 
 fn logHeader(buf: []const u8, title: *const [12]u8) void {
@@ -258,8 +276,9 @@ const Gpio = struct {
     };
 
     fn init(allocator: Allocator, cpu: *Arm7tdmi, kind: Device.Kind) !*This {
-        const self = try allocator.create(This);
+        log.info("Device: {}", .{kind});
 
+        const self = try allocator.create(This);
         self.* = .{
             .data = 0b0000,
             .direction = 0b1111, // TODO: What is GPIO DIrection set to by default?

@@ -61,7 +61,7 @@ pub const Backup = struct {
         return backup;
     }
 
-    pub fn guessKind(rom: []const u8) ?Kind {
+    pub fn guessKind(rom: []const u8) Kind {
         for (backup_kinds) |needle| {
             const needle_len = needle.str.len;
 
@@ -71,7 +71,7 @@ pub const Backup = struct {
             }
         }
 
-        return null;
+        return .None;
     }
 
     pub fn deinit(self: *Self) void {
