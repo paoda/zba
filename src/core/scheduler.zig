@@ -66,7 +66,7 @@ pub const Scheduler = struct {
                     if (device.kind != .Rtc or device.ptr == null) return;
 
                     const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
-                    clock.updateTime();
+                    clock.updateTime(late);
                 },
                 .FrameSequencer => cpu.bus.apu.tickFrameSequencer(late),
                 .SampleAudio => cpu.bus.apu.sampleAudio(late),

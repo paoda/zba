@@ -505,8 +505,8 @@ pub const Clock = struct {
         cpu.sched.push(.RealTimeClock, 1 << 24); // Every Second
     }
 
-    pub fn updateTime(self: *This) void {
-        self.cpu.sched.push(.RealTimeClock, 1 << 24); // Reschedule
+    pub fn updateTime(self: *This, late: u64) void {
+        self.cpu.sched.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
 
         const now = DateTime.now();
         self.year = toBcd(u8, @intCast(u8, now.date.year - 2000));
