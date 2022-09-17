@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Clock = @import("bus/GamePak.zig").Clock;
 
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;
@@ -59,6 +60,13 @@ pub const Scheduler = struct {
                         2 => cpu.bus.apu.ch3.channelTimerOverflow(late),
                         3 => cpu.bus.apu.ch4.channelTimerOverflow(late),
                     }
+                },
+                .RealTimeClock => {
+                    const device = &cpu.bus.pak.gpio.device;
+                    if (device.kind != .Rtc or device.ptr == null) return;
+
+                    const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
+                    clock.updateTime(late);
                 },
                 .FrameSequencer => cpu.bus.apu.tickFrameSequencer(late),
                 .SampleAudio => cpu.bus.apu.sampleAudio(late),
@@ -118,4 +126,5 @@ pub const EventKind = union(enum) {
     SampleAudio,
     FrameSequencer,
     ApuChannel: u2,
+    RealTimeClock,
 };

@@ -18,6 +18,7 @@ const sync_video: RunKind = .LimitedFPS; // Configure Video Sync
 pub const win_scale = 3; // 1x, 2x, 3x, etc. Window Scaling
 pub const cpu_logging = false; // Enable detailed CPU logging
 pub const allow_unhandled_io = true; // Only relevant in Debug Builds
+pub const force_rtc = false;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896

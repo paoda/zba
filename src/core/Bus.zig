@@ -51,7 +51,7 @@ sched: *Scheduler,
 
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
     self.* = .{
-        .pak = try GamePak.init(allocator, paths.rom, paths.save),
+        .pak = try GamePak.init(allocator, cpu, paths.rom, paths.save),
         .bios = try Bios.init(allocator, paths.bios),
         .ppu = try Ppu.init(allocator, sched),
         .apu = Apu.init(sched),
