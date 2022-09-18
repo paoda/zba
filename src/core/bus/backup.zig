@@ -5,9 +5,10 @@ const log = std.log.scoped(.Backup);
 const escape = @import("../util.zig").escape;
 const span = @import("../util.zig").span;
 
-const backup_kinds = [5]Needle{
+const backup_kinds = [6]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
     .{ .str = "SRAM_V", .kind = .Sram },
+    .{ .str = "SRAM_F_V", .kind = .Sram },
     .{ .str = "FLASH_V", .kind = .Flash },
     .{ .str = "FLASH512_V", .kind = .Flash },
     .{ .str = "FLASH1M_V", .kind = .Flash1M },
