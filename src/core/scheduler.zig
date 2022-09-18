@@ -2,7 +2,7 @@ const std = @import("std");
 
 const Bus = @import("Bus.zig");
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const Clock = @import("bus/GamePak.zig").Clock;
+const Clock = @import("bus/gpio.zig").Clock;
 
 const Order = std.math.Order;
 const PriorityQueue = std.PriorityQueue;
