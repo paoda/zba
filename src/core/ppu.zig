@@ -269,7 +269,7 @@ pub const Ppu = struct {
         sched.push(.Draw, 240 * 4);
 
         const sprites = try allocator.create([128]?Sprite);
-        sprites.* = [_]?Sprite{null} ** 128;
+        std.mem.set(?Sprite, sprites, null);
 
         return Self{
             .vram = try Vram.init(allocator),
