@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
 const escape = @import("../util.zig").escape;
-const asStringSlice = @import("../util.zig").asStringSlice;
+const span = @import("../util.zig").span;
 
 const backup_kinds = [5]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
@@ -128,7 +128,7 @@ pub const Backup = struct {
     }
 
     fn getSaveFilename(self: *const Self, allocator: Allocator) ![]const u8 {
-        const title_str = asStringSlice(&escape(self.title));
+        const title_str = span(&escape(self.title));
         const name = if (title_str.len != 0) title_str else "untitled";
 
         return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });

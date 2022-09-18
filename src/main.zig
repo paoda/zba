@@ -4,14 +4,14 @@ const builtin = @import("builtin");
 const known_folders = @import("known_folders");
 const clap = @import("clap");
 
-const Gui = @import("Gui.zig");
+const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("core/util.zig").FilePaths;
 
 const Allocator = std.mem.Allocator;
-const log = std.log.scoped(.CLI);
+const log = std.log.scoped(.Cli);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
 const cpu_logging = @import("core/emu.zig").cpu_logging;
@@ -54,8 +54,7 @@ pub fn main() anyerror!void {
     try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
 
-    var gui = Gui.init(bus.pak.title, width, height);
-    gui.initAudio(&bus.apu);
+    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height);
     defer gui.deinit();
 
     try gui.run(&cpu, &scheduler);
