@@ -5,6 +5,8 @@ const config = @import("config.zig");
 const Log2Int = std.math.Log2Int;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 
+const Allocator = std.mem.Allocator;
+
 // Sign-Extend value of type `T` to type `U`
 pub fn sext(comptime T: type, comptime U: type, value: T) T {
     // U must have less bits than T
@@ -123,6 +125,7 @@ pub const io = struct {
 
 pub const Logger = struct {
     const Self = @This();
+    const FmtArgTuple = std.meta.Tuple(&.{ u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 });
 
     buf: std.io.BufferedWriter(4096 << 2, std.fs.File.Writer),
 
@@ -180,8 +183,6 @@ pub const Logger = struct {
         };
     }
 };
-
-const FmtArgTuple = struct { u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 };
 
 pub const audio = struct {
     const _io = @import("core/bus/io.zig");
@@ -275,3 +276,44 @@ fn HalfInt(comptime T: type) type {
 
     return std.meta.Int(type_info.Int.signedness, type_info.Int.bits >> 1);
 }
+
+/// Double Buffering Implementation
+pub const FrameBuffer = struct {
+    const Self = @This();
+
+    layers: [2][]u8,
+    buf: []u8,
+    current: u1,
+
+    allocator: Allocator,
+
+    // TODO: Rename
+    const Device = enum { Emulator, Renderer };
+
+    pub fn init(allocator: Allocator, comptime len: comptime_int) !Self {
+        const buf = try allocator.alloc(u8, len * 2);
+        std.mem.set(u8, buf, 0);
+
+        return .{
+            // Front and Back Framebuffers
+            .layers = [_][]u8{ buf[0..][0..len], buf[len..][0..len] },
+            .buf = buf,
+            .current = 0,
+
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.buf);
+        self.* = undefined;
+    }
+
+    pub fn swap(self: *Self) void {
+        self.current = ~self.current;
+    }
+
+    pub fn get(self: *Self, comptime dev: Device) []u8 {
+        return self.layers[if (dev == .Emulator) self.current else ~self.current];
+    }
+};

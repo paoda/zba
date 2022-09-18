@@ -12,6 +12,7 @@ const Vram = @import("ppu/Vram.zig");
 const EventKind = @import("scheduler.zig").EventKind;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const FrameBuffer = @import("../util.zig").FrameBuffer;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
@@ -275,7 +276,7 @@ pub const Ppu = struct {
             .palette = try Palette.init(allocator),
             .oam = try Oam.init(allocator),
             .sched = sched,
-            .framebuf = try FrameBuffer.init(allocator),
+            .framebuf = try FrameBuffer.init(allocator, framebuf_pitch * height),
             .allocator = allocator,
 
             // Registers
@@ -1368,52 +1369,5 @@ const Scanline = struct {
 
     fn btm(self: *Self) []?u16 {
         return self.layers[1];
-    }
-};
-
-// Double Buffering Implementation
-const FrameBuffer = struct {
-    const Self = @This();
-
-    layers: [2][]u8,
-    buf: []u8,
-    current: std.atomic.Atomic(u8),
-
-    allocator: Allocator,
-
-    // TODO: Rename
-    const Device = enum {
-        Emulator,
-        Renderer,
-    };
-
-    pub fn init(allocator: Allocator) !Self {
-        const framebuf_len = framebuf_pitch * height;
-        const buf = try allocator.alloc(u8, framebuf_len * 2);
-        std.mem.set(u8, buf, 0);
-
-        return .{
-            // Front and Back Framebuffers
-            .layers = [_][]u8{ buf[0..][0..framebuf_len], buf[framebuf_len..][0..framebuf_len] },
-            .buf = buf,
-            .current = std.atomic.Atomic(u8).init(0),
-
-            .allocator = allocator,
-        };
-    }
-
-    fn deinit(self: *Self) void {
-        self.allocator.free(self.buf);
-        self.* = undefined;
-    }
-
-    pub fn swap(self: *Self) void {
-        _ = self.current.fetchXor(1, .Release); // fetchNot(.Release)
-    }
-
-    pub fn get(self: *Self, comptime dev: Device) []u8 {
-        const current = @intCast(u1, self.current.load(.Acquire));
-
-        return self.layers[if (dev == .Emulator) current else ~current];
     }
 };
