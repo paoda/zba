@@ -13,9 +13,9 @@ const Atomic = std.atomic.Atomic;
 const Allocator = std.mem.Allocator;
 
 // TODO: Move these to a TOML File
-const sync_audio = false; // Enable Audio Sync
+const sync_audio = true; // Enable Audio Sync
 const sync_video: RunKind = .LimitedFPS; // Configure Video Sync
-pub const win_scale = 3; // 1x, 2x, 3x, etc. Window Scaling
+pub const win_scale = 4; // 1x, 2x, 3x, etc. Window Scaling
 pub const cpu_logging = false; // Enable detailed CPU logging
 pub const allow_unhandled_io = true; // Only relevant in Debug Builds
 pub const force_rtc = false;
