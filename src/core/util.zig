@@ -72,7 +72,7 @@ pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
 /// This function returns a slice of the ASCII string without the null terminator(s)
 /// (essentially, a proper Zig/Rust/Any modern language String)
 pub fn span(title: *const [12]u8) []const u8 {
-    const end = std.mem.indexOfScalar(u8, title, "\x00"[0]);
+    const end = std.mem.indexOfScalar(u8, title, '\x00');
     return title[0 .. end orelse title.len];
 }
 
@@ -117,19 +117,17 @@ test "span" {
     try std.testing.expectEqualSlices(u8, "", span(example));
 }
 
-/// Copies a Title and returns either an identical or similar
-/// array consisting of ASCII that won't make any file system angry
+/// Creates a copy of a title with all Filesystem-invalid characters replaced
 ///
 /// e.g. POKEPIN R/S to POKEPIN R_S
 pub fn escape(title: [12]u8) [12]u8 {
-    var result: [12]u8 = title;
+    var ret: [12]u8 = title;
 
-    for (result) |*char| {
-        if (char.* == '/' or char.* == '\\') char.* = '_';
-        if (char.* == 0) break;
-    }
+    //TODO: Add more replacements
+    std.mem.replaceScalar(u8, &ret, '/', '_');
+    std.mem.replaceScalar(u8, &ret, '\\', '_');
 
-    return result;
+    return ret;
 }
 
 pub const FilePaths = struct {
