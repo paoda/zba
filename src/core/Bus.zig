@@ -107,7 +107,7 @@ pub fn deinit(self: *Self) void {
 }
 
 fn fillReadTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
-    const vramMirror = @import("ppu.zig").Vram.mirror;
+    const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table) |*ptr, i| {
         const addr = page_size * i;
@@ -134,7 +134,7 @@ fn fillReadTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
 
 fn fillWriteTable(comptime T: type, bus: *Self, table: *[table_len]?*const anyopaque) void {
     comptime std.debug.assert(T == u32 or T == u16 or T == u8);
-    const vramMirror = @import("ppu.zig").Vram.mirror;
+    const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table) |*ptr, i| {
         const addr = page_size * i;

@@ -2,11 +2,16 @@ const std = @import("std");
 const io = @import("bus/io.zig");
 const util = @import("../util.zig");
 
-const Scheduler = @import("scheduler.zig").Scheduler;
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
+const dma = @import("bus/dma.zig");
+
+const Oam = @import("ppu/Oam.zig");
+const Palette = @import("ppu/Palette.zig");
+const Vram = @import("ppu/Vram.zig");
+const EventKind = @import("scheduler.zig").EventKind;
+const Scheduler = @import("scheduler.zig").Scheduler;
+const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
@@ -698,7 +703,7 @@ pub const Ppu = struct {
                 while (i < width) : (i += 1) {
                     // If we're outside of the bounds of mode 5, draw the background colour
                     const bgr555 =
-                        if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
+                        if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.backdrop();
 
                     std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
@@ -742,7 +747,7 @@ pub const Ppu = struct {
         }
 
         if (maybe_top) |top| return top;
-        return self.palette.getBackdrop();
+        return self.palette.backdrop();
     }
 
     fn copyToBackgroundBuffer(self: *Self, comptime n: u2, bounds: ?WindowBounds, i: usize, bgr555: u16) void {
@@ -871,7 +876,7 @@ pub const Ppu = struct {
         // See if HBlank DMA is present and not enabled
 
         if (!self.dispstat.vblank.read())
-            pollDmaOnBlank(cpu.bus, .HBlank);
+            dma.onBlanking(cpu.bus, .HBlank);
 
         self.dispstat.hblank.set();
         self.sched.push(.HBlank, 68 * 4 -| late);
@@ -913,163 +918,11 @@ pub const Ppu = struct {
                 self.aff_bg[1].latchRefPoints();
 
                 // See if Vblank DMA is present and not enabled
-                pollDmaOnBlank(cpu.bus, .VBlank);
+                dma.onBlanking(cpu.bus, .VBlank);
             }
 
             if (scanline == 227) self.dispstat.vblank.unset();
             self.sched.push(.VBlank, 240 * 4 -| late);
-        }
-    }
-};
-
-const Palette = struct {
-    const palram_size = 0x400;
-    const Self = @This();
-
-    buf: []u8,
-    allocator: Allocator,
-
-    fn init(allocator: Allocator) !Self {
-        const buf = try allocator.alloc(u8, palram_size);
-        std.mem.set(u8, buf, 0);
-
-        return Self{
-            .buf = buf,
-            .allocator = allocator,
-        };
-    }
-
-    fn deinit(self: *Self) void {
-        self.allocator.free(self.buf);
-        self.* = undefined;
-    }
-
-    pub fn read(self: *const Self, comptime T: type, address: usize) T {
-        const addr = address & 0x3FF;
-
-        return switch (T) {
-            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
-            else => @compileError("PALRAM: Unsupported read width"),
-        };
-    }
-
-    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
-        const addr = address & 0x3FF;
-
-        switch (T) {
-            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
-            u8 => {
-                const align_addr = addr & ~@as(u32, 1); // Aligned to Halfword boundary
-                std.mem.writeIntSliceLittle(u16, self.buf[align_addr..][0..@sizeOf(u16)], @as(u16, value) * 0x101);
-            },
-            else => @compileError("PALRAM: Unsupported write width"),
-        }
-    }
-
-    fn getBackdrop(self: *const Self) u16 {
-        return self.read(u16, 0);
-    }
-};
-
-pub const Vram = struct {
-    const vram_size = 0x18000;
-    const Self = @This();
-
-    buf: []u8,
-    allocator: Allocator,
-
-    fn init(allocator: Allocator) !Self {
-        const buf = try allocator.alloc(u8, vram_size);
-        std.mem.set(u8, buf, 0);
-
-        return Self{
-            .buf = buf,
-            .allocator = allocator,
-        };
-    }
-
-    fn deinit(self: *Self) void {
-        self.allocator.free(self.buf);
-        self.* = undefined;
-    }
-
-    pub fn read(self: *const Self, comptime T: type, address: usize) T {
-        const addr = Self.mirror(address);
-
-        return switch (T) {
-            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
-            else => @compileError("VRAM: Unsupported read width"),
-        };
-    }
-
-    pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address: usize, value: T) void {
-        const mode: u3 = dispcnt.bg_mode.read();
-        const idx = Self.mirror(address);
-
-        switch (T) {
-            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[idx..][0..@sizeOf(T)], value),
-            u8 => {
-                // Ignore write if it falls within the boundaries of OBJ VRAM
-                switch (mode) {
-                    0, 1, 2 => if (0x0001_0000 <= idx) return,
-                    else => if (0x0001_4000 <= idx) return,
-                }
-
-                const align_idx = idx & ~@as(u32, 1); // Aligned to a halfword boundary
-                std.mem.writeIntSliceLittle(u16, self.buf[align_idx..][0..@sizeOf(u16)], @as(u16, value) * 0x101);
-            },
-            else => @compileError("VRAM: Unsupported write width"),
-        }
-    }
-
-    pub fn mirror(address: usize) usize {
-        // Mirrored in steps of 128K (64K + 32K + 32K) (abcc)
-        const addr = address & 0x1FFFF;
-
-        // If the address is within 96K we don't do anything,
-        // otherwise we want to mirror the last 32K (addresses between 64K and 96K)
-        return if (addr < vram_size) addr else 0x10000 + (addr & 0x7FFF);
-    }
-};
-
-const Oam = struct {
-    const oam_size = 0x400;
-    const Self = @This();
-
-    buf: []u8,
-    allocator: Allocator,
-
-    fn init(allocator: Allocator) !Self {
-        const buf = try allocator.alloc(u8, oam_size);
-        std.mem.set(u8, buf, 0);
-
-        return Self{
-            .buf = buf,
-            .allocator = allocator,
-        };
-    }
-
-    fn deinit(self: *Self) void {
-        self.allocator.free(self.buf);
-        self.* = undefined;
-    }
-
-    pub fn read(self: *const Self, comptime T: type, address: usize) T {
-        const addr = address & 0x3FF;
-
-        return switch (T) {
-            u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
-            else => @compileError("OAM: Unsupported read width"),
-        };
-    }
-
-    pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
-        const addr = address & 0x3FF;
-
-        switch (T) {
-            u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
-            u8 => return, // 8-bit writes are explicitly ignored
-            else => @compileError("OAM: Unsupported write width"),
         }
     }
 };

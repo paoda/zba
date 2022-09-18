@@ -338,7 +338,7 @@ fn DmaController(comptime id: u2) type {
     };
 }
 
-pub fn pollDmaOnBlank(bus: *Bus, comptime kind: DmaKind) void {
+pub fn onBlanking(bus: *Bus, comptime kind: DmaKind) void {
     comptime var i: usize = 0;
     inline while (i < 4) : (i += 1) {
         bus.dma[i].poll(kind);
