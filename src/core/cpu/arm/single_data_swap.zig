@@ -4,7 +4,7 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
-const rotr = @import("../../util.zig").rotr;
+const rotr = @import("../../../util.zig").rotr;
 
 pub fn singleDataSwap(comptime B: bool) InstrFn {
     return struct {

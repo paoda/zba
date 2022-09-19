@@ -1,7 +1,7 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const io = @import("bus/io.zig");
-const util = @import("util.zig");
+const util = @import("../util.zig");
 
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
@@ -9,7 +9,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 const AudioDeviceId = SDL.SDL_AudioDeviceID;
 
-const intToBytes = @import("util.zig").intToBytes;
+const intToBytes = @import("../util.zig").intToBytes;
 const log = std.log.scoped(.APU);
 
 pub const host_sample_rate = 1 << 15;

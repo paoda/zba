@@ -12,7 +12,7 @@ const Apu = @import("apu.zig").Apu;
 const DmaTuple = @import("bus/dma.zig").DmaTuple;
 const TimerTuple = @import("bus/timer.zig").TimerTuple;
 const Scheduler = @import("scheduler.zig").Scheduler;
-const FilePaths = @import("util.zig").FilePaths;
+const FilePaths = @import("../util.zig").FilePaths;
 
 const io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
@@ -20,7 +20,7 @@ const log = std.log.scoped(.Bus);
 
 const createDmaTuple = @import("bus/dma.zig").create;
 const createTimerTuple = @import("bus/timer.zig").create;
-const rotr = @import("util.zig").rotr;
+const rotr = @import("../util.zig").rotr;
 
 const timings: [2][0x10]u8 = [_][0x10]u8{
     // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused

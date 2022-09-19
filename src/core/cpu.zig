@@ -1,12 +1,12 @@
 const std = @import("std");
-const util = @import("util.zig");
+const util = @import("../util.zig");
 
 const Bus = @import("Bus.zig");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
-const FilePaths = @import("util.zig").FilePaths;
-const Logger = @import("util.zig").Logger;
+const FilePaths = @import("../util.zig").FilePaths;
+const Logger = @import("../util.zig").Logger;
 
 const File = std.fs.File;
 
@@ -125,7 +125,7 @@ pub const thumb = struct {
     const swi = @import("cpu/thumb/software_interrupt.zig").fmt17;
     const branch = @import("cpu/thumb/branch.zig");
 
-    /// Determine index into THUMB InstrFn LUT 
+    /// Determine index into THUMB InstrFn LUT
     fn idx(opcode: u16) u10 {
         return @truncate(u10, opcode >> 6);
     }

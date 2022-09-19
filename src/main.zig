@@ -8,7 +8,7 @@ const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
-const FilePaths = @import("core/util.zig").FilePaths;
+const FilePaths = @import("util.zig").FilePaths;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Cli);

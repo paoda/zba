@@ -5,9 +5,9 @@ const emu = @import("core/emu.zig");
 const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
-const FpsTracker = @import("core/util.zig").FpsTracker;
+const FpsTracker = @import("util.zig").FpsTracker;
 
-const span = @import("core/util.zig").span;
+const span = @import("util.zig").span;
 
 const pitch = @import("core/ppu.zig").framebuf_pitch;
 const scale = @import("core/emu.zig").win_scale;

@@ -1,5 +1,5 @@
 const std = @import("std");
-const util = @import("../util.zig");
+const util = @import("../../util.zig");
 
 const DmaControl = @import("io.zig").DmaControl;
 const Bus = @import("../Bus.zig");

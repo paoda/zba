@@ -4,8 +4,8 @@ const SDL = @import("sdl2");
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const FpsTracker = @import("util.zig").FpsTracker;
-const FilePaths = @import("util.zig").FilePaths;
+const FpsTracker = @import("../util.zig").FpsTracker;
+const FilePaths = @import("../util.zig").FilePaths;
 
 const Timer = std.time.Timer;
 const Thread = std.Thread;

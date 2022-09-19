@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const timer = @import("timer.zig");
 const dma = @import("dma.zig");
 const apu = @import("../apu.zig");
-const util = @import("../util.zig");
+const util = @import("../../util.zig");
 
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;

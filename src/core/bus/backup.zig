@@ -2,8 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
-const escape = @import("../util.zig").escape;
-const span = @import("../util.zig").span;
+const escape = @import("../../util.zig").escape;
+const span = @import("../../util.zig").span;
 
 const backup_kinds = [6]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },

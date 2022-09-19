@@ -1,5 +1,5 @@
 const std = @import("std");
-const util = @import("../util.zig");
+const util = @import("../../util.zig");
 
 const TimerControl = @import("io.zig").TimerControl;
 const Io = @import("io.zig").Io;

@@ -4,7 +4,7 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
-const sext = @import("../../util.zig").sext;
+const sext = @import("../../../util.zig").sext;
 
 pub fn branch(comptime L: bool) InstrFn {
     return struct {

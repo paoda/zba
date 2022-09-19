@@ -1,9 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Log2Int = std.math.Log2Int;
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 
-const allow_unhandled_io = @import("emu.zig").allow_unhandled_io;
+const allow_unhandled_io = @import("core/emu.zig").allow_unhandled_io;
 
 // Sign-Extend value of type `T` to type `U`
 pub fn sext(comptime T: type, comptime U: type, value: T) T {

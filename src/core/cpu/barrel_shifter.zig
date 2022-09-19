@@ -3,7 +3,7 @@ const std = @import("std");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const CPSR = @import("../cpu.zig").PSR;
 
-const rotr = @import("../util.zig").rotr;
+const rotr = @import("../../util.zig").rotr;
 
 pub fn execute(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var result: u32 = undefined;
