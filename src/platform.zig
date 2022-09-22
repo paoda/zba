@@ -25,10 +25,10 @@ pub const Gui = struct {
     // zig fmt: off
     const vertices: [32]f32 = [_]f32{
         // Positions        // Colours      // Texture Coords
-         1.0,  -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
-         1.0, 1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
-        -1.0, 1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
-        -1.0,  -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
+         1.0, -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
+         1.0,  1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
+        -1.0,  1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
+        -1.0, -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
     };
 
     const indices: [6]u32 = [_]u32{
@@ -236,7 +236,8 @@ pub const Gui = struct {
 
     pub fn deinit(self: *Self) void {
         self.audio.deinit();
-
+        // TODO: Buffer deletions
+        gl.deleteProgram(self.program_id);
         SDL.SDL_GL_DeleteContext(self.ctx);
         SDL.SDL_DestroyWindow(self.window);
         SDL.SDL_Quit();
