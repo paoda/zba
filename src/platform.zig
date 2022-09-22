@@ -25,10 +25,10 @@ pub const Gui = struct {
     // zig fmt: off
     const vertices: [32]f32 = [_]f32{
         // Positions        // Colours      // Texture Coords
-         1.0,  1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
-         1.0, -1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
-        -1.0, -1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
-        -1.0,  1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
+         1.0,  -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
+         1.0, 1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
+        -1.0, 1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
+        -1.0,  -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
     };
 
     const indices: [6]u32 = [_]u32{
@@ -47,8 +47,8 @@ pub const Gui = struct {
     pub fn init(title: *const [12]u8, apu: *Apu, width: i32, height: i32) Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
-        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0) panic();
-        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0) panic();
+        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
+        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
 
         const win_scale = @intCast(c_int, config.config().host.win_scale);
 
@@ -121,13 +121,13 @@ pub const Gui = struct {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
 
         // Position
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), &0);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, 0)); // lmao
         gl.enableVertexAttribArray(0);
         // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), &(3 * @sizeOf(f32)));
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (3 * @sizeOf(f32))));
         gl.enableVertexAttribArray(1);
         // Texture Coord
-        gl.vertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), &(6 * @sizeOf(f32)));
+        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (6 * @sizeOf(f32))));
         gl.enableVertexAttribArray(2);
 
         return .{ vao_id, vbo_id, ebo_id };
@@ -138,13 +138,13 @@ pub const Gui = struct {
         gl.genTextures(1, &tex_id);
         gl.bindTexture(gl.TEXTURE_2D, tex_id);
 
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf.ptr);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
         // gl.generateMipmap(gl.TEXTURE_2D); // TODO: Remove?
 
         return tex_id;
@@ -220,7 +220,7 @@ pub const Gui = struct {
 
             // Emulator has an internal Double Buffer
             const framebuf = cpu.bus.ppu.framebuf.get(.Renderer);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_BYTE, framebuf.ptr);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, framebuf.ptr);
 
             gl.useProgram(self.program_id);
             gl.bindVertexArray(vao_id);
