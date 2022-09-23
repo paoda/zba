@@ -246,7 +246,7 @@ pub const Gui = struct {
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
         _ = ctx;
-        return SDL.SDL_GL_GetProcAddress(@ptrCast([*c]const u8, proc));
+        return SDL.SDL_GL_GetProcAddress(proc.ptr);
     }
 };
 
