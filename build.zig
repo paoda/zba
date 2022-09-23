@@ -31,8 +31,8 @@ pub fn build(b: *std.build.Builder) void {
     // TOML Library
     exe.addPackagePath("toml", "lib/zig-toml/src/toml.zig");
 
-    // OpenGL Bindings
-    exe.addPackagePath("gl", "lib/gl_4v5.zig");
+    // OpenGL 3.3 Bindings
+    exe.addPackagePath("gl", "lib/gl.zig");
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b);
