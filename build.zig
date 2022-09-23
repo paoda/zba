@@ -13,6 +13,8 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("zba", "src/main.zig");
+    exe.setTarget(target);
+
     // Known Folders (%APPDATA%, XDG, etc.)
     exe.addPackagePath("known_folders", "lib/known-folders/known-folders.zig");
 
@@ -29,10 +31,8 @@ pub fn build(b: *std.build.Builder) void {
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b);
     sdk.link(exe, .dynamic);
-
     exe.addPackage(sdk.getNativePackage("sdl2"));
 
-    exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
 
