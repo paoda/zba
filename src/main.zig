@@ -1,8 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
-
 const known_folders = @import("known_folders");
 const clap = @import("clap");
+const toml = @import("toml");
 
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
@@ -33,11 +33,26 @@ pub fn main() anyerror!void {
     defer std.debug.assert(!gpa.deinit());
     const allocator = gpa.allocator();
 
+    // TODO: Make Error message not Linux Specific
+    const data_path = try known_folders.getPath(allocator, .data) orelse exit("Unable to Determine XDG Data Path", .{});
+    defer allocator.free(data_path);
+
+    const config_path = try configFilePath(allocator, data_path);
+    defer allocator.free(config_path);
+
+    const save_path = try savePath(allocator, data_path);
+    defer allocator.free(save_path);
+
+    const config = try loadConfig(allocator, config_path);
+    _ = config;
+
+    log.debug("got past loadConfig()", .{});
+
     // Handle CLI Input
     const result = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer result.deinit();
 
-    const paths = try handleArguments(allocator, &result);
+    const paths = try handleArguments(allocator, data_path, &result);
     defer if (paths.save) |path| allocator.free(path);
 
     const log_file: ?std.fs.File = if (cpu_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
@@ -60,43 +75,75 @@ pub fn main() anyerror!void {
     try gui.run(&cpu, &scheduler);
 }
 
-fn getSavePath(allocator: Allocator) !?[]const u8 {
-    const save_subpath = "zba" ++ [_]u8{std.fs.path.sep} ++ "save";
-
-    const maybe_data_path = try known_folders.getPath(allocator, .data);
-    defer if (maybe_data_path) |path| allocator.free(path);
-
-    const save_path = if (maybe_data_path) |base| try std.fs.path.join(allocator, &[_][]const u8{ base, "zba", "save" }) else null;
-
-    if (save_path) |_| {
-        // If we've determined what our save path should be, ensure the prereq directories
-        // are present so that we can successfully write to the path when necessary
-        const maybe_data_dir = try known_folders.open(allocator, .data, .{});
-        if (maybe_data_dir) |data_dir| try data_dir.makePath(save_subpath);
-    }
-
-    return save_path;
-}
-
-fn getRomPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) ![]const u8 {
-    return switch (result.positionals.len) {
-        1 => result.positionals[0],
-        0 => std.debug.panic("ZBA requires a positional path to a GamePak ROM.\n", .{}),
-        else => std.debug.panic("ZBA received too many arguments.\n", .{}),
-    };
-}
-
-pub fn handleArguments(allocator: Allocator, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
-    const rom_path = try getRomPath(result);
+pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
+    const rom_path = romPath(result);
     log.info("ROM path: {s}", .{rom_path});
+
     const bios_path = result.args.bios;
     if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.info("No BIOS provided", .{});
-    const save_path = try getSavePath(allocator);
-    if (save_path) |path| log.info("Save path: {s}", .{path});
+
+    const save_path = try savePath(allocator, data_path);
+    log.info("Save path: {s}", .{save_path});
 
     return FilePaths{
         .rom = rom_path,
         .bios = bios_path,
         .save = save_path,
     };
+}
+
+const Config = struct {
+    // TODO: Add Config Fields
+    // TODO: Move to it's own file? config.zig?
+};
+
+// FIXME: TOML Library Leaks memory here
+// Either I should improve the TOML library, or try some of the even less used ones :thinking
+fn loadConfig(allocator: Allocator, config_path: []const u8) !Config {
+    // _ = allocator;
+    // _ = config_path;
+
+    const table = try toml.parseFile(allocator, config_path, null);
+    table.deinit();
+
+    return .{};
+}
+
+fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
+    const path = try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "config.toml" });
+
+    // We try to create the file exclusively, meaning that we err out if the file already exists.
+    // All we care about is a file being there so we can just ignore that error in particular and
+    // continue down the happy pathj
+    std.fs.accessAbsolute(path, .{}) catch {
+        const file_handle = try std.fs.createFileAbsolute(path, .{});
+        file_handle.close();
+    };
+
+    return path;
+}
+
+fn savePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
+    var dir = try std.fs.openDirAbsolute(data_path, .{});
+    defer dir.close();
+
+    // Will either make the path recursively, or just exit early since it already exists
+    try dir.makePath("zba" ++ [_]u8{std.fs.path.sep} ++ "save");
+
+    // FIXME: Do we have to allocate? :sad:
+    return try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "save" });
+}
+
+fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
+    return switch (result.positionals.len) {
+        1 => result.positionals[0],
+        0 => exit("ZBA requires a path to a GamePak ROM\n", .{}),
+        else => exit("ZBA received too many positional arguments. \n", .{}),
+    };
+}
+
+fn exit(comptime format: []const u8, args: anytype) noreturn {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print(format, args) catch {}; // Just exit already...
+    std.os.exit(1);
 }
