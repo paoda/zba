@@ -17,7 +17,7 @@ pub fn armSoftwareInterrupt() InstrFn {
             cpu.r[14] = ret_addr; // Resume Execution
             cpu.spsr.raw = cpsr; // Previous mode CPSR
             cpu.r[15] = 0x0000_0008;
-            cpu.pipe.reload(u32, cpu);
+            cpu.pipe.reload(cpu);
         }
     }.inner;
 }

@@ -76,9 +76,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                 else => {
                     cpu.r[rd] = result;
                     if (rd == 0xF) {
-                        if (S) cpu.setCpsrNoFlush(cpu.spsr.raw);
-
-                        cpu.pipe.reload(u32, cpu);
+                        if (S) cpu.setCpsr(cpu.spsr.raw);
+                        cpu.pipe.reload(cpu);
                     }
                 },
             }
@@ -180,5 +179,5 @@ pub fn adc(overflow: *bool, left: u32, right: u32, old_carry: u1) u32 {
 
 fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
     @setCold(true);
-    cpu.setCpsrNoFlush(cpu.spsr.raw);
+    cpu.setCpsr(cpu.spsr.raw);
 }

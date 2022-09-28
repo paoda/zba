@@ -15,7 +15,7 @@ pub fn fmt16(comptime cond: u4) InstrFn {
             if (!checkCond(cpu.cpsr, cond)) return;
 
             cpu.r[15] +%= sext(u32, u8, opcode & 0xFF) << 1;
-            cpu.pipe.reload(u16, cpu);
+            cpu.pipe.reload(cpu);
         }
     }.inner;
 }
@@ -25,7 +25,7 @@ pub fn fmt18() InstrFn {
         // B but conditional
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             cpu.r[15] +%= sext(u32, u11, opcode & 0x7FF) << 1;
-            cpu.pipe.reload(u16, cpu);
+            cpu.pipe.reload(cpu);
         }
     }.inner;
 }
@@ -43,7 +43,7 @@ pub fn fmt19(comptime is_low: bool) InstrFn {
                 cpu.r[15] = cpu.r[14] +% (offset << 1);
                 cpu.r[14] = next_opcode | 1;
 
-                cpu.pipe.reload(u16, cpu);
+                cpu.pipe.reload(cpu);
             } else {
                 // Instruction 1
                 const lr_offset = sext(u32, u11, offset) << 12;

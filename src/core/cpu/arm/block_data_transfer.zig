@@ -55,7 +55,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
 
                 if (L) {
                     cpu.r[15] = bus.read(u32, und_addr);
-                    cpu.pipe.reload(u32, cpu);
+                    cpu.pipe.reload(cpu);
                 } else {
                     // FIXME: Should r15 on write be +12 ahead?
                     bus.write(u32, und_addr, cpu.r[15] + 4);
@@ -92,7 +92,7 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                     cpu.r[i] = value;
                     if (i == 0xF) {
                         cpu.r[i] &= ~@as(u32, 3); // Align r15
-                        cpu.pipe.reload(u32, cpu);
+                        cpu.pipe.reload(cpu);
 
                         if (S) cpu.setCpsr(cpu.spsr.raw);
                     }

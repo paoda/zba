@@ -323,21 +323,8 @@ pub const Arm7tdmi = struct {
         return self.bus.io.haltcnt == .Halt;
     }
 
-    pub fn setCpsrNoFlush(self: *Self, value: u32) void {
-        if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
-        self.cpsr.raw = value;
-    }
-
     pub fn setCpsr(self: *Self, value: u32) void {
         if (value & 0x1F != self.cpsr.raw & 0x1F) self.changeModeFromIdx(@truncate(u5, value & 0x1F));
-
-        const new: PSR = .{ .raw = value };
-        if (self.cpsr.t.read() != new.t.read()) {
-            // If THUMB to ARM or ARM to THUMB, flush pipeline
-            self.r[15] &= if (new.t.read()) ~@as(u32, 1) else ~@as(u32, 3);
-            if (new.t.read()) self.pipe.reload(u16, self) else self.pipe.reload(u32, self);
-        }
-
         self.cpsr.raw = value;
     }
 
@@ -500,7 +487,8 @@ pub const Arm7tdmi = struct {
         // log.debug("Handling Interrupt!", .{});
         self.bus.io.haltcnt = .Execute;
 
-        const ret_addr = self.r[15] - if (self.cpsr.t.read()) 2 else @as(u32, 4);
+        // FIXME: This seems weird, but retAddr.gba suggests I need to make these changes
+        const ret_addr = self.r[15] - if (self.cpsr.t.read()) 0 else @as(u32, 4);
         const new_spsr = self.cpsr.raw;
 
         self.changeMode(.Irq);
@@ -510,7 +498,7 @@ pub const Arm7tdmi = struct {
         self.r[14] = ret_addr;
         self.spsr.raw = new_spsr;
         self.r[15] = 0x0000_0018;
-        self.pipe.reload(u32, self);
+        self.pipe.reload(self);
     }
 
     inline fn fetch(self: *Self, comptime T: type) T {
@@ -692,18 +680,17 @@ const Pipline = struct {
         return opcode;
     }
 
-    pub fn reload(self: *Self, comptime T: type, cpu: *Arm7tdmi) void {
-        comptime std.debug.assert(T == u32 or T == u16);
+    pub fn reload(self: *Self, cpu: *Arm7tdmi) void {
+        if (cpu.cpsr.t.read()) {
+            self.stage[0] = cpu.bus.read(u16, cpu.r[15]);
+            self.stage[1] = cpu.bus.read(u16, cpu.r[15] + 2);
+            cpu.r[15] += 4;
+        } else {
+            self.stage[0] = cpu.bus.read(u32, cpu.r[15]);
+            self.stage[1] = cpu.bus.read(u32, cpu.r[15] + 4);
+            cpu.r[15] += 8;
+        }
 
-        // Sometimes, the pipeline can be reloaded twice in the same instruction
-        // This can happen if:
-        // 1. R15 is written to
-        // 2. The CPSR is written to (and T changes), so R15 is written to again
-
-        self.stage[0] = cpu.bus.read(T, cpu.r[15]);
-        self.stage[1] = cpu.bus.read(T, cpu.r[15] + if (T == u32) 4 else @as(u32, 2));
-
-        cpu.r[15] += if (T == u32) 8 else @as(u32, 4);
         self.flushed = true;
     }
 };

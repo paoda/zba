@@ -83,13 +83,13 @@ pub fn fmt5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
                     cpu.r[15] = op2 & ~@as(u32, 1);
 
                     cpu.cpsr.t.write(is_thumb);
-                    if (is_thumb) cpu.pipe.reload(u16, cpu) else cpu.pipe.reload(u32, cpu);
+                    cpu.pipe.reload(cpu);
                 },
                 else => {
                     cpu.r[rd] = result;
                     if (rd == 0xF) {
                         cpu.r[15] &= ~@as(u32, 1);
-                        cpu.pipe.reload(u16, cpu);
+                        cpu.pipe.reload(cpu);
                     }
                 },
             }
