@@ -24,7 +24,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
             if (!I and opcode >> 4 & 1 == 1) cpu.r[15] -= 4;
 
             var result: u32 = undefined;
-            var didOverflow: bool = undefined;
+            var overflow: bool = undefined;
 
             // Perform Data Processing Logic
             switch (kind) {
@@ -32,8 +32,8 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                 0x1 => result = op1 ^ op2, // EOR
                 0x2 => result = op1 -% op2, // SUB
                 0x3 => result = op2 -% op1, // RSB
-                0x4 => result = newAdd(&didOverflow, op1, op2), // ADD
-                0x5 => result = newAdc(&didOverflow, op1, op2, old_carry), // ADC
+                0x4 => result = add(&overflow, op1, op2), // ADD
+                0x5 => result = adc(&overflow, op1, op2, old_carry), // ADC
                 0x6 => result = sbc(op1, op2, old_carry), // SBC
                 0x7 => result = sbc(op2, op1, old_carry), // RSC
                 0x8 => {
@@ -62,7 +62,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                     if (rd == 0xF)
                         return undefinedTestBehaviour(cpu);
 
-                    didOverflow = @addWithOverflow(u32, op1, op2, &result);
+                    overflow = @addWithOverflow(u32, op1, op2, &result);
                 },
                 0xC => result = op1 | op2, // ORR
                 0xD => result = op2, // MOV
@@ -111,7 +111,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                     // ADD, ADC Flags
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(didOverflow);
+                    cpu.cpsr.c.write(overflow);
                     cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0x6, 0x7 => if (S and rd != 0xF) {
@@ -142,7 +142,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                         cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                     } else if (kind == 0xB) {
                         // CMN specific
-                        cpu.cpsr.c.write(didOverflow);
+                        cpu.cpsr.c.write(overflow);
                         cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                     } else {
                         // TST, TEQ specific
@@ -163,63 +163,19 @@ pub fn sbc(left: u32, right: u32, old_carry: u1) u32 {
     return ret;
 }
 
-pub fn sub(comptime S: bool, cpu: *Arm7tdmi, left: u32, right: u32) u32 {
-    const result = left -% right;
-
-    if (S) {
-        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-        cpu.cpsr.z.write(result == 0);
-        cpu.cpsr.c.write(right <= left);
-        cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
-    }
-
-    return result;
-}
-
-fn newAdd(didOverflow: *bool, left: u32, right: u32) u32 {
+pub fn add(overflow: *bool, left: u32, right: u32) u32 {
     var ret: u32 = undefined;
-    didOverflow.* = @addWithOverflow(u32, left, right, &ret);
+    overflow.* = @addWithOverflow(u32, left, right, &ret);
     return ret;
 }
 
-pub fn add(comptime S: bool, cpu: *Arm7tdmi, left: u32, right: u32) u32 {
-    var result: u32 = undefined;
-    const didOverflow = @addWithOverflow(u32, left, right, &result);
-
-    if (S) {
-        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-        cpu.cpsr.z.write(result == 0);
-        cpu.cpsr.c.write(didOverflow);
-        cpu.cpsr.v.write(((left ^ result) & (right ^ result)) >> 31 & 1 == 1);
-    }
-
-    return result;
-}
-
-pub fn newAdc(didOverflow: *bool, left: u32, right: u32, old_carry: u1) u32 {
+pub fn adc(overflow: *bool, left: u32, right: u32, old_carry: u1) u32 {
     var ret: u32 = undefined;
-    const did = @addWithOverflow(u32, left, right, &ret);
-    const overflow = @addWithOverflow(u32, ret, old_carry, &ret);
+    const first = @addWithOverflow(u32, left, right, &ret);
+    const second = @addWithOverflow(u32, ret, old_carry, &ret);
 
-    didOverflow.* = did or overflow;
+    overflow.* = first or second;
     return ret;
-}
-
-pub fn cmp(cpu: *Arm7tdmi, left: u32, right: u32) void {
-    const result = left -% right;
-
-    cpu.cpsr.n.write(result >> 31 & 1 == 1);
-    cpu.cpsr.z.write(result == 0);
-    cpu.cpsr.c.write(right <= left);
-    cpu.cpsr.v.write(((left ^ result) & (~right ^ result)) >> 31 & 1 == 1);
-}
-
-pub fn setLogicOpFlags(comptime S: bool, cpu: *Arm7tdmi, result: u32) void {
-    if (S) {
-        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-        cpu.cpsr.z.write(result == 0);
-        // C set by Barrel Shifter, V is unaffected
-    }
 }
 
 fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
