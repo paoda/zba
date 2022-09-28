@@ -242,7 +242,7 @@ pub const Arm7tdmi = struct {
     const Self = @This();
 
     r: [16]u32,
-    pipe: Pipline,
+    pipe: Pipeline,
     sched: *Scheduler,
     bus: *Bus,
     cpsr: PSR,
@@ -263,7 +263,7 @@ pub const Arm7tdmi = struct {
     pub fn init(sched: *Scheduler, bus: *Bus, log_file: ?std.fs.File) Self {
         return Self{
             .r = [_]u32{0x00} ** 16,
-            .pipe = Pipline.init(),
+            .pipe = Pipeline.init(),
             .sched = sched,
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_001F },
@@ -643,7 +643,7 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
     };
 }
 
-const Pipline = struct {
+const Pipeline = struct {
     const Self = @This();
     stage: [2]?u32,
     flushed: bool,
