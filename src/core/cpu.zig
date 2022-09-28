@@ -428,22 +428,24 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn step(self: *Self) void {
-        if (self.cpsr.t.read()) blk: {
-            const opcode = @truncate(u16, self.pipe.step(self, u16) orelse break :blk);
+        defer {
+            if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+            self.pipe.flushed = false;
+        }
+
+        if (self.cpsr.t.read()) {
+            const opcode = @truncate(u16, self.pipe.step(self, u16) orelse return);
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             thumb.lut[thumb.idx(opcode)](self, self.bus, opcode);
-        } else blk: {
-            const opcode = self.pipe.step(self, u32) orelse break :blk;
+        } else {
+            const opcode = self.pipe.step(self, u32) orelse return;
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm.lut[arm.idx(opcode)](self, self.bus, opcode);
             }
         }
-
-        if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
-        self.pipe.flushed = false;
     }
 
     pub fn stepDmaTransfer(self: *Self) bool {
@@ -481,8 +483,8 @@ pub const Arm7tdmi = struct {
         // Return if IME is disabled, CPSR I is set or there is nothing to handle
         if (!self.bus.io.ime or self.cpsr.i.read() or should_handle == 0) return;
 
-        // If pipeline isn't full, return but reschedule the handling of the event
-        if (!self.pipe.isFull()) return;
+        // If Pipeline isn't full, we have a bug
+        std.debug.assert(self.pipe.isFull());
 
         // log.debug("Handling Interrupt!", .{});
         self.bus.io.haltcnt = .Execute;
@@ -501,23 +503,18 @@ pub const Arm7tdmi = struct {
         self.pipe.reload(self);
     }
 
-    inline fn fetch(self: *Self, comptime T: type) T {
+    inline fn fetch(self: *Self, comptime T: type, address: u32) T {
         comptime std.debug.assert(T == u32 or T == u16); // Opcode may be 32-bit (ARM) or 16-bit (THUMB)
-        defer self.r[15] += if (T == u32) 4 else 2;
 
-        // FIXME: You better hope this is optimized out
+        // Bus.read will advance the scheduler. There are different timings for CPU fetches,
+        // so we want to undo what Bus.read will apply. We can do this by caching the current tick
+        // This is very dumb.
+        //
+        // FIXME: Please rework this
         const tick_cache = self.sched.tick;
-        defer self.sched.tick = tick_cache + Bus.fetch_timings[@boolToInt(T == u32)][@truncate(u4, self.r[15] >> 24)];
+        defer self.sched.tick = tick_cache + Bus.fetch_timings[@boolToInt(T == u32)][@truncate(u4, address >> 24)];
 
-        return self.bus.read(T, self.r[15]);
-    }
-
-    fn debug_log(self: *const Self, file: *const File, opcode: u32) void {
-        if (self.binary_log) {
-            self.skyLog(file) catch unreachable;
-        } else {
-            self.mgbaLog(file, opcode) catch unreachable;
-        }
+        return self.bus.read(T, address);
     }
 
     pub fn panic(self: *const Self, comptime format: []const u8, args: anytype) noreturn {
@@ -655,15 +652,6 @@ const Pipeline = struct {
         };
     }
 
-    pub fn flush(self: *Self) void {
-        for (self.stage) |*opcode| opcode.* = null;
-        self.flushed = true;
-
-        // Note: If using this, add
-        // if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
-        // to the end of Arm7tdmi.step
-    }
-
     pub fn isFull(self: *const Self) bool {
         return self.stage[0] != null and self.stage[1] != null;
     }
@@ -672,22 +660,22 @@ const Pipeline = struct {
         comptime std.debug.assert(T == u32 or T == u16);
 
         // FIXME: https://github.com/ziglang/zig/issues/12642
-        const opcode = self.stage[0..1][0];
+        var opcode = self.stage[0];
 
         self.stage[0] = self.stage[1];
-        self.stage[1] = cpu.bus.read(T, cpu.r[15]);
+        self.stage[1] = cpu.fetch(T, cpu.r[15]);
 
         return opcode;
     }
 
     pub fn reload(self: *Self, cpu: *Arm7tdmi) void {
         if (cpu.cpsr.t.read()) {
-            self.stage[0] = cpu.bus.read(u16, cpu.r[15]);
-            self.stage[1] = cpu.bus.read(u16, cpu.r[15] + 2);
+            self.stage[0] = cpu.fetch(u16, cpu.r[15]);
+            self.stage[1] = cpu.fetch(u16, cpu.r[15] + 2);
             cpu.r[15] += 4;
         } else {
-            self.stage[0] = cpu.bus.read(u32, cpu.r[15]);
-            self.stage[1] = cpu.bus.read(u32, cpu.r[15] + 4);
+            self.stage[0] = cpu.fetch(u32, cpu.r[15]);
+            self.stage[1] = cpu.fetch(u32, cpu.r[15] + 4);
             cpu.r[15] += 8;
         }
 

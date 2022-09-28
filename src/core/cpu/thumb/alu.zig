@@ -73,8 +73,6 @@ pub fn fmt4(comptime op: u4) InstrFn {
                     cpu.cpsr.z.write(result == 0);
                     cpu.cpsr.c.write(overflow);
                     cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
-
-                    // FIXME: Pretty sure CMN Is the same
                 },
                 0x6 => {
                     // SBC
