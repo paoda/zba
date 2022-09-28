@@ -75,73 +75,60 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                 0x8, 0x9, 0xA, 0xB => {}, // Test Operations
                 else => {
                     cpu.r[rd] = result;
-                    if (rd == 0xF) cpu.pipe.reload(u32, cpu);
+                    if (rd == 0xF) {
+                        if (S) cpu.setCpsr(cpu.spsr.raw);
+
+                        cpu.pipe.reload(u32, cpu);
+                    }
                 },
             }
 
             // Write Flags
             switch (kind) {
-                0x0, 0x1, 0xC, 0xD, 0xE, 0xF => {
+                0x0, 0x1, 0xC, 0xD, 0xE, 0xF => if (S and rd != 0xF) {
                     // Logic Operation Flags
-                    if (S) {
-                        if (rd == 0xF) {
-                            cpu.setCpsr(cpu.spsr.raw);
-                        } else {
-                            cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                            cpu.cpsr.z.write(result == 0);
-                            // C set by Barrel Shifter, V is unaffected
-                        }
-                    }
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    // C set by Barrel Shifter, V is unaffected
+
                 },
-                0x2, 0x3 => {
+                0x2, 0x3 => if (S and rd != 0xF) {
                     // SUB, RSB Flags
-                    if (S) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
 
-                        if (kind == 0x2) {
-                            // SUB specific
-                            cpu.cpsr.c.write(op2 <= op1);
-                            cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
-                        } else {
-                            // RSB Specific
-                            cpu.cpsr.c.write(op1 <= op2);
-                            cpu.cpsr.v.write(((op2 ^ result) & (~op1 ^ result)) >> 31 & 1 == 1);
-                        }
-
-                        if (rd == 0xF) cpu.setCpsr(cpu.spsr.raw);
+                    if (kind == 0x2) {
+                        // SUB specific
+                        cpu.cpsr.c.write(op2 <= op1);
+                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
+                    } else {
+                        // RSB Specific
+                        cpu.cpsr.c.write(op1 <= op2);
+                        cpu.cpsr.v.write(((op2 ^ result) & (~op1 ^ result)) >> 31 & 1 == 1);
                     }
                 },
-                0x4, 0x5 => {
+                0x4, 0x5 => if (S and rd != 0xF) {
                     // ADD, ADC Flags
-                    if (S) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
-                        cpu.cpsr.c.write(didOverflow);
-                        cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
-
-                        if (rd == 0xF) cpu.setCpsr(cpu.spsr.raw);
-                    }
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.c.write(didOverflow);
+                    cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
-                0x6, 0x7 => {
+                0x6, 0x7 => if (S and rd != 0xF) {
                     // SBC, RSC Flags
-                    if (S) {
-                        cpu.cpsr.n.write(result >> 31 & 1 == 1);
-                        cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
 
-                        if (kind == 0x6) {
-                            // SBC specific
-                            const subtrahend = @as(u64, op2) -% old_carry +% 1;
-                            cpu.cpsr.c.write(subtrahend <= op1);
-                            cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
-                        } else {
-                            // RSC Specific
-                            const subtrahend = @as(u64, op1) -% old_carry +% 1;
-                            cpu.cpsr.c.write(subtrahend <= op2);
-                            cpu.cpsr.v.write(((op2 ^ result) & (~op1 ^ result)) >> 31 & 1 == 1);
-                        }
-
-                        if (rd == 0xF) cpu.setCpsr(cpu.spsr.raw);
+                    if (kind == 0x6) {
+                        // SBC specific
+                        const subtrahend = @as(u64, op2) -% old_carry +% 1;
+                        cpu.cpsr.c.write(subtrahend <= op1);
+                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
+                    } else {
+                        // RSC Specific
+                        const subtrahend = @as(u64, op1) -% old_carry +% 1;
+                        cpu.cpsr.c.write(subtrahend <= op2);
+                        cpu.cpsr.v.write(((op2 ^ result) & (~op1 ^ result)) >> 31 & 1 == 1);
                     }
                 },
                 0x8, 0x9, 0xA, 0xB => {
