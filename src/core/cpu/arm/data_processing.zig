@@ -2,8 +2,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
-const rotateRight = @import("../barrel_shifter.zig").rotateRight;
-const execute = @import("../barrel_shifter.zig").execute;
+const exec = @import("../barrel_shifter.zig").exec;
+const ror = @import("../barrel_shifter.zig").ror;
 
 pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) InstrFn {
     return struct {
@@ -18,7 +18,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
             const op1 = cpu.r[rn];
 
             const amount = @truncate(u8, (opcode >> 8 & 0xF) << 1);
-            const op2 = if (I) rotateRight(S, &cpu.cpsr, opcode & 0xFF, amount) else execute(S, cpu, opcode);
+            const op2 = if (I) ror(S, &cpu.cpsr, opcode & 0xFF, amount) else exec(S, cpu, opcode);
 
             // Undo special condition from above
             if (!I and opcode >> 4 & 1 == 1) cpu.r[15] -= 4;
@@ -146,7 +146,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                     } else {
                         // TST, TEQ specific
                         // Barrel Shifter should always calc CPSR C in TST
-                        if (!S) _ = execute(true, cpu, opcode);
+                        if (!S) _ = exec(true, cpu, opcode);
                     }
                 },
             }

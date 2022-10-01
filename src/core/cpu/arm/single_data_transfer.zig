@@ -17,7 +17,7 @@ pub fn singleDataTransfer(comptime I: bool, comptime P: bool, comptime U: bool, 
             // rn is r15 and L is not set, the PC is 12 ahead
             const base = cpu.r[rn] + if (!L and rn == 0xF) 4 else @as(u32, 0);
 
-            const offset = if (I) shifter.immShift(false, cpu, opcode) else opcode & 0xFFF;
+            const offset = if (I) shifter.immediate(false, cpu, opcode) else opcode & 0xFFF;
 
             const modified_base = if (U) base +% offset else base -% offset;
             var address = if (P) modified_base else base;

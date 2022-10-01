@@ -5,10 +5,10 @@ const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 const adc = @import("../arm/data_processing.zig").adc;
 const sbc = @import("../arm/data_processing.zig").sbc;
 
-const lsl = @import("../barrel_shifter.zig").logicalLeft;
-const lsr = @import("../barrel_shifter.zig").logicalRight;
-const asr = @import("../barrel_shifter.zig").arithmeticRight;
-const ror = @import("../barrel_shifter.zig").rotateRight;
+const lsl = @import("../barrel_shifter.zig").lsl;
+const lsr = @import("../barrel_shifter.zig").lsr;
+const asr = @import("../barrel_shifter.zig").asr;
+const ror = @import("../barrel_shifter.zig").ror;
 
 pub fn fmt4(comptime op: u4) InstrFn {
     return struct {

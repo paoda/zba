@@ -6,9 +6,9 @@ const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const add = @import("../arm/data_processing.zig").add;
 
-const lsl = @import("../barrel_shifter.zig").logicalLeft;
-const lsr = @import("../barrel_shifter.zig").logicalRight;
-const asr = @import("../barrel_shifter.zig").arithmeticRight;
+const lsl = @import("../barrel_shifter.zig").lsl;
+const lsr = @import("../barrel_shifter.zig").lsr;
+const asr = @import("../barrel_shifter.zig").asr;
 
 pub fn fmt1(comptime op: u2, comptime offset: u5) InstrFn {
     return struct {
