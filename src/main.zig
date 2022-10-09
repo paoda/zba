@@ -60,10 +60,11 @@ pub fn main() anyerror!void {
 
     var bus: Bus = undefined;
     var cpu = Arm7tdmi.init(&scheduler, &bus, log_file);
-    if (paths.bios == null) cpu.fastBoot();
 
     try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
+
+    if (paths.bios == null) cpu.fastBoot();
 
     var gui = Gui.init(&bus.pak.title, &bus.apu, width, height);
     defer gui.deinit();

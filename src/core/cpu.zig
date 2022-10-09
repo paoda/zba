@@ -412,6 +412,12 @@ pub const Arm7tdmi = struct {
         self.cpsr.mode.write(@enumToInt(next));
     }
 
+    /// Advances state so that the BIOS is skipped
+    ///
+    /// Note: This accesses the CPU's bus ptr so it only may be called
+    /// once the Bus has been properly initialized
+    ///
+    /// TODO: Make above notice impossible to do in code
     pub fn fastBoot(self: *Self) void {
         self.r = std.mem.zeroes([16]u32);
 
@@ -425,6 +431,8 @@ pub const Arm7tdmi = struct {
 
         // self.cpsr.raw = 0x6000001F;
         self.cpsr.raw = 0x0000_001F;
+
+        self.bus.bios.addr_latch = 0x0000_00DC + 8;
     }
 
     pub fn step(self: *Self) void {
