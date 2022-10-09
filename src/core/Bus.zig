@@ -84,7 +84,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
             if (address < Bios.size)
                 break :blk self.bios.dbgRead(T, self.cpu.r[15], aligned_addr);
 
-            break :blk self.readOpenBus(T, address);
+            break :blk self.openBus(T, address);
         },
         0x02 => self.ewram.read(T, aligned_addr),
         0x03 => self.iwram.read(T, aligned_addr),
@@ -109,48 +109,63 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
 
             break :blk @as(T, value) * multiplier;
         },
-        else => self.readOpenBus(T, address),
+        else => self.openBus(T, address),
     };
 }
 
 fn readIo(self: *const Self, comptime T: type, unaligned_address: u32) T {
     const maybe_value = io.read(self, T, forceAlign(T, unaligned_address));
-    return if (maybe_value) |value| value else self.readOpenBus(T, unaligned_address);
+    return if (maybe_value) |value| value else self.openBus(T, unaligned_address);
 }
 
-fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
+fn openBus(self: *const Self, comptime T: type, address: u32) T {
     const r15 = self.cpu.r[15];
 
     const word = blk: {
-        // If u32 Open Bus, read recently fetched opcode (PC + 8)
-        if (!self.cpu.cpsr.t.read()) break :blk self.dbgRead(u32, r15 + 4);
+        // If Arm, get the most recently fetched instruction (PC + 8)
+        if (!self.cpu.cpsr.t.read()) break :blk self.cpu.pipe.stage[1].?;
+
         const page = @truncate(u8, r15 >> 24);
+
+        // PC + 2 = stage[0]
+        // PC + 4 = stage[1]
+        // PC + 6 = Need a Debug Read for this?
 
         switch (page) {
             // EWRAM, PALRAM, VRAM, and Game ROM (16-bit)
             0x02, 0x05, 0x06, 0x08...0x0D => {
-                // (PC + 4)
-                const halfword = self.dbgRead(u16, r15 + 2);
-
-                break :blk @as(u32, halfword) << 16 | halfword;
+                const halfword: u32 = @truncate(u16, self.cpu.pipe.stage[1].?);
+                break :blk halfword << 16 | halfword;
             },
+
             // BIOS or OAM (32-bit)
             0x00, 0x07 => {
                 // Aligned: (PC + 6) | (PC + 4)
                 // Unaligned: (PC + 4) | (PC + 2)
-                const offset: u32 = if (address & 3 == 0b00) 2 else 0;
+                const aligned = address & 3 == 0b00;
 
-                break :blk @as(u32, self.dbgRead(u16, r15 + 2 + offset)) << 16 | self.dbgRead(u16, r15 + offset);
+                // TODO: What to do on PC + 6?
+                const high: u32 = if (aligned) self.dbgRead(u16, r15 + 4) else @truncate(u16, self.cpu.pipe.stage[1].?);
+                const low: u32 = @truncate(u16, self.cpu.pipe.stage[@boolToInt(aligned)].?);
+
+                break :blk high << 16 | low;
             },
+
             // IWRAM (16-bit but special)
             0x03 => {
                 // Aligned: (PC + 2) | (PC + 4)
                 // Unaligned: (PC + 4) | (PC + 2)
-                const offset: u32 = if (address & 3 == 0b00) 2 else 0;
+                const aligned = address & 3 == 0b00;
 
-                break :blk @as(u32, self.dbgRead(u16, r15 + 2 - offset)) << 16 | self.dbgRead(u16, r15 + offset);
+                const high: u32 = @truncate(u16, self.cpu.pipe.stage[1 - @boolToInt(aligned)].?);
+                const low: u32 = @truncate(u16, self.cpu.pipe.stage[@boolToInt(aligned)].?);
+
+                break :blk high << 16 | low;
             },
-            else => unreachable,
+            else => {
+                log.err("THUMB open bus read from 0x{X:0>2} page @0x{X:0>8}", .{ page, address });
+                @panic("invariant most-likely broken");
+            },
         }
     };
 
@@ -169,7 +184,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
             if (address < Bios.size)
                 break :blk self.bios.read(T, self.cpu.r[15], aligned_addr);
 
-            break :blk self.readOpenBus(T, address);
+            break :blk self.openBus(T, address);
         },
         0x02 => self.ewram.read(T, aligned_addr),
         0x03 => self.iwram.read(T, aligned_addr),
@@ -194,7 +209,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
 
             break :blk @as(T, value) * multiplier;
         },
-        else => self.readOpenBus(T, address),
+        else => self.openBus(T, address),
     };
 }
 
