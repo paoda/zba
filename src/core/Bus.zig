@@ -46,7 +46,7 @@ iwram: Iwram,
 ewram: Ewram,
 io: Io,
 
-cpu: ?*Arm7tdmi,
+cpu: *Arm7tdmi,
 sched: *Scheduler,
 
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
@@ -82,7 +82,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.dbgRead(T, self.cpu.?.r[15], aligned_addr);
+                break :blk self.bios.dbgRead(T, self.cpu.r[15], aligned_addr);
 
             break :blk self.readOpenBus(T, address);
         },
@@ -119,11 +119,11 @@ fn readIo(self: *const Self, comptime T: type, unaligned_address: u32) T {
 }
 
 fn readOpenBus(self: *const Self, comptime T: type, address: u32) T {
-    const r15 = self.cpu.?.r[15];
+    const r15 = self.cpu.r[15];
 
     const word = blk: {
         // If u32 Open Bus, read recently fetched opcode (PC + 8)
-        if (!self.cpu.?.cpsr.t.read()) break :blk self.dbgRead(u32, r15 + 4);
+        if (!self.cpu.cpsr.t.read()) break :blk self.dbgRead(u32, r15 + 4);
         const page = @truncate(u8, r15 >> 24);
 
         switch (page) {
@@ -167,7 +167,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.read(T, self.cpu.?.r[15], aligned_addr);
+                break :blk self.bios.read(T, self.cpu.r[15], aligned_addr);
 
             break :blk self.readOpenBus(T, address);
         },
