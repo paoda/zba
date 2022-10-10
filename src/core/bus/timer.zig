@@ -19,20 +19,20 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
 
     return switch (T) {
         u32 => switch (nybble) {
-            0x0 => @as(T, tim.*[0].cnt.raw) << 16 | tim.*[0].getCntL(),
-            0x4 => @as(T, tim.*[1].cnt.raw) << 16 | tim.*[1].getCntL(),
-            0x8 => @as(T, tim.*[2].cnt.raw) << 16 | tim.*[2].getCntL(),
-            0xC => @as(T, tim.*[3].cnt.raw) << 16 | tim.*[3].getCntL(),
+            0x0 => @as(T, tim.*[0].cnt.raw) << 16 | tim.*[0].timcntL(),
+            0x4 => @as(T, tim.*[1].cnt.raw) << 16 | tim.*[1].timcntL(),
+            0x8 => @as(T, tim.*[2].cnt.raw) << 16 | tim.*[2].timcntL(),
+            0xC => @as(T, tim.*[3].cnt.raw) << 16 | tim.*[3].timcntL(),
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (nybble) {
-            0x0 => tim.*[0].getCntL(),
+            0x0 => tim.*[0].timcntL(),
             0x2 => tim.*[0].cnt.raw,
-            0x4 => tim.*[1].getCntL(),
+            0x4 => tim.*[1].timcntL(),
             0x6 => tim.*[1].cnt.raw,
-            0x8 => tim.*[2].getCntL(),
+            0x8 => tim.*[2].timcntL(),
             0xA => tim.*[2].cnt.raw,
-            0xC => tim.*[3].getCntL(),
+            0xC => tim.*[3].timcntL(),
             0xE => tim.*[3].cnt.raw,
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
@@ -46,21 +46,21 @@ pub fn write(comptime T: type, tim: *TimerTuple, addr: u32, value: T) void {
 
     return switch (T) {
         u32 => switch (nybble) {
-            0x0 => tim.*[0].setCnt(value),
-            0x4 => tim.*[1].setCnt(value),
-            0x8 => tim.*[2].setCnt(value),
-            0xC => tim.*[3].setCnt(value),
+            0x0 => tim.*[0].setTimcnt(value),
+            0x4 => tim.*[1].setTimcnt(value),
+            0x8 => tim.*[2].setTimcnt(value),
+            0xC => tim.*[3].setTimcnt(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (nybble) {
-            0x0 => tim.*[0].setCntL(value),
-            0x2 => tim.*[0].setCntH(value),
-            0x4 => tim.*[1].setCntL(value),
-            0x6 => tim.*[1].setCntH(value),
-            0x8 => tim.*[2].setCntL(value),
-            0xA => tim.*[2].setCntH(value),
-            0xC => tim.*[3].setCntL(value),
-            0xE => tim.*[3].setCntH(value),
+            0x0 => tim.*[0].setTimcntL(value),
+            0x2 => tim.*[0].setTimcntH(value),
+            0x4 => tim.*[1].setTimcntL(value),
+            0x6 => tim.*[1].setTimcntH(value),
+            0x8 => tim.*[2].setTimcntL(value),
+            0xA => tim.*[2].setTimcntH(value),
+            0xC => tim.*[3].setTimcntL(value),
+            0xE => tim.*[3].setTimcntH(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
@@ -72,13 +72,13 @@ fn Timer(comptime id: u2) type {
     return struct {
         const Self = @This();
 
-        /// Read Only, Internal. Please use self.getCntL()
+        /// Read Only, Internal. Please use self.timcntL()
         _counter: u16,
 
-        /// Write Only, Internal. Please use self.setCntL()
+        /// Write Only, Internal. Please use self.setTimcntL()
         _reload: u16,
 
-        /// Write Only, Internal. Please use self.setCntH()
+        /// Write Only, Internal. Please use self.setTimcntH()
         cnt: TimerControl,
 
         /// Internal.
@@ -97,26 +97,26 @@ fn Timer(comptime id: u2) type {
             };
         }
 
-        /// TIMCNT_L
-        pub fn getCntL(self: *const Self) u16 {
+        /// TIMCNT_L Getter
+        pub fn timcntL(self: *const Self) u16 {
             if (self.cnt.cascade.read() or !self.cnt.enabled.read()) return self._counter;
 
             return self._counter +% @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
         }
 
-        /// TIMCNT_L
-        pub fn setCntL(self: *Self, halfword: u16) void {
+        /// TIMCNT_L Setter
+        pub fn setTimcntL(self: *Self, halfword: u16) void {
             self._reload = halfword;
         }
 
         /// TIMCNT_L & TIMCNT_H
-        pub fn setCnt(self: *Self, word: u32) void {
-            self.setCntL(@truncate(u16, word));
-            self.setCntH(@truncate(u16, word >> 16));
+        pub fn setTimcnt(self: *Self, word: u32) void {
+            self.setTimcntL(@truncate(u16, word));
+            self.setTimcntH(@truncate(u16, word >> 16));
         }
 
         /// TIMCNT_H
-        pub fn setCntH(self: *Self, halfword: u16) void {
+        pub fn setTimcntH(self: *Self, halfword: u16) void {
             const new = TimerControl{ .raw = halfword };
 
             // If Timer happens to be enabled, It will either be resheduled or disabled
@@ -132,12 +132,12 @@ fn Timer(comptime id: u2) type {
             if (!self.cnt.enabled.read() and new.enabled.read()) self._counter = self._reload;
 
             // If Timer is enabled and we're not cascading, we need to schedule an overflow event
-            if (new.enabled.read() and !new.cascade.read()) self.scheduleOverflow(0);
+            if (new.enabled.read() and !new.cascade.read()) self.rescheduleTimerExpire(0);
 
             self.cnt.raw = halfword;
         }
 
-        pub fn handleOverflow(self: *Self, cpu: *Arm7tdmi, late: u64) void {
+        pub fn onTimerExpire(self: *Self, cpu: *Arm7tdmi, late: u64) void {
             // Fire IRQ if enabled
             const io = &cpu.bus.io;
 
@@ -161,15 +161,15 @@ fn Timer(comptime id: u2) type {
             switch (id) {
                 0 => if (cpu.bus.tim[1].cnt.cascade.read()) {
                     cpu.bus.tim[1]._counter +%= 1;
-                    if (cpu.bus.tim[1]._counter == 0) cpu.bus.tim[1].handleOverflow(cpu, late);
+                    if (cpu.bus.tim[1]._counter == 0) cpu.bus.tim[1].onTimerExpire(cpu, late);
                 },
                 1 => if (cpu.bus.tim[2].cnt.cascade.read()) {
                     cpu.bus.tim[2]._counter +%= 1;
-                    if (cpu.bus.tim[2]._counter == 0) cpu.bus.tim[2].handleOverflow(cpu, late);
+                    if (cpu.bus.tim[2]._counter == 0) cpu.bus.tim[2].onTimerExpire(cpu, late);
                 },
                 2 => if (cpu.bus.tim[3].cnt.cascade.read()) {
                     cpu.bus.tim[3]._counter +%= 1;
-                    if (cpu.bus.tim[3]._counter == 0) cpu.bus.tim[3].handleOverflow(cpu, late);
+                    if (cpu.bus.tim[3]._counter == 0) cpu.bus.tim[3].onTimerExpire(cpu, late);
                 },
                 3 => {}, // There is no Timer for TIM3 to "cascade" to,
             }
@@ -177,11 +177,11 @@ fn Timer(comptime id: u2) type {
             // Reschedule Timer if we're not cascading
             if (!self.cnt.cascade.read()) {
                 self._counter = self._reload;
-                self.scheduleOverflow(late);
+                self.rescheduleTimerExpire(late);
             }
         }
 
-        fn scheduleOverflow(self: *Self, late: u64) void {
+        fn rescheduleTimerExpire(self: *Self, late: u64) void {
             const when = (@as(u64, 0x10000) - self._counter) * self.frequency();
 
             self._start_timestamp = self.sched.now();

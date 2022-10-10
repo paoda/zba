@@ -10,7 +10,7 @@ const Bitfield = @import("bitfield").Bitfield;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
-const pollBlankingDma = @import("bus/dma.zig").pollBlankingDma;
+const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 /// This is used to generate byuu / Talurabi's Color Correction algorithm
 const COLOUR_LUT = genColourLut();
@@ -572,7 +572,7 @@ pub const Ppu = struct {
         // See if HBlank DMA is present and not enabled
 
         if (!self.dispstat.vblank.read())
-            pollBlankingDma(cpu.bus, .HBlank);
+            pollDmaOnBlank(cpu.bus, .HBlank);
 
         self.dispstat.hblank.set();
         self.sched.push(.HBlank, 68 * 4 -| late);
@@ -614,7 +614,7 @@ pub const Ppu = struct {
                 self.aff_bg[1].latchRefPoints();
 
                 // See if Vblank DMA is present and not enabled
-                pollBlankingDma(cpu.bus, .VBlank);
+                pollDmaOnBlank(cpu.bus, .VBlank);
             }
 
             if (scanline == 227) self.dispstat.vblank.unset();

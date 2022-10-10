@@ -403,12 +403,12 @@ pub const Apu = struct {
 
         if (@boolToInt(self.dma_cnt.chA_timer.read()) == tim_id) {
             self.chA.updateSample();
-            if (self.chA.len() <= 15) cpu.bus.dma[1].requestSoundDma(0x0400_00A0);
+            if (self.chA.len() <= 15) cpu.bus.dma[1].requestAudio(0x0400_00A0);
         }
 
         if (@boolToInt(self.dma_cnt.chB_timer.read()) == tim_id) {
             self.chB.updateSample();
-            if (self.chB.len() <= 15) cpu.bus.dma[2].requestSoundDma(0x0400_00A4);
+            if (self.chB.len() <= 15) cpu.bus.dma[2].requestAudio(0x0400_00A4);
         }
     }
 };
