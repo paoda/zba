@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Backup);
 
 const Eeprom = @import("backup/eeprom.zig").Eeprom;
+const Flash = @import("backup/Flash.zig");
 
 const escape = @import("../../util.zig").escape;
 const span = @import("../../util.zig").span;
@@ -56,7 +57,7 @@ pub const Backup = struct {
             .kind = kind,
             .title = title,
             .save_path = path,
-            .flash = Flash.init(),
+            .flash = Flash.create(),
             .eeprom = Eeprom.create(allocator),
         };
 
@@ -186,7 +187,7 @@ pub const Backup = struct {
         switch (self.kind) {
             .Flash, .Flash1M => {
                 if (self.flash.prep_write) return self.flash.write(self.buf, addr, byte);
-                if (self.flash.shouldEraseSector(addr, byte)) return self.flash.eraseSector(self.buf, addr);
+                if (self.flash.shouldEraseSector(addr, byte)) return self.flash.erase(self.buf, addr);
 
                 switch (addr) {
                     0x0000 => if (self.kind == .Flash1M and self.flash.set_bank) {
@@ -229,76 +230,4 @@ const Needle = struct {
 
 const SaveError = error{
     UnsupportedBackupKind,
-};
-
-const Flash = struct {
-    const Self = @This();
-
-    state: State,
-
-    id_mode: bool,
-    set_bank: bool,
-    prep_erase: bool,
-    prep_write: bool,
-
-    bank: u1,
-
-    const State = enum {
-        Ready,
-        Set,
-        Command,
-    };
-
-    fn init() Self {
-        return .{
-            .state = .Ready,
-            .id_mode = false,
-            .set_bank = false,
-            .prep_erase = false,
-            .prep_write = false,
-            .bank = 0,
-        };
-    }
-
-    fn handleCommand(self: *Self, buf: []u8, byte: u8) void {
-        switch (byte) {
-            0x90 => self.id_mode = true,
-            0xF0 => self.id_mode = false,
-            0xB0 => self.set_bank = true,
-            0x80 => self.prep_erase = true,
-            0x10 => {
-                std.mem.set(u8, buf, 0xFF);
-                self.prep_erase = false;
-            },
-            0xA0 => self.prep_write = true,
-            else => std.debug.panic("Unhandled Flash Command: 0x{X:0>2}", .{byte}),
-        }
-
-        self.state = .Ready;
-    }
-
-    fn shouldEraseSector(self: *const Self, addr: usize, byte: u8) bool {
-        return self.state == .Command and self.prep_erase and byte == 0x30 and addr & 0xFFF == 0x000;
-    }
-
-    fn write(self: *Self, buf: []u8, idx: usize, byte: u8) void {
-        buf[self.baseAddress() + idx] = byte;
-        self.prep_write = false;
-    }
-
-    fn read(self: *const Self, buf: []u8, idx: usize) u8 {
-        return buf[self.baseAddress() + idx];
-    }
-
-    fn eraseSector(self: *Self, buf: []u8, idx: usize) void {
-        const start = self.baseAddress() + (idx & 0xF000);
-
-        std.mem.set(u8, buf[start..][0..0x1000], 0xFF);
-        self.prep_erase = false;
-        self.state = .Ready;
-    }
-
-    inline fn baseAddress(self: *const Self) usize {
-        return if (self.bank == 1) 0x10000 else @as(usize, 0);
-    }
 };
