@@ -1,0 +1,75 @@
+const io = @import("../../bus/io.zig");
+
+/// Linear Feedback Shift Register
+const Scheduler = @import("../../scheduler.zig").Scheduler;
+const FrameSequencer = @import("../../apu.zig").FrameSequencer;
+const Noise = @import("../Noise.zig");
+
+const Self = @This();
+pub const interval: u64 = (1 << 24) / (1 << 22);
+
+shift: u15,
+timer: u16,
+
+sched: *Scheduler,
+
+pub fn create(sched: *Scheduler) Self {
+    return .{
+        .shift = 0,
+        .timer = 0,
+        .sched = sched,
+    };
+}
+
+pub fn sample(self: *const Self) i8 {
+    return if ((~self.shift & 1) == 1) 1 else -1;
+}
+
+/// Update the sate of the Channel Length TImer
+pub fn updateLength(_: *Self, fs: *const FrameSequencer, ch4: *Noise, nr44: io.NoiseControl) void {
+    // Write to NRx4 when FS's next step is not one that clocks the length counter
+    if (!fs.isLengthNext()) {
+        // If length_enable was disabled but is now enabled and length timer is not 0 already,
+        // decrement the length timer
+
+        if (!ch4.cnt.length_enable.read() and nr44.length_enable.read() and ch4.len_dev.timer != 0) {
+            ch4.len_dev.timer -= 1;
+
+            // If Length Timer is now 0 and trigger is clear, disable the channel
+            if (ch4.len_dev.timer == 0 and !nr44.trigger.read()) ch4.enabled = false;
+        }
+    }
+}
+
+/// Reload LFSR Timer
+pub fn reload(self: *Self, poly: io.PolyCounter) void {
+    self.sched.removeScheduledEvent(.{ .ApuChannel = 3 });
+
+    const div = Self.divisor(poly.div_ratio.read());
+    const timer = div << poly.shift.read();
+    self.sched.push(.{ .ApuChannel = 3 }, @as(u64, timer) * interval);
+}
+
+/// Scheduler Event Handler for LFSR Timer Expire
+/// FIXME: This gets called a lot, clogging up the Scheduler
+pub fn onLfsrTimerExpire(self: *Self, poly: io.PolyCounter, late: u64) void {
+    // Obscure: "Using a noise channel clock shift of 14 or 15
+    // results in the LFSR receiving no clocks."
+    if (poly.shift.read() >= 14) return;
+
+    const div = Self.divisor(poly.div_ratio.read());
+    const timer = div << poly.shift.read();
+
+    const tmp = (self.shift & 1) ^ ((self.shift & 2) >> 1);
+    self.shift = (self.shift >> 1) | (tmp << 14);
+
+    if (poly.width.read())
+        self.shift = (self.shift & ~@as(u15, 0x40)) | tmp << 6;
+
+    self.sched.push(.{ .ApuChannel = 3 }, @as(u64, timer) * interval -| late);
+}
+
+fn divisor(code: u3) u16 {
+    if (code == 0) return 8;
+    return @as(u16, code) << 4;
+}
