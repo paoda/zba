@@ -189,7 +189,7 @@ pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_pat
 
     const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
     const title = file_buf[0xA0..0xAC].*;
-    const kind = Backup.guessKind(file_buf);
+    const kind = Backup.guess(file_buf);
     const device = if (force_rtc) .Rtc else guessDevice(file_buf);
 
     logHeader(file_buf, &title);

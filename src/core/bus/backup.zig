@@ -8,6 +8,7 @@ const Flash = @import("backup/Flash.zig");
 const escape = @import("../../util.zig").escape;
 const span = @import("../../util.zig").span;
 
+const Needle = struct { str: []const u8, kind: Backup.Kind };
 const backup_kinds = [6]Needle{
     .{ .str = "EEPROM_V", .kind = .Eeprom },
     .{ .str = "SRAM_V", .kind = .Sram },
@@ -16,6 +17,8 @@ const backup_kinds = [6]Needle{
     .{ .str = "FLASH512_V", .kind = .Flash },
     .{ .str = "FLASH1M_V", .kind = .Flash1M },
 };
+
+const SaveError = error{Unsupported};
 
 pub const Backup = struct {
     const Self = @This();
@@ -37,122 +40,6 @@ pub const Backup = struct {
         Flash1M,
         None,
     };
-
-    pub fn init(allocator: Allocator, kind: Kind, title: [12]u8, path: ?[]const u8) !Self {
-        log.info("Kind: {}", .{kind});
-
-        const buf_size: usize = switch (kind) {
-            .Sram => 0x8000, // 32K
-            .Flash => 0x10000, // 64K
-            .Flash1M => 0x20000, // 128K
-            .None, .Eeprom => 0, // EEPROM is handled upon first Read Request to it
-        };
-
-        const buf = try allocator.alloc(u8, buf_size);
-        std.mem.set(u8, buf, 0xFF);
-
-        var backup = Self{
-            .buf = buf,
-            .allocator = allocator,
-            .kind = kind,
-            .title = title,
-            .save_path = path,
-            .flash = Flash.create(),
-            .eeprom = Eeprom.create(allocator),
-        };
-
-        if (backup.save_path) |p| backup.loadSaveFromDisk(allocator, p) catch |e| log.err("Failed to load save: {}", .{e});
-        return backup;
-    }
-
-    pub fn guessKind(rom: []const u8) Kind {
-        for (backup_kinds) |needle| {
-            const needle_len = needle.str.len;
-
-            var i: usize = 0;
-            while ((i + needle_len) < rom.len) : (i += 1) {
-                if (std.mem.eql(u8, needle.str, rom[i..][0..needle_len])) return needle.kind;
-            }
-        }
-
-        return .None;
-    }
-
-    pub fn deinit(self: *Self) void {
-        if (self.save_path) |path| self.writeSaveToDisk(self.allocator, path) catch |e| log.err("Failed to write save: {}", .{e});
-        self.allocator.free(self.buf);
-        self.* = undefined;
-    }
-
-    fn loadSaveFromDisk(self: *Self, allocator: Allocator, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(allocator, path);
-        defer allocator.free(file_path);
-
-        // FIXME: Don't rely on this lol
-        if (std.mem.eql(u8, file_path[file_path.len - 12 .. file_path.len], "untitled.sav")) {
-            return log.err("ROM header lacks title, no save loaded", .{});
-        }
-
-        const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
-        const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
-        defer allocator.free(file_buf);
-
-        switch (self.kind) {
-            .Sram, .Flash, .Flash1M => {
-                if (self.buf.len == file_buf.len) {
-                    std.mem.copy(u8, self.buf, file_buf);
-                    return log.info("Loaded Save from {s}", .{file_path});
-                }
-
-                log.err("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
-            },
-            .Eeprom => {
-                if (file_buf.len == 0x200 or file_buf.len == 0x2000) {
-                    self.eeprom.kind = if (file_buf.len == 0x200) .Small else .Large;
-
-                    self.buf = try allocator.alloc(u8, file_buf.len);
-                    std.mem.copy(u8, self.buf, file_buf);
-                    return log.info("Loaded Save from {s}", .{file_path});
-                }
-
-                log.err("EEPROM can either be 0x200 bytes or 0x2000 byes, but {s} was {X:} bytes", .{
-                    file_path,
-                    file_buf.len,
-                });
-            },
-            .None => return SaveError.UnsupportedBackupKind,
-        }
-    }
-
-    fn getSaveFilePath(self: *const Self, allocator: Allocator, path: []const u8) ![]const u8 {
-        const filename = try self.getSaveFilename(allocator);
-        defer allocator.free(filename);
-
-        return try std.fs.path.join(allocator, &[_][]const u8{ path, filename });
-    }
-
-    fn getSaveFilename(self: *const Self, allocator: Allocator) ![]const u8 {
-        const title_str = span(&escape(self.title));
-        const name = if (title_str.len != 0) title_str else "untitled";
-
-        return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });
-    }
-
-    fn writeSaveToDisk(self: Self, allocator: Allocator, path: []const u8) !void {
-        const file_path = try self.getSaveFilePath(allocator, path);
-        defer allocator.free(file_path);
-
-        switch (self.kind) {
-            .Sram, .Flash, .Flash1M, .Eeprom => {
-                const file = try std.fs.createFileAbsolute(file_path, .{});
-                defer file.close();
-
-                try file.writeAll(self.buf);
-                log.info("Wrote Save to {s}", .{file_path});
-            },
-            else => return SaveError.UnsupportedBackupKind,
-        }
-    }
 
     pub fn read(self: *const Self, address: usize) u8 {
         const addr = address & 0xFFFF;
@@ -212,22 +99,121 @@ pub const Backup = struct {
             .None, .Eeprom => {},
         }
     }
-};
 
-const Needle = struct {
-    const Self = @This();
+    pub fn init(allocator: Allocator, kind: Kind, title: [12]u8, path: ?[]const u8) !Self {
+        log.info("Kind: {}", .{kind});
 
-    str: []const u8,
-    kind: Backup.Kind,
-
-    fn init(str: []const u8, kind: Backup.Kind) Self {
-        return .{
-            .str = str,
-            .kind = kind,
+        const buf_size: usize = switch (kind) {
+            .Sram => 0x8000, // 32K
+            .Flash => 0x10000, // 64K
+            .Flash1M => 0x20000, // 128K
+            .None, .Eeprom => 0, // EEPROM is handled upon first Read Request to it
         };
-    }
-};
 
-const SaveError = error{
-    UnsupportedBackupKind,
+        const buf = try allocator.alloc(u8, buf_size);
+        std.mem.set(u8, buf, 0xFF);
+
+        var backup = Self{
+            .buf = buf,
+            .allocator = allocator,
+            .kind = kind,
+            .title = title,
+            .save_path = path,
+            .flash = Flash.create(),
+            .eeprom = Eeprom.create(allocator),
+        };
+
+        if (backup.save_path) |p| backup.readSave(allocator, p) catch |e| log.err("Failed to load save: {}", .{e});
+        return backup;
+    }
+
+    pub fn deinit(self: *Self) void {
+        if (self.save_path) |path| self.writeSave(self.allocator, path) catch |e| log.err("Failed to write save: {}", .{e});
+        self.allocator.free(self.buf);
+        self.* = undefined;
+    }
+
+    /// Guesses the Backup Kind of a GBA ROM
+    pub fn guess(rom: []const u8) Kind {
+        for (backup_kinds) |needle| {
+            const needle_len = needle.str.len;
+
+            var i: usize = 0;
+            while ((i + needle_len) < rom.len) : (i += 1) {
+                if (std.mem.eql(u8, needle.str, rom[i..][0..needle_len])) return needle.kind;
+            }
+        }
+
+        return .None;
+    }
+
+    fn readSave(self: *Self, allocator: Allocator, path: []const u8) !void {
+        const file_path = try self.savePath(allocator, path);
+        defer allocator.free(file_path);
+
+        // FIXME: Don't rely on this lol
+        if (std.mem.eql(u8, file_path[file_path.len - 12 .. file_path.len], "untitled.sav")) {
+            return log.err("ROM header lacks title, no save loaded", .{});
+        }
+
+        const file: std.fs.File = try std.fs.openFileAbsolute(file_path, .{});
+        const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
+        defer allocator.free(file_buf);
+
+        switch (self.kind) {
+            .Sram, .Flash, .Flash1M => {
+                if (self.buf.len == file_buf.len) {
+                    std.mem.copy(u8, self.buf, file_buf);
+                    return log.info("Loaded Save from {s}", .{file_path});
+                }
+
+                log.err("{s} is {} bytes, but we expected {} bytes", .{ file_path, file_buf.len, self.buf.len });
+            },
+            .Eeprom => {
+                if (file_buf.len == 0x200 or file_buf.len == 0x2000) {
+                    self.eeprom.kind = if (file_buf.len == 0x200) .Small else .Large;
+
+                    self.buf = try allocator.alloc(u8, file_buf.len);
+                    std.mem.copy(u8, self.buf, file_buf);
+                    return log.info("Loaded Save from {s}", .{file_path});
+                }
+
+                log.err("EEPROM can either be 0x200 bytes or 0x2000 byes, but {s} was {X:} bytes", .{
+                    file_path,
+                    file_buf.len,
+                });
+            },
+            .None => return SaveError.Unsupported,
+        }
+    }
+
+    fn savePath(self: *const Self, allocator: Allocator, path: []const u8) ![]const u8 {
+        const filename = try self.saveName(allocator);
+        defer allocator.free(filename);
+
+        return try std.fs.path.join(allocator, &[_][]const u8{ path, filename });
+    }
+
+    fn saveName(self: *const Self, allocator: Allocator) ![]const u8 {
+        const title_str = span(&escape(self.title));
+        const name = if (title_str.len != 0) title_str else "untitled";
+
+        return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });
+    }
+
+    fn writeSave(self: Self, allocator: Allocator, path: []const u8) !void {
+        const file_path = try self.savePath(allocator, path);
+        defer allocator.free(file_path);
+
+        switch (self.kind) {
+            .Sram, .Flash, .Flash1M, .Eeprom => {
+                const file = try std.fs.createFileAbsolute(file_path, .{});
+                defer file.close();
+
+                try file.writeAll(self.buf);
+                log.info("Wrote Save to {s}", .{file_path});
+            },
+            else => return SaveError.Unsupported,
+        }
+    }
 };
