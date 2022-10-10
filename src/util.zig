@@ -158,17 +158,6 @@ pub const io = struct {
         }
     };
 };
-pub fn readUndefined(log: anytype, comptime format: []const u8, args: anytype) u8 {
-    log.warn(format, args);
-    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
-
-    return 0;
-}
-
-pub fn writeUndefined(log: anytype, comptime format: []const u8, args: anytype) void {
-    log.warn(format, args);
-    if (builtin.mode == .Debug) std.debug.panic("TODO: Implement I/O Register", .{});
-}
 
 pub const Logger = struct {
     const Self = @This();
@@ -230,3 +219,52 @@ pub const Logger = struct {
 };
 
 const FmtArgTuple = std.meta.Tuple(&.{ u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 });
+
+pub const audio = struct {
+    const _io = @import("core/bus/io.zig");
+
+    const ToneSweep = @import("core/apu/ToneSweep.zig");
+    const Tone = @import("core/apu/Tone.zig");
+    const Wave = @import("core/apu/Wave.zig");
+    const Noise = @import("core/apu/Noise.zig");
+
+    pub const length = struct {
+        const FrameSequencer = @import("core/apu.zig").FrameSequencer;
+
+        /// Update State of Ch1, Ch2 and Ch3 length timer
+        pub fn update(comptime T: type, self: *T, fs: *const FrameSequencer, nrx34: _io.Frequency) void {
+            comptime std.debug.assert(T == ToneSweep or T == Tone or T == Wave);
+
+            // Write to NRx4 when FS's next step is not one that clocks the length counter
+            if (!fs.isLengthNext()) {
+                // If length_enable was disabled but is now enabled and length timer is not 0 already,
+                // decrement the length timer
+
+                if (!self.freq.length_enable.read() and nrx34.length_enable.read() and self.len_dev.timer != 0) {
+                    self.len_dev.timer -= 1;
+
+                    // If Length Timer is now 0 and trigger is clear, disable the channel
+                    if (self.len_dev.timer == 0 and !nrx34.trigger.read()) self.enabled = false;
+                }
+            }
+        }
+
+        pub const ch4 = struct {
+            /// update state of ch4 length timer
+            pub fn update(self: *Noise, fs: *const FrameSequencer, nr44: _io.NoiseControl) void {
+                // Write to NRx4 when FS's next step is not one that clocks the length counter
+                if (!fs.isLengthNext()) {
+                    // If length_enable was disabled but is now enabled and length timer is not 0 already,
+                    // decrement the length timer
+
+                    if (!self.cnt.length_enable.read() and nr44.length_enable.read() and self.len_dev.timer != 0) {
+                        self.len_dev.timer -= 1;
+
+                        // If Length Timer is now 0 and trigger is clear, disable the channel
+                        if (self.len_dev.timer == 0 and !nr44.trigger.read()) self.enabled = false;
+                    }
+                }
+            }
+        };
+    };
+};

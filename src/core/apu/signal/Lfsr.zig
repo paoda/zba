@@ -25,22 +25,6 @@ pub fn sample(self: *const Self) i8 {
     return if ((~self.shift & 1) == 1) 1 else -1;
 }
 
-/// Update the sate of the Channel Length TImer
-pub fn updateLength(_: *Self, fs: *const FrameSequencer, ch4: *Noise, nr44: io.NoiseControl) void {
-    // Write to NRx4 when FS's next step is not one that clocks the length counter
-    if (!fs.isLengthNext()) {
-        // If length_enable was disabled but is now enabled and length timer is not 0 already,
-        // decrement the length timer
-
-        if (!ch4.cnt.length_enable.read() and nr44.length_enable.read() and ch4.len_dev.timer != 0) {
-            ch4.len_dev.timer -= 1;
-
-            // If Length Timer is now 0 and trigger is clear, disable the channel
-            if (ch4.len_dev.timer == 0 and !nr44.trigger.read()) ch4.enabled = false;
-        }
-    }
-}
-
 /// Reload LFSR Timer
 pub fn reload(self: *Self, poly: io.PolyCounter) void {
     self.sched.removeScheduledEvent(.{ .ApuChannel = 3 });

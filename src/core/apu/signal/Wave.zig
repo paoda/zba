@@ -77,19 +77,3 @@ pub fn shift(_: *const Self, nr32: io.WaveVolume) u2 {
         0b11 => 2, // 25% Volume
     };
 }
-
-/// Update state of Channel 3 Length Device
-pub fn updateLength(_: *Self, fs: *const FrameSequencer, ch3: *Wave, nrx34: io.Frequency) void {
-    // Write to NRx4 when FS's next step is not one that clocks the length counter
-    if (!fs.isLengthNext()) {
-        // If length_enable was disabled but is now enabled and length timer is not 0 already,
-        // decrement the length timer
-
-        if (!ch3.freq.length_enable.read() and nrx34.length_enable.read() and ch3.len_dev.timer != 0) {
-            ch3.len_dev.timer -= 1;
-
-            // If Length Timer is now 0 and trigger is clear, disable the channel
-            if (ch3.len_dev.timer == 0 and !nrx34.trigger.read()) ch3.enabled = false;
-        }
-    }
-}

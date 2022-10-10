@@ -1,4 +1,5 @@
 const io = @import("../bus/io.zig");
+const util = @import("../../util.zig");
 
 const Scheduler = @import("../scheduler.zig").Scheduler;
 const FrameSequencer = @import("../apu.zig").FrameSequencer;
@@ -65,10 +66,6 @@ pub fn channelTimerOverflow(self: *Self, late: u64) void {
     self.sample = if (self.enabled) self.square.sample(self.duty) * @as(i8, self.env_dev.vol) else 0;
 }
 
-pub fn amplitude(self: *const Self) i16 {
-    return @as(i16, self.sample);
-}
-
 /// NR21, NR22
 pub fn getSoundCntL(self: *const Self) u16 {
     return @as(u16, self.envelope.raw) << 8 | (self.duty.raw & 0xC0);
@@ -131,7 +128,7 @@ pub fn setNr24(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         self.enabled = self.isDacEnabled();
     }
 
-    self.square.updateLength(Self, fs, self, new);
+    util.audio.length.update(Self, self, fs, new);
     self.freq = new;
 }
 

@@ -1,4 +1,5 @@
 const io = @import("../bus/io.zig");
+const util = @import("../../util.zig");
 
 const Scheduler = @import("../scheduler.zig").Scheduler;
 const FrameSequencer = @import("../apu.zig").FrameSequencer;
@@ -111,7 +112,7 @@ pub fn setNr34(self: *Self, fs: *const FrameSequencer, byte: u8) void {
         self.enabled = self.select.enabled.read();
     }
 
-    self.wave_dev.updateLength(fs, self, new);
+    util.audio.length.update(Self, self, fs, new);
     self.freq = new;
 }
 
@@ -122,8 +123,4 @@ pub fn channelTimerOverflow(self: *Self, late: u64) void {
     if (!self.select.enabled.read()) return;
     // Convert unsigned 4-bit wave sample to signed 8-bit sample
     self.sample = (2 * @as(i8, self.wave_dev.sample(self.select)) - 15) >> self.wave_dev.shift(self.vol);
-}
-
-pub fn amplitude(self: *const Self) i16 {
-    return @as(i16, self.sample);
 }

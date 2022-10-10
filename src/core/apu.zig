@@ -306,15 +306,15 @@ pub const Apu = struct {
         };
 
         // Add all PSG channels together
-        left += if (ch_left & 1 == 1) self.ch1.amplitude() else 0;
-        left += if (ch_left >> 1 & 1 == 1) self.ch2.amplitude() else 0;
-        left += if (ch_left >> 2 & 1 == 1) self.ch3.amplitude() else 0;
-        left += if (ch_left >> 3 == 1) self.ch4.amplitude() else 0;
+        left += if (ch_left & 1 == 1) @as(i16, self.ch1.sample) else 0;
+        left += if (ch_left >> 1 & 1 == 1) @as(i16, self.ch2.sample) else 0;
+        left += if (ch_left >> 2 & 1 == 1) @as(i16, self.ch3.sample) else 0;
+        left += if (ch_left >> 3 == 1) @as(i16, self.ch4.sample) else 0;
 
-        right += if (ch_right & 1 == 1) self.ch1.amplitude() else 0;
-        right += if (ch_right >> 1 & 1 == 1) self.ch2.amplitude() else 0;
-        right += if (ch_right >> 2 & 1 == 1) self.ch3.amplitude() else 0;
-        right += if (ch_right >> 3 == 1) self.ch4.amplitude() else 0;
+        right += if (ch_right & 1 == 1) @as(i16, self.ch1.sample) else 0;
+        right += if (ch_right >> 1 & 1 == 1) @as(i16, self.ch2.sample) else 0;
+        right += if (ch_right >> 2 & 1 == 1) @as(i16, self.ch3.sample) else 0;
+        right += if (ch_right >> 3 == 1) @as(i16, self.ch4.sample) else 0;
 
         // Multiply by master channel volume
         left *= 1 + @as(i16, self.psg_cnt.left_vol.read());

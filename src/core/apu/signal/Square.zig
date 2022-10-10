@@ -21,23 +21,6 @@ pub fn init(sched: *Scheduler) Self {
     };
 }
 
-/// Updates the State of either Ch1 or Ch2's Length Timer
-pub fn updateLength(_: *const Self, comptime T: type, fs: *const FrameSequencer, ch: *T, nrx34: io.Frequency) void {
-    comptime std.debug.assert(T == ToneSweep or T == Tone);
-    // Write to NRx4 when FS's next step is not one that clocks the length counter
-    if (!fs.isLengthNext()) {
-        // If length_enable was disabled but is now enabled and length timer is not 0 already,
-        // decrement the length timer
-
-        if (!ch.freq.length_enable.read() and nrx34.length_enable.read() and ch.len_dev.timer != 0) {
-            ch.len_dev.timer -= 1;
-
-            // If Length Timer is now 0 and trigger is clear, disable the channel
-            if (ch.len_dev.timer == 0 and !nrx34.trigger.read()) ch.enabled = false;
-        }
-    }
-}
-
 /// Scheduler Event Handler for Square Synth Timer Expire
 pub fn onSquareTimerExpire(self: *Self, comptime T: type, nrx34: io.Frequency, late: u64) void {
     comptime std.debug.assert(T == ToneSweep or T == Tone);
