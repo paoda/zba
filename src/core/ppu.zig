@@ -562,7 +562,7 @@ pub const Ppu = struct {
         };
     }
 
-    pub fn handleHDrawEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
+    pub fn onHdrawEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
         // Transitioning to a Hblank
         if (self.dispstat.hblank_irq.read()) {
             cpu.bus.io.irq.hblank.set();
@@ -578,7 +578,7 @@ pub const Ppu = struct {
         self.sched.push(.HBlank, 68 * 4 -| late);
     }
 
-    pub fn handleHBlankEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
+    pub fn onHblankEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
         // The End of a Hblank (During Draw or Vblank)
         const old_scanline = self.vcount.scanline.read();
         const scanline = (old_scanline + 1) % 228;

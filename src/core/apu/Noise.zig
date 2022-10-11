@@ -128,7 +128,7 @@ pub fn setNr44(self: *Self, fs: *const FrameSequencer, byte: u8) void {
     self.cnt = new;
 }
 
-pub fn channelTimerOverflow(self: *Self, late: u64) void {
+pub fn onNoiseEvent(self: *Self, late: u64) void {
     self.lfsr.onLfsrTimerExpire(self.poly, late);
 
     self.sample = 0;

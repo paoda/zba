@@ -116,7 +116,7 @@ pub fn setNr34(self: *Self, fs: *const FrameSequencer, byte: u8) void {
     self.freq = new;
 }
 
-pub fn channelTimerOverflow(self: *Self, late: u64) void {
+pub fn onWaveEvent(self: *Self, late: u64) void {
     self.wave_dev.onWaveTimerExpire(self.freq, self.select, late);
 
     self.sample = 0;

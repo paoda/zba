@@ -288,7 +288,7 @@ pub const Clock = struct {
         cpu.sched.push(.RealTimeClock, 1 << 24); // Every Second
     }
 
-    pub fn updateTime(self: *Self, late: u64) void {
+    pub fn onClockUpdate(self: *Self, late: u64) void {
         self.cpu.sched.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
 
         const now = DateTime.now();

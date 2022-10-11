@@ -43,7 +43,7 @@ pub const Scheduler = struct {
                 .Draw => {
                     // The end of a VDraw
                     cpu.bus.ppu.drawScanline();
-                    cpu.bus.ppu.handleHDrawEnd(cpu, late);
+                    cpu.bus.ppu.onHdrawEnd(cpu, late);
                 },
                 .TimerOverflow => |id| {
                     switch (id) {
@@ -55,10 +55,10 @@ pub const Scheduler = struct {
                 },
                 .ApuChannel => |id| {
                     switch (id) {
-                        0 => cpu.bus.apu.ch1.channelTimerOverflow(late),
-                        1 => cpu.bus.apu.ch2.channelTimerOverflow(late),
-                        2 => cpu.bus.apu.ch3.channelTimerOverflow(late),
-                        3 => cpu.bus.apu.ch4.channelTimerOverflow(late),
+                        0 => cpu.bus.apu.ch1.onToneSweepEvent(late),
+                        1 => cpu.bus.apu.ch2.onToneEvent(late),
+                        2 => cpu.bus.apu.ch3.onWaveEvent(late),
+                        3 => cpu.bus.apu.ch4.onNoiseEvent(late),
                     }
                 },
                 .RealTimeClock => {
@@ -66,12 +66,12 @@ pub const Scheduler = struct {
                     if (device.kind != .Rtc or device.ptr == null) return;
 
                     const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
-                    clock.updateTime(late);
+                    clock.onClockUpdate(late);
                 },
-                .FrameSequencer => cpu.bus.apu.tickFrameSequencer(late),
+                .FrameSequencer => cpu.bus.apu.onSequencerTick(late),
                 .SampleAudio => cpu.bus.apu.sampleAudio(late),
-                .HBlank => cpu.bus.ppu.handleHBlankEnd(cpu, late), // The end of a HBlank
-                .VBlank => cpu.bus.ppu.handleHDrawEnd(cpu, late), // The end of a VBlank
+                .HBlank => cpu.bus.ppu.onHblankEnd(cpu, late), // The end of a HBlank
+                .VBlank => cpu.bus.ppu.onHdrawEnd(cpu, late), // The end of a VBlank
             }
         }
     }

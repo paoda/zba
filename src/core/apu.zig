@@ -373,7 +373,7 @@ pub const Apu = struct {
         return @as(u64, 1) << (15 + @as(u6, cycle));
     }
 
-    pub fn tickFrameSequencer(self: *Self, late: u64) void {
+    pub fn onSequencerTick(self: *Self, late: u64) void {
         self.fs.tick();
 
         switch (self.fs.step) {
@@ -403,7 +403,7 @@ pub const Apu = struct {
         self.ch4.tickEnvelope();
     }
 
-    pub fn handleTimerOverflow(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {
+    pub fn onDmaAudioSampleRequest(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {
         if (!self.cnt.apu_enable.read()) return;
 
         if (@boolToInt(self.dma_cnt.chA_timer.read()) == tim_id) {

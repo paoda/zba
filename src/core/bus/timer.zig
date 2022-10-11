@@ -154,7 +154,7 @@ fn Timer(comptime id: u2) type {
 
             // DMA Sound Things
             if (id == 0 or id == 1) {
-                cpu.bus.apu.handleTimerOverflow(cpu, id);
+                cpu.bus.apu.onDmaAudioSampleRequest(cpu, id);
             }
 
             // Perform Cascade Behaviour

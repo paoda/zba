@@ -58,7 +58,7 @@ pub fn tickEnvelope(self: *Self) void {
     self.env_dev.tick(self.envelope);
 }
 
-pub fn channelTimerOverflow(self: *Self, late: u64) void {
+pub fn onToneEvent(self: *Self, late: u64) void {
     self.square.onSquareTimerExpire(Self, self.freq, late);
 
     self.sample = 0;
