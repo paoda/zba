@@ -2,7 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const known_folders = @import("known_folders");
 const clap = @import("clap");
-const toml = @import("toml");
+
+const config = @import("config.zig");
 
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
@@ -14,10 +15,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Cli);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
-const cpu_logging = @import("core/emu.zig").cpu_logging;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
-
-// TODO: Reimpl Logging
 
 // CLI Arguments + Help Text
 const params = clap.parseParamsComptime(
@@ -43,10 +41,7 @@ pub fn main() anyerror!void {
     const save_path = try savePath(allocator, data_path);
     defer allocator.free(save_path);
 
-    const config = try loadConfig(allocator, config_path);
-    _ = config;
-
-    log.debug("got past loadConfig()", .{});
+    try config.load(allocator, config_path);
 
     // Handle CLI Input
     const result = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
@@ -55,7 +50,8 @@ pub fn main() anyerror!void {
     const paths = try handleArguments(allocator, data_path, &result);
     defer if (paths.save) |path| allocator.free(path);
 
-    const log_file: ?std.fs.File = if (cpu_logging) try std.fs.cwd().createFile("zba.log", .{}) else null;
+    const cpu_trace = config.config().debug.cpu_trace;
+    const log_file: ?std.fs.File = if (cpu_trace) try std.fs.cwd().createFile("zba.log", .{}) else null;
     defer if (log_file) |file| file.close();
 
     // TODO: Take Emulator Init Code out of main.zig
@@ -90,23 +86,6 @@ pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *con
         .bios = bios_path,
         .save = save_path,
     };
-}
-
-const Config = struct {
-    // TODO: Add Config Fields
-    // TODO: Move to it's own file? config.zig?
-};
-
-// FIXME: TOML Library Leaks memory here
-// Either I should improve the TOML library, or try some of the even less used ones :thinking
-fn loadConfig(allocator: Allocator, config_path: []const u8) !Config {
-    // _ = allocator;
-    // _ = config_path;
-
-    const table = try toml.parseFile(allocator, config_path, null);
-    table.deinit();
-
-    return .{};
 }
 
 fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {

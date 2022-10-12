@@ -1,5 +1,6 @@
 const std = @import("std");
 const SDL = @import("sdl2");
+const config = @import("../config.zig");
 
 const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
@@ -11,14 +12,6 @@ const Timer = std.time.Timer;
 const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
 const Allocator = std.mem.Allocator;
-
-// TODO: Move these to a TOML File
-const sync_audio = false; // Enable Audio Sync
-const sync_video: RunKind = .LimitedFPS; // Configure Video Sync
-pub const win_scale = 4; // 1x, 2x, 3x, etc. Window Scaling
-pub const cpu_logging = false; // Enable detailed CPU logging
-pub const allow_unhandled_io = true; // Only relevant in Debug Builds
-pub const force_rtc = false;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896
@@ -40,18 +33,20 @@ const RunKind = enum {
     UnlimitedFPS,
     Limited,
     LimitedFPS,
-    LimitedBusy,
 };
 
 pub fn run(quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    if (sync_audio) log.info("Audio sync enabled", .{});
+    if (config.config().guest.audio_sync) log.info("Audio sync enabled", .{});
 
-    switch (sync_video) {
-        .Unlimited => runUnsynchronized(quit, sched, cpu, null),
-        .Limited => runSynchronized(quit, sched, cpu, null),
-        .UnlimitedFPS => runUnsynchronized(quit, sched, cpu, fps),
-        .LimitedFPS => runSynchronized(quit, sched, cpu, fps),
-        .LimitedBusy => runBusyLoop(quit, sched, cpu),
+    // TODO: Support the other modes?
+    const video_sync: RunKind = if (config.config().guest.video_sync) .LimitedFPS else .UnlimitedFPS;
+    const audio_sync = config.config().guest.audio_sync;
+
+    switch (video_sync) {
+        .Unlimited => runUnsynchronized(audio_sync, quit, sched, cpu, null),
+        .Limited => runSynchronized(audio_sync, quit, sched, cpu, null),
+        .UnlimitedFPS => runUnsynchronized(audio_sync, quit, sched, cpu, fps),
+        .LimitedFPS => runSynchronized(audio_sync, quit, sched, cpu, fps),
     }
 }
 
@@ -72,7 +67,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn syncToAudio(stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
+fn syncToAudio(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
     const sample_size = 2 * @sizeOf(u16);
     const max_buf_size: c_int = 0x400;
 
@@ -85,11 +80,11 @@ fn syncToAudio(stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
 
     while (true) {
         still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
-        if (!sync_audio or !still_full) break;
+        if (!audio_sync or !still_full) break;
     }
 }
 
-pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
+pub fn runUnsynchronized(audio_sync: bool, quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
     log.info("Emulation thread w/out video sync", .{});
 
     if (fps) |tracker| {
@@ -97,19 +92,19 @@ pub fn runUnsynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi,
 
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
             tracker.tick();
         }
     } else {
         while (!quit.load(.SeqCst)) {
             runFrame(sched, cpu);
-            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
         }
     }
 }
 
-pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
+pub fn runSynchronized(audio_sync: bool, quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
     log.info("Emulation thread w/ video sync", .{});
     var timer = Timer.start() catch std.debug.panic("Failed to initialize std.timer.Timer", .{});
     var wake_time: u64 = frame_period;
@@ -125,8 +120,8 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
             // If we happen to also be syncing to audio, we choose to spin on
             // the amount of time needed for audio to catch up rather than
             // our expected wake-up time
-            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-            if (!sync_audio) spinLoop(&timer, wake_time);
+            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            if (!audio_sync) spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
 
             tracker.tick();
@@ -137,8 +132,8 @@ pub fn runSynchronized(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, f
             const new_wake_time = blockOnVideo(&timer, wake_time);
 
             // see above comment
-            syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-            if (!sync_audio) spinLoop(&timer, wake_time);
+            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+            if (!audio_sync) spinLoop(&timer, wake_time);
             wake_time = new_wake_time;
         }
     }
@@ -151,22 +146,6 @@ inline fn blockOnVideo(timer: *Timer, wake_time: u64) u64 {
     // If sleep() determined we need to adjust our wake up time, do so
     // otherwise predict our next wake up time according to the frame period
     return if (maybe_recalc_wake_time) |recalc| recalc else wake_time + frame_period;
-}
-
-pub fn runBusyLoop(quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi) void {
-    log.info("Emulation thread with video sync using busy loop", .{});
-    var timer = Timer.start() catch unreachable;
-    var wake_time: u64 = frame_period;
-
-    while (!quit.load(.SeqCst)) {
-        runFrame(sched, cpu);
-        spinLoop(&timer, wake_time);
-
-        syncToAudio(cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-
-        // Update to the new wake time
-        wake_time += frame_period;
-    }
 }
 
 fn sleep(timer: *Timer, wake_time: u64) ?u64 {
