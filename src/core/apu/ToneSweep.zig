@@ -78,18 +78,18 @@ pub fn onToneSweepEvent(self: *Self, late: u64) void {
 }
 
 /// NR10, NR11, NR12
-pub fn setSoundCnt(self: *Self, value: u32) void {
-    self.setSoundCntL(@truncate(u8, value));
-    self.setSoundCntH(@truncate(u16, value >> 16));
+pub fn setSound1Cnt(self: *Self, value: u32) void {
+    self.setSound1CntL(@truncate(u8, value));
+    self.setSound1CntH(@truncate(u16, value >> 16));
 }
 
 /// NR10
-pub fn getSoundCntL(self: *const Self) u8 {
+pub fn sound1CntL(self: *const Self) u8 {
     return self.sweep.raw & 0x7F;
 }
 
 /// NR10
-pub fn setSoundCntL(self: *Self, value: u8) void {
+pub fn setSound1CntL(self: *Self, value: u8) void {
     const new = io.Sweep{ .raw = value };
 
     if (self.sweep.direction.read() and !new.direction.read()) {
@@ -104,12 +104,12 @@ pub fn setSoundCntL(self: *Self, value: u8) void {
 }
 
 /// NR11, NR12
-pub fn getSoundCntH(self: *const Self) u16 {
+pub fn sound1CntH(self: *const Self) u16 {
     return @as(u16, self.envelope.raw) << 8 | (self.duty.raw & 0xC0);
 }
 
 /// NR11, NR12
-pub fn setSoundCntH(self: *Self, value: u16) void {
+pub fn setSound1CntH(self: *Self, value: u16) void {
     self.setNr11(@truncate(u8, value));
     self.setNr12(@truncate(u8, value >> 8));
 }
@@ -127,12 +127,12 @@ pub fn setNr12(self: *Self, value: u8) void {
 }
 
 /// NR13, NR14
-pub fn getSoundCntX(self: *const Self) u16 {
+pub fn sound1CntX(self: *const Self) u16 {
     return self.freq.raw & 0x4000;
 }
 
 /// NR13, NR14
-pub fn setSoundCntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
+pub fn setSound1CntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
     self.setNr13(@truncate(u8, value));
     self.setNr14(fs, @truncate(u8, value >> 8));
 }

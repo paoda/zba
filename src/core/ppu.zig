@@ -808,18 +808,6 @@ const Window = struct {
         self.in.raw = @truncate(u16, value);
         self.out.raw = @truncate(u16, value >> 16);
     }
-
-    pub fn setInL(self: *Self, value: u8) void {
-        self.in.raw = (self.in.raw & 0xFF00) | value;
-    }
-
-    pub fn setInH(self: *Self, value: u8) void {
-        self.in.raw = (self.in.raw & 0x00FF) | (@as(u16, value) << 8);
-    }
-
-    pub fn setOutL(self: *Self, value: u8) void {
-        self.out.raw = (self.out.raw & 0xFF00) | value;
-    }
 };
 
 const Background = struct {

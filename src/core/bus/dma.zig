@@ -8,6 +8,9 @@ const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
 const log = std.log.scoped(.DmaTransfer);
 
+const setHi = util.setHi;
+const setLo = util.setLo;
+
 pub fn create() DmaTuple {
     return .{ DmaController(0).init(), DmaController(1).init(), DmaController(2).init(), DmaController(3).init() };
 }
@@ -55,31 +58,31 @@ pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
-            0xB0 => dma.*[0].setDmasad(setU32L(dma.*[0].sad, value)),
-            0xB2 => dma.*[0].setDmasad(setU32H(dma.*[0].sad, value)),
-            0xB4 => dma.*[0].setDmadad(setU32L(dma.*[0].dad, value)),
-            0xB6 => dma.*[0].setDmadad(setU32H(dma.*[0].dad, value)),
+            0xB0 => dma.*[0].setDmasad(setLo(u32, dma.*[0].sad, value)),
+            0xB2 => dma.*[0].setDmasad(setHi(u32, dma.*[0].sad, value)),
+            0xB4 => dma.*[0].setDmadad(setLo(u32, dma.*[0].dad, value)),
+            0xB6 => dma.*[0].setDmadad(setHi(u32, dma.*[0].dad, value)),
             0xB8 => dma.*[0].setDmacntL(value),
             0xBA => dma.*[0].setDmacntH(value),
 
-            0xBC => dma.*[1].setDmasad(setU32L(dma.*[1].sad, value)),
-            0xBE => dma.*[1].setDmasad(setU32H(dma.*[1].sad, value)),
-            0xC0 => dma.*[1].setDmadad(setU32L(dma.*[1].dad, value)),
-            0xC2 => dma.*[1].setDmadad(setU32H(dma.*[1].dad, value)),
+            0xBC => dma.*[1].setDmasad(setLo(u32, dma.*[1].sad, value)),
+            0xBE => dma.*[1].setDmasad(setHi(u32, dma.*[1].sad, value)),
+            0xC0 => dma.*[1].setDmadad(setLo(u32, dma.*[1].dad, value)),
+            0xC2 => dma.*[1].setDmadad(setHi(u32, dma.*[1].dad, value)),
             0xC4 => dma.*[1].setDmacntL(value),
             0xC6 => dma.*[1].setDmacntH(value),
 
-            0xC8 => dma.*[2].setDmasad(setU32L(dma.*[2].sad, value)),
-            0xCA => dma.*[2].setDmasad(setU32H(dma.*[2].sad, value)),
-            0xCC => dma.*[2].setDmadad(setU32L(dma.*[2].dad, value)),
-            0xCE => dma.*[2].setDmadad(setU32H(dma.*[2].dad, value)),
+            0xC8 => dma.*[2].setDmasad(setLo(u32, dma.*[2].sad, value)),
+            0xCA => dma.*[2].setDmasad(setHi(u32, dma.*[2].sad, value)),
+            0xCC => dma.*[2].setDmadad(setLo(u32, dma.*[2].dad, value)),
+            0xCE => dma.*[2].setDmadad(setHi(u32, dma.*[2].dad, value)),
             0xD0 => dma.*[2].setDmacntL(value),
             0xD2 => dma.*[2].setDmacntH(value),
 
-            0xD4 => dma.*[3].setDmasad(setU32L(dma.*[3].sad, value)),
-            0xD6 => dma.*[3].setDmasad(setU32H(dma.*[3].sad, value)),
-            0xD8 => dma.*[3].setDmadad(setU32L(dma.*[3].dad, value)),
-            0xDA => dma.*[3].setDmadad(setU32H(dma.*[3].dad, value)),
+            0xD4 => dma.*[3].setDmasad(setLo(u32, dma.*[3].sad, value)),
+            0xD6 => dma.*[3].setDmasad(setHi(u32, dma.*[3].sad, value)),
+            0xD8 => dma.*[3].setDmadad(setLo(u32, dma.*[3].dad, value)),
+            0xDA => dma.*[3].setDmadad(setHi(u32, dma.*[3].dad, value)),
             0xDC => dma.*[3].setDmacntL(value),
             0xDE => dma.*[3].setDmacntH(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
@@ -283,11 +286,3 @@ const DmaKind = enum(u2) {
     VBlank,
     Special,
 };
-
-fn setU32L(left: u32, right: u16) u32 {
-    return (left & 0xFFFF_0000) | right;
-}
-
-fn setU32H(left: u32, right: u16) u32 {
-    return (left & 0x0000_FFFF) | (@as(u32, right) << 16);
-}

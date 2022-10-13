@@ -68,12 +68,12 @@ pub fn onToneEvent(self: *Self, late: u64) void {
 }
 
 /// NR21, NR22
-pub fn getSoundCntL(self: *const Self) u16 {
+pub fn sound2CntL(self: *const Self) u16 {
     return @as(u16, self.envelope.raw) << 8 | (self.duty.raw & 0xC0);
 }
 
 /// NR21, NR22
-pub fn setSoundCntL(self: *Self, value: u16) void {
+pub fn setSound2CntL(self: *Self, value: u16) void {
     self.setNr21(@truncate(u8, value));
     self.setNr22(@truncate(u8, value >> 8));
 }
@@ -91,12 +91,12 @@ pub fn setNr22(self: *Self, value: u8) void {
 }
 
 /// NR23, NR24
-pub fn getSoundCntH(self: *const Self) u16 {
+pub fn sound2CntH(self: *const Self) u16 {
     return self.freq.raw & 0x4000;
 }
 
 /// NR23, NR24
-pub fn setSoundCntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
+pub fn setSound2CntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
     self.setNr23(@truncate(u8, value));
     self.setNr24(fs, @truncate(u8, value >> 8));
 }

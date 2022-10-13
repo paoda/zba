@@ -11,6 +11,9 @@ const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
+const setHi = util.setLo;
+const setLo = util.setHi;
+
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -233,18 +236,18 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0022 => bus.ppu.aff_bg[0].pb = @bitCast(i16, value),
             0x0400_0024 => bus.ppu.aff_bg[0].pc = @bitCast(i16, value),
             0x0400_0026 => bus.ppu.aff_bg[0].pd = @bitCast(i16, value),
-            0x0400_0028 => bus.ppu.aff_bg[0].x = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[0].x) & 0xFFFF_0000 | value),
-            0x0400_002A => bus.ppu.aff_bg[0].x = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[0].x) & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_002C => bus.ppu.aff_bg[0].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[0].y) & 0xFFFF_0000 | value),
-            0x0400_002E => bus.ppu.aff_bg[0].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[0].y) & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_0028 => bus.ppu.aff_bg[0].x = @bitCast(i32, setLo(u32, @bitCast(u32, bus.ppu.aff_bg[0].x), value)),
+            0x0400_002A => bus.ppu.aff_bg[0].x = @bitCast(i32, setHi(u32, @bitCast(u32, bus.ppu.aff_bg[0].x), value)),
+            0x0400_002C => bus.ppu.aff_bg[0].y = @bitCast(i32, setLo(u32, @bitCast(u32, bus.ppu.aff_bg[0].y), value)),
+            0x0400_002E => bus.ppu.aff_bg[0].y = @bitCast(i32, setHi(u32, @bitCast(u32, bus.ppu.aff_bg[0].y), value)),
             0x0400_0030 => bus.ppu.aff_bg[1].pa = @bitCast(i16, value),
             0x0400_0032 => bus.ppu.aff_bg[1].pb = @bitCast(i16, value),
             0x0400_0034 => bus.ppu.aff_bg[1].pc = @bitCast(i16, value),
             0x0400_0036 => bus.ppu.aff_bg[1].pd = @bitCast(i16, value),
-            0x0400_0038 => bus.ppu.aff_bg[1].x = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].x) & 0xFFFF_0000 | value),
-            0x0400_003A => bus.ppu.aff_bg[1].x = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].x) & 0x0000_FFFF | (@as(u32, value) << 16)),
-            0x0400_003C => bus.ppu.aff_bg[1].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].y) & 0xFFFF_0000 | value),
-            0x0400_003E => bus.ppu.aff_bg[1].y = @bitCast(i32, @bitCast(u32, bus.ppu.aff_bg[1].y) & 0x0000_FFFF | (@as(u32, value) << 16)),
+            0x0400_0038 => bus.ppu.aff_bg[1].x = @bitCast(i32, setLo(u32, @bitCast(u32, bus.ppu.aff_bg[1].x), value)),
+            0x0400_003A => bus.ppu.aff_bg[1].x = @bitCast(i32, setHi(u32, @bitCast(u32, bus.ppu.aff_bg[1].x), value)),
+            0x0400_003C => bus.ppu.aff_bg[1].y = @bitCast(i32, setLo(u32, @bitCast(u32, bus.ppu.aff_bg[1].y), value)),
+            0x0400_003E => bus.ppu.aff_bg[1].y = @bitCast(i32, setHi(u32, @bitCast(u32, bus.ppu.aff_bg[1].y), value)),
             0x0400_0040 => bus.ppu.win.h[0].raw = value,
             0x0400_0042 => bus.ppu.win.h[1].raw = value,
             0x0400_0044 => bus.ppu.win.v[0].raw = value,
@@ -296,16 +299,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         },
         u8 => switch (address) {
             // Display
-            0x0400_0004 => bus.ppu.dispstat.raw = (bus.ppu.dispstat.raw & 0xFF00) | value,
-            0x0400_0005 => bus.ppu.dispstat.raw = (@as(u16, value) << 8) | (bus.ppu.dispstat.raw & 0xFF),
-            0x0400_0008 => bus.ppu.bg[0].cnt.raw = (bus.ppu.bg[0].cnt.raw & 0xFF00) | value,
-            0x0400_0009 => bus.ppu.bg[0].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[0].cnt.raw & 0xFF),
-            0x0400_000A => bus.ppu.bg[1].cnt.raw = (bus.ppu.bg[1].cnt.raw & 0xFF00) | value,
-            0x0400_000B => bus.ppu.bg[1].cnt.raw = (@as(u16, value) << 8) | (bus.ppu.bg[1].cnt.raw & 0xFF),
-            0x0400_0048 => bus.ppu.win.setInL(value),
-            0x0400_0049 => bus.ppu.win.setInH(value),
-            0x0400_004A => bus.ppu.win.setOutL(value),
-            0x0400_0054 => bus.ppu.bldy.raw = (bus.ppu.bldy.raw & 0xFF00) | value,
+            0x0400_0004 => bus.ppu.dispstat.raw = setLo(u16, bus.ppu.dispstat.raw, value),
+            0x0400_0005 => bus.ppu.dispstat.raw = setHi(u16, bus.ppu.dispstat.raw, value),
+            0x0400_0008 => bus.ppu.bg[0].cnt.raw = setLo(u16, bus.ppu.bg[0].cnt.raw, value),
+            0x0400_0009 => bus.ppu.bg[0].cnt.raw = setHi(u16, bus.ppu.bg[0].cnt.raw, value),
+            0x0400_000A => bus.ppu.bg[1].cnt.raw = setLo(u16, bus.ppu.bg[1].cnt.raw, value),
+            0x0400_000B => bus.ppu.bg[1].cnt.raw = setHi(u16, bus.ppu.bg[1].cnt.raw, value),
+            0x0400_0048 => bus.ppu.win.in.raw = setLo(u16, bus.ppu.win.in.raw, value),
+            0x0400_0049 => bus.ppu.win.in.raw = setHi(u16, bus.ppu.win.in.raw, value),
+            0x0400_004A => bus.ppu.win.out.raw = setLo(u16, bus.ppu.win.out.raw, value),
+            0x0400_0054 => bus.ppu.bldy.raw = setLo(u16, bus.ppu.bldy.raw, value),
 
             // Sound
             0x0400_0060...0x0400_00A7 => apu.write(T, &bus.apu, address, value),

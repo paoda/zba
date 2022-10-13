@@ -67,12 +67,12 @@ pub fn tick(self: *Self, comptime kind: Tick) void {
 }
 
 /// NR41, NR42
-pub fn getSoundCntL(self: *const Self) u16 {
+pub fn sound4CntL(self: *const Self) u16 {
     return @as(u16, self.envelope.raw) << 8;
 }
 
 /// NR41, NR42
-pub fn setSoundCntL(self: *Self, value: u16) void {
+pub fn setSound4CntL(self: *Self, value: u16) void {
     self.setNr41(@truncate(u8, value));
     self.setNr42(@truncate(u8, value >> 8));
 }
@@ -90,12 +90,12 @@ pub fn setNr42(self: *Self, value: u8) void {
 }
 
 /// NR43, NR44
-pub fn getSoundCntH(self: *const Self) u16 {
+pub fn sound4CntH(self: *const Self) u16 {
     return @as(u16, self.poly.raw & 0x40) << 8 | self.cnt.raw;
 }
 
 /// NR43, NR44
-pub fn setSoundCntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
+pub fn setSound4CntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
     self.poly.raw = @truncate(u8, value);
     self.setNr44(fs, @truncate(u8, value >> 8));
 }

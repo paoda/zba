@@ -15,6 +15,9 @@ const Noise = @import("apu/Noise.zig");
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
 const intToBytes = @import("../util.zig").intToBytes;
+const setHi = @import("../util.zig").setHi;
+const setLo = @import("../util.zig").setLo;
+
 const log = std.log.scoped(.APU);
 
 pub const host_sample_rate = 1 << 15;
@@ -24,28 +27,28 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
 
     return switch (T) {
         u16 => switch (byte) {
-            0x60 => apu.ch1.getSoundCntL(),
-            0x62 => apu.ch1.getSoundCntH(),
-            0x64 => apu.ch1.getSoundCntX(),
-            0x68 => apu.ch2.getSoundCntL(),
-            0x6C => apu.ch2.getSoundCntH(),
+            0x60 => apu.ch1.sound1CntL(),
+            0x62 => apu.ch1.sound1CntH(),
+            0x64 => apu.ch1.sound1CntX(),
+            0x68 => apu.ch2.sound2CntL(),
+            0x6C => apu.ch2.sound2CntH(),
 
             0x70 => apu.ch3.select.raw & 0xE0, // SOUND3CNT_L
-            0x72 => apu.ch3.getSoundCntH(),
+            0x72 => apu.ch3.sound3CntH(),
             0x74 => apu.ch3.freq.raw & 0x4000, // SOUND3CNT_X
 
-            0x78 => apu.ch4.getSoundCntL(),
-            0x7C => apu.ch4.getSoundCntH(),
+            0x78 => apu.ch4.sound4CntL(),
+            0x7C => apu.ch4.sound4CntH(),
 
             0x80 => apu.psg_cnt.raw & 0xFF77, // SOUNDCNT_L
             0x82 => apu.dma_cnt.raw & 0x770F, // SOUNDCNT_H
-            0x84 => apu.getSoundCntX(),
+            0x84 => apu.soundCntX(),
             0x88 => apu.bias.raw, // SOUNDBIAS
             0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
-            0x60 => apu.ch1.getSoundCntL(), // NR10
+            0x60 => apu.ch1.sound1CntL(), // NR10
             0x62 => apu.ch1.duty.raw, // NR11
             0x63 => apu.ch1.envelope.raw, // NR12
             0x68 => apu.ch2.duty.raw, // NR21
@@ -54,7 +57,7 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
             0x79 => apu.ch4.envelope.raw, // NR42
             0x7C => apu.ch4.poly.raw, // NR43
             0x81 => @truncate(u8, apu.psg_cnt.raw >> 8), // NR51
-            0x84 => apu.getSoundCntX(),
+            0x84 => apu.soundCntX(),
             0x89 => @truncate(u8, apu.bias.raw >> 8), // SOUNDBIAS_H
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
@@ -68,14 +71,14 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
 
     switch (T) {
         u32 => switch (byte) {
-            0x60 => apu.ch1.setSoundCnt(value),
-            0x64 => apu.ch1.setSoundCntX(&apu.fs, @truncate(u16, value)),
-            0x68 => apu.ch2.setSoundCntL(@truncate(u16, value)),
-            0x6C => apu.ch2.setSoundCntH(&apu.fs, @truncate(u16, value)),
-            0x70 => apu.ch3.setSoundCnt(value),
-            0x74 => apu.ch3.setSoundCntX(&apu.fs, @truncate(u16, value)),
-            0x78 => apu.ch4.setSoundCntL(@truncate(u16, value)),
-            0x7C => apu.ch4.setSoundCntH(&apu.fs, @truncate(u16, value)),
+            0x60 => apu.ch1.setSound1Cnt(value),
+            0x64 => apu.ch1.setSound1CntX(&apu.fs, @truncate(u16, value)),
+            0x68 => apu.ch2.setSound2CntL(@truncate(u16, value)),
+            0x6C => apu.ch2.setSound2CntH(&apu.fs, @truncate(u16, value)),
+            0x70 => apu.ch3.setSound3Cnt(value),
+            0x74 => apu.ch3.setSound3CntX(&apu.fs, @truncate(u16, value)),
+            0x78 => apu.ch4.setSound4CntL(@truncate(u16, value)),
+            0x7C => apu.ch4.setSound4CntH(&apu.fs, @truncate(u16, value)),
 
             0x80 => apu.setSoundCnt(value),
             // WAVE_RAM
@@ -85,19 +88,19 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte) {
-            0x60 => apu.ch1.setSoundCntL(@truncate(u8, value)), // SOUND1CNT_L
-            0x62 => apu.ch1.setSoundCntH(value),
-            0x64 => apu.ch1.setSoundCntX(&apu.fs, value),
+            0x60 => apu.ch1.setSound1CntL(@truncate(u8, value)), // SOUND1CNT_L
+            0x62 => apu.ch1.setSound1CntH(value),
+            0x64 => apu.ch1.setSound1CntX(&apu.fs, value),
 
-            0x68 => apu.ch2.setSoundCntL(value),
-            0x6C => apu.ch2.setSoundCntH(&apu.fs, value),
+            0x68 => apu.ch2.setSound2CntL(value),
+            0x6C => apu.ch2.setSound2CntH(&apu.fs, value),
 
-            0x70 => apu.ch3.setSoundCntL(@truncate(u8, value)),
-            0x72 => apu.ch3.setSoundCntH(value),
-            0x74 => apu.ch3.setSoundCntX(&apu.fs, value),
+            0x70 => apu.ch3.setSound3CntL(@truncate(u8, value)),
+            0x72 => apu.ch3.setSound3CntH(value),
+            0x74 => apu.ch3.setSound3CntX(&apu.fs, value),
 
-            0x78 => apu.ch4.setSoundCntL(value),
-            0x7C => apu.ch4.setSoundCntH(&apu.fs, value),
+            0x78 => apu.ch4.setSound4CntL(value),
+            0x7C => apu.ch4.setSound4CntH(&apu.fs, value),
 
             0x80 => apu.psg_cnt.raw = value, // SOUNDCNT_L
             0x82 => apu.setSoundCntH(value),
@@ -108,7 +111,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => switch (byte) {
-            0x60 => apu.ch1.setSoundCntL(value),
+            0x60 => apu.ch1.setSound1CntL(value),
             0x62 => apu.ch1.setNr11(value),
             0x63 => apu.ch1.setNr12(value),
             0x64 => apu.ch1.setNr13(value),
@@ -119,7 +122,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             0x6C => apu.ch2.setNr23(value),
             0x6D => apu.ch2.setNr24(&apu.fs, value),
 
-            0x70 => apu.ch3.setSoundCntL(value), // NR30
+            0x70 => apu.ch3.setSound3CntL(value), // NR30
             0x72 => apu.ch3.setNr31(value),
             0x73 => apu.ch3.vol.raw = value, // NR32
             0x74 => apu.ch3.setNr33(value),
@@ -132,8 +135,8 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
 
             0x80 => apu.setNr50(value),
             0x81 => apu.setNr51(value),
-            0x82 => apu.setSoundCntHL(value),
-            0x83 => apu.setSoundCntHH(value),
+            0x82 => apu.setSoundCntH(setLo(u16, apu.dma_cnt.raw, value)),
+            0x83 => apu.setSoundCntH(setHi(u16, apu.dma_cnt.raw, value)),
             0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
             0x89 => apu.setSoundBiasH(value),
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
@@ -194,12 +197,12 @@ pub const Apu = struct {
             .is_buffer_full = false,
         };
 
-        sched.push(.SampleAudio, apu.sampleTicks());
+        sched.push(.SampleAudio, apu.interval());
         sched.push(.{ .ApuChannel = 0 }, @import("apu/signal/Square.zig").interval);
         sched.push(.{ .ApuChannel = 1 }, @import("apu/signal/Square.zig").interval);
         sched.push(.{ .ApuChannel = 2 }, @import("apu/signal/Wave.zig").interval);
         sched.push(.{ .ApuChannel = 3 }, @import("apu/signal/Lfsr.zig").interval);
-        sched.push(.FrameSequencer, ((1 << 24) / 512));
+        sched.push(.FrameSequencer, FrameSequencer.interval);
 
         return apu;
     }
@@ -215,18 +218,6 @@ pub const Apu = struct {
     fn setSoundCnt(self: *Self, value: u32) void {
         self.psg_cnt.raw = @truncate(u16, value);
         self.setSoundCntH(@truncate(u16, value >> 16));
-    }
-
-    /// SOUNDCNT_H_L
-    fn setSoundCntHL(self: *Self, value: u8) void {
-        const merged = (self.dma_cnt.raw & 0xFF00) | value;
-        self.setSoundCntH(merged);
-    }
-
-    /// SOUNDCNT_H_H
-    fn setSoundCntHH(self: *Self, value: u8) void {
-        const merged = (self.dma_cnt.raw & 0x00FF) | (@as(u16, value) << 8);
-        self.setSoundCntH(merged);
     }
 
     /// SOUNDCNT_H
@@ -260,7 +251,7 @@ pub const Apu = struct {
     }
 
     /// NR52
-    pub fn getSoundCntX(self: *const Self) u8 {
+    pub fn soundCntX(self: *const Self) u8 {
         const apu_enable: u8 = @boolToInt(self.cnt.apu_enable.read());
 
         const ch1_enable: u8 = @boolToInt(self.ch1.enabled);
@@ -286,7 +277,7 @@ pub const Apu = struct {
     }
 
     pub fn sampleAudio(self: *Self, late: u64) void {
-        self.sched.push(.SampleAudio, self.sampleTicks() -| late);
+        self.sched.push(.SampleAudio, self.interval() -| late);
 
         // Whether the APU is busy or not is determined  by the main loop in emu.zig
         // This should only ever be true (because this side of the emu is single threaded)
@@ -355,6 +346,7 @@ pub const Apu = struct {
     }
 
     fn replaceSDLResampler(self: *Self) void {
+        @setCold(true);
         const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
         log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
 
@@ -367,7 +359,7 @@ pub const Apu = struct {
         self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, sample_rate), SDL.AUDIO_U16, 2, host_sample_rate).?;
     }
 
-    fn sampleTicks(self: *const Self) u64 {
+    fn interval(self: *const Self) u64 {
         return (1 << 24) / Self.sampleRate(self.bias.sampling_cycle.read());
     }
 
@@ -393,19 +385,19 @@ pub const Apu = struct {
     }
 
     fn tick(self: *Self, comptime kind: Tick) void {
+        self.ch1.tick(kind);
+
         switch (kind) {
             .Length => {
-                self.ch1.tick(kind);
                 self.ch2.tick(kind);
                 self.ch3.tick(kind);
                 self.ch4.tick(kind);
             },
             .Envelope => {
-                self.ch1.tick(kind);
                 self.ch2.tick(kind);
                 self.ch4.tick(kind);
             },
-            .Sweep => self.ch1.tick(kind),
+            .Sweep => {}, // Already handled above (only for Ch1)
         }
     }
 
@@ -464,6 +456,7 @@ const DmaSoundKind = enum {
 };
 
 pub const FrameSequencer = struct {
+    const interval = (1 << 24) / 512;
     const Self = @This();
 
     step: u3,

@@ -268,3 +268,32 @@ pub const audio = struct {
         };
     };
 };
+
+/// Sets the high bits of an integer to a value
+pub inline fn setHi(comptime T: type, left: T, right: HalfInt(T)) T {
+    return switch (T) {
+        u32 => (left & 0xFFFF_0000) | right,
+        u16 => (left & 0xFF00) | right,
+        u8 => (left & 0xF0) | right,
+        else => @compileError("unsupported type"),
+    };
+}
+
+/// sets the low bits of an integer to a value
+pub inline fn setLo(comptime T: type, left: T, right: HalfInt(T)) T {
+    return switch (T) {
+        u32 => (left & 0x0000_FFFF) | @as(u32, right) << 16,
+        u16 => (left & 0x00FF) | @as(u16, right) << 8,
+        u8 => (left & 0x0F) | @as(u8, right) << 4,
+        else => @compileError("unsupported type"),
+    };
+}
+
+/// The Integer type which corresponds to T with exactly half the amount of bits
+fn HalfInt(comptime T: type) type {
+    const type_info = @typeInfo(T);
+    comptime std.debug.assert(type_info == .Int); // Type must be an integer
+    comptime std.debug.assert(type_info.Int.bits % 2 == 0); // Type must have an even amount of bits
+
+    return std.meta.Int(type_info.Int.signedness, type_info.Int.bits >> 1);
+}
