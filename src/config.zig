@@ -34,7 +34,7 @@ const Config = struct {
     const Debug = struct {
         /// Enable CPU Trace logs
         cpu_trace: bool = false,
-        /// If false and ZBA is build in debug mode, ZBA will panic on unhandled I/O
+        /// If false and ZBA is built in debug mode, ZBA will panic on unhandled I/O
         unhandled_io: bool = true,
     };
 };

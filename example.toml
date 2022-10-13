@@ -1,0 +1,21 @@
+[Host]
+# Using nearest-neighbour scaling, how many times the native resolution 
+# of the game bow should the screen be?
+win_scale = 4
+# Enable VSYNC on the UI thread
+vsync = true
+
+[Guest]
+# Sync Emulation to Audio 
+audio_sync = false
+# Sync Emulation to Video
+video_sync = false
+# Force RTC support
+force_rtc = false
+
+[Debug]
+# Enable detailed CPU logs
+cpu_trace = false
+# When false and builtin.mode == .Debug, ZBA will panic
+# on unknown I/O reads
+unhandled_io = true
