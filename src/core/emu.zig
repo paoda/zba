@@ -35,18 +35,55 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(quit: *Atomic(bool), fps: *FpsTracker, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    if (config.config().guest.audio_sync) log.info("Audio sync enabled", .{});
-
-    // TODO: Support the other modes?
-    const video_sync: RunKind = if (config.config().guest.video_sync) .LimitedFPS else .UnlimitedFPS;
+pub fn run(quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: *FpsTracker) void {
     const audio_sync = config.config().guest.audio_sync;
+    if (audio_sync) log.info("Audio sync enabled", .{});
 
-    switch (video_sync) {
-        .Unlimited => runUnsynchronized(audio_sync, quit, sched, cpu, null),
-        .Limited => runSynchronized(audio_sync, quit, sched, cpu, null),
-        .UnlimitedFPS => runUnsynchronized(audio_sync, quit, sched, cpu, fps),
-        .LimitedFPS => runSynchronized(audio_sync, quit, sched, cpu, fps),
+    if (config.config().guest.video_sync) {
+        inner(.LimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+    } else {
+        inner(.UnlimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+    }
+}
+
+fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: ?*FpsTracker) void {
+    if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
+        std.debug.assert(tracker != null);
+        log.info("FPS tracking enabled", .{});
+    }
+
+    switch (kind) {
+        .Unlimited, .UnlimitedFPS => {
+            log.info("Emulation w/out video sync", .{});
+
+            while (!quit.load(.SeqCst)) {
+                runFrame(scheduler, cpu);
+                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+
+                if (kind == .UnlimitedFPS) tracker.?.tick();
+            }
+        },
+        .Limited, .LimitedFPS => {
+            log.info("Emulation w/ video sync", .{});
+            var timer = Timer.start() catch @panic("failed to initalize std.timer.Timer");
+            var wake_time: u64 = frame_period;
+
+            while (!quit.load(.SeqCst)) {
+                runFrame(scheduler, cpu);
+                const new_wake_time = videoSync(&timer, wake_time);
+
+                // Spin to make up the difference of OS scheduler innacuracies
+                // If we happen to also be syncing to audio, we choose to spin on
+                // the amount of time needed for audio to catch up rather than
+                // our expected wake-up time
+
+                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+                if (!audio_sync) spinLoop(&timer, wake_time);
+                wake_time = new_wake_time;
+
+                if (kind == .LimitedFPS) tracker.?.tick();
+            }
+        },
     }
 }
 
@@ -67,7 +104,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn syncToAudio(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
+fn audioSync(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
     const sample_size = 2 * @sizeOf(u16);
     const max_buf_size: c_int = 0x400;
 
@@ -84,70 +121,16 @@ fn syncToAudio(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *
     }
 }
 
-pub fn runUnsynchronized(audio_sync: bool, quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
-    log.info("Emulation thread w/out video sync", .{});
-
-    if (fps) |tracker| {
-        log.info("FPS Tracking Enabled", .{});
-
-        while (!quit.load(.SeqCst)) {
-            runFrame(sched, cpu);
-            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-
-            tracker.tick();
-        }
-    } else {
-        while (!quit.load(.SeqCst)) {
-            runFrame(sched, cpu);
-            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-        }
-    }
-}
-
-pub fn runSynchronized(audio_sync: bool, quit: *Atomic(bool), sched: *Scheduler, cpu: *Arm7tdmi, fps: ?*FpsTracker) void {
-    log.info("Emulation thread w/ video sync", .{});
-    var timer = Timer.start() catch std.debug.panic("Failed to initialize std.timer.Timer", .{});
-    var wake_time: u64 = frame_period;
-
-    if (fps) |tracker| {
-        log.info("FPS Tracking Enabled", .{});
-
-        while (!quit.load(.SeqCst)) {
-            runFrame(sched, cpu);
-            const new_wake_time = blockOnVideo(&timer, wake_time);
-
-            // Spin to make up the difference of OS scheduler innacuracies
-            // If we happen to also be syncing to audio, we choose to spin on
-            // the amount of time needed for audio to catch up rather than
-            // our expected wake-up time
-            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-            if (!audio_sync) spinLoop(&timer, wake_time);
-            wake_time = new_wake_time;
-
-            tracker.tick();
-        }
-    } else {
-        while (!quit.load(.SeqCst)) {
-            runFrame(sched, cpu);
-            const new_wake_time = blockOnVideo(&timer, wake_time);
-
-            // see above comment
-            syncToAudio(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
-            if (!audio_sync) spinLoop(&timer, wake_time);
-            wake_time = new_wake_time;
-        }
-    }
-}
-
-inline fn blockOnVideo(timer: *Timer, wake_time: u64) u64 {
+fn videoSync(timer: *Timer, wake_time: u64) u64 {
     // Use the OS scheduler to put the emulation thread to sleep
-    const maybe_recalc_wake_time = sleep(timer, wake_time);
+    const recalculated = sleep(timer, wake_time);
 
     // If sleep() determined we need to adjust our wake up time, do so
     // otherwise predict our next wake up time according to the frame period
-    return if (maybe_recalc_wake_time) |recalc| recalc else wake_time + frame_period;
+    return recalculated orelse wake_time + frame_period;
 }
 
+// TODO: Better sleep impl?
 fn sleep(timer: *Timer, wake_time: u64) ?u64 {
     // const step = std.time.ns_per_ms * 10; // 10ms
     const timestamp = timer.read();

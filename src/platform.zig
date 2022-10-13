@@ -60,9 +60,9 @@ pub const Gui = struct {
 
     pub fn run(self: *Self, cpu: *Arm7tdmi, scheduler: *Scheduler) !void {
         var quit = std.atomic.Atomic(bool).init(false);
-        var frame_rate = FpsTracker.init();
+        var tracker = FpsTracker.init();
 
-        const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, &frame_rate, scheduler, cpu });
+        const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
         defer thread.join();
 
         var title_buf: [0x100]u8 = [_]u8{0} ** 0x100;
@@ -129,7 +129,7 @@ pub const Gui = struct {
             _ = SDL.SDL_RenderCopy(self.renderer, self.texture, null, null);
             SDL.SDL_RenderPresent(self.renderer);
 
-            const dyn_title = std.fmt.bufPrint(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, frame_rate.value() }) catch unreachable;
+            const dyn_title = std.fmt.bufPrint(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, tracker.value() }) catch unreachable;
             SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
         }
 
