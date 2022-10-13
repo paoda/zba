@@ -1,4 +1,6 @@
 const std = @import("std");
+const config = @import("../../config.zig");
+
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const DateTime = @import("datetime").datetime.Datetime;
@@ -8,7 +10,6 @@ const Backup = @import("backup.zig").Backup;
 const Gpio = @import("gpio.zig").Gpio;
 const Allocator = std.mem.Allocator;
 
-const force_rtc = @import("../emu.zig").force_rtc;
 const log = std.log.scoped(.GamePak);
 
 const Self = @This();
@@ -190,7 +191,7 @@ pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_pat
     const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
     const title = file_buf[0xA0..0xAC].*;
     const kind = Backup.guess(file_buf);
-    const device = if (force_rtc) .Rtc else guessDevice(file_buf);
+    const device = if (config.config().guest.force_rtc) .Rtc else guessDevice(file_buf);
 
     logHeader(file_buf, &title);
 

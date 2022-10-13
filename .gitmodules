@@ -10,3 +10,6 @@
 [submodule "lib/zig-datetime"]
 	path = lib/zig-datetime
 	url = https://github.com/frmdstryr/zig-datetime
+[submodule "lib/zig-toml"]
+	path = lib/zig-toml
+	url = https://github.com/aeronavery/zig-toml

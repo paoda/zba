@@ -236,7 +236,6 @@ pub const thumb = struct {
     }
 };
 
-const cpu_logging = @import("emu.zig").cpu_logging;
 const log = std.log.scoped(.Arm7Tdmi);
 
 pub const Arm7tdmi = struct {
@@ -428,12 +427,12 @@ pub const Arm7tdmi = struct {
     pub fn step(self: *Self) void {
         if (self.cpsr.t.read()) {
             const opcode = self.fetch(u16);
-            if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
+            if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             thumb.lut[thumb.idx(opcode)](self, self.bus, opcode);
         } else {
             const opcode = self.fetch(u32);
-            if (cpu_logging) self.logger.?.mgbaLog(self, opcode);
+            if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
                 arm.lut[arm.idx(opcode)](self, self.bus, opcode);

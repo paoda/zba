@@ -1,6 +1,7 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const emu = @import("core/emu.zig");
+const config = @import("config.zig");
 
 const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
@@ -10,8 +11,6 @@ const FpsTracker = @import("util.zig").FpsTracker;
 const span = @import("util.zig").span;
 
 const pitch = @import("core/ppu.zig").framebuf_pitch;
-const scale = @import("core/emu.zig").win_scale;
-
 const default_title: []const u8 = "ZBA";
 
 pub const Gui = struct {
@@ -28,16 +27,19 @@ pub const Gui = struct {
         const ret = SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER);
         if (ret < 0) panic();
 
+        const win_scale = @intCast(c_int, config.config().host.win_scale);
+
         const window = SDL.SDL_CreateWindow(
             default_title.ptr,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
-            @as(c_int, width * scale),
-            @as(c_int, height * scale),
+            @as(c_int, width * win_scale),
+            @as(c_int, height * win_scale),
             SDL.SDL_WINDOW_SHOWN,
         ) orelse panic();
 
-        const renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC) orelse panic();
+        const renderer_flags = SDL.SDL_RENDERER_ACCELERATED | if (config.config().host.vsync) SDL.SDL_RENDERER_PRESENTVSYNC else 0;
+        const renderer = SDL.SDL_CreateRenderer(window, -1, @bitCast(u32, renderer_flags)) orelse panic();
 
         const texture = SDL.SDL_CreateTexture(
             renderer,
@@ -58,9 +60,9 @@ pub const Gui = struct {
 
     pub fn run(self: *Self, cpu: *Arm7tdmi, scheduler: *Scheduler) !void {
         var quit = std.atomic.Atomic(bool).init(false);
-        var frame_rate = FpsTracker.init();
+        var tracker = FpsTracker.init();
 
-        const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, &frame_rate, scheduler, cpu });
+        const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
         defer thread.join();
 
         var title_buf: [0x100]u8 = [_]u8{0} ** 0x100;
@@ -127,7 +129,7 @@ pub const Gui = struct {
             _ = SDL.SDL_RenderCopy(self.renderer, self.texture, null, null);
             SDL.SDL_RenderPresent(self.renderer);
 
-            const dyn_title = std.fmt.bufPrint(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, frame_rate.value() }) catch unreachable;
+            const dyn_title = std.fmt.bufPrint(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, tracker.value() }) catch unreachable;
             SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
         }
 

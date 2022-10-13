@@ -1,9 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const config = @import("config.zig");
+
 const Log2Int = std.math.Log2Int;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
-
-const allow_unhandled_io = @import("core/emu.zig").allow_unhandled_io;
 
 // Sign-Extend value of type `T` to type `U`
 pub fn sext(comptime T: type, comptime U: type, value: T) T {
@@ -144,8 +144,10 @@ pub const io = struct {
         }
 
         pub fn undef(comptime T: type, log: anytype, comptime format: []const u8, args: anytype) ?T {
+            const unhandled_io = config.config().debug.unhandled_io;
+
             log.warn(format, args);
-            if (builtin.mode == .Debug and !allow_unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
+            if (builtin.mode == .Debug and !unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
 
             return null;
         }
@@ -153,8 +155,10 @@ pub const io = struct {
 
     pub const write = struct {
         pub fn undef(log: anytype, comptime format: []const u8, args: anytype) void {
+            const unhandled_io = config.config().debug.unhandled_io;
+
             log.warn(format, args);
-            if (builtin.mode == .Debug and !allow_unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
+            if (builtin.mode == .Debug and !unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
         }
     };
 };

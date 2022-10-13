@@ -28,6 +28,9 @@ pub fn build(b: *std.build.Builder) void {
     // Argument Parsing Library
     exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
 
+    // TOML Library
+    exe.addPackagePath("toml", "lib/zig-toml/src/toml.zig");
+
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b);
     sdk.link(exe, .dynamic);
