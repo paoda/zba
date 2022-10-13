@@ -3,6 +3,7 @@ const util = @import("../../util.zig");
 
 const Scheduler = @import("../scheduler.zig").Scheduler;
 const FrameSequencer = @import("../apu.zig").FrameSequencer;
+const Tick = @import("../apu.zig").Apu.Tick;
 const Envelope = @import("device/Envelope.zig");
 const Length = @import("device/Length.zig");
 const Lfsr = @import("signal/Lfsr.zig");
@@ -57,12 +58,12 @@ pub fn reset(self: *Self) void {
     self.enabled = false;
 }
 
-pub fn tickLength(self: *Self) void {
-    self.len_dev.tick(self.cnt.length_enable.read(), &self.enabled);
-}
-
-pub fn tickEnvelope(self: *Self) void {
-    self.env_dev.tick(self.envelope);
+pub fn tick(self: *Self, comptime kind: Tick) void {
+    switch (kind) {
+        .Length => self.len_dev.tick(self.cnt.length_enable.read(), &self.enabled),
+        .Envelope => self.env_dev.tick(self.envelope),
+        .Sweep => @compileError("Channel 4 does not implement Sweep"),
+    }
 }
 
 /// NR41, NR42

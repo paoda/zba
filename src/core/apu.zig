@@ -169,6 +169,8 @@ pub const Apu = struct {
 
     is_buffer_full: bool,
 
+    pub const Tick = enum { Length, Envelope, Sweep };
+
     pub fn init(sched: *Scheduler) Self {
         const apu: Self = .{
             .ch1 = ToneSweep.init(sched),
@@ -377,12 +379,12 @@ pub const Apu = struct {
         self.fs.tick();
 
         switch (self.fs.step) {
-            7 => self.tickEnvelopes(), // Clock Envelope
-            0, 4 => self.tickLengths(), // Clock Length
+            7 => self.tick(.Envelope), // Clock Envelope
+            0, 4 => self.tick(.Length), // Clock Length
             2, 6 => {
                 // Clock Length and Sweep
-                self.tickLengths();
-                self.ch1.tickSweep();
+                self.tick(.Length);
+                self.tick(.Sweep);
             },
             1, 3, 5 => {},
         }
@@ -390,17 +392,21 @@ pub const Apu = struct {
         self.sched.push(.FrameSequencer, ((1 << 24) / 512) -| late);
     }
 
-    fn tickLengths(self: *Self) void {
-        self.ch1.tickLength();
-        self.ch2.tickLength();
-        self.ch3.tickLength();
-        self.ch4.tickLength();
-    }
-
-    fn tickEnvelopes(self: *Self) void {
-        self.ch1.tickEnvelope();
-        self.ch2.tickEnvelope();
-        self.ch4.tickEnvelope();
+    fn tick(self: *Self, comptime kind: Tick) void {
+        switch (kind) {
+            .Length => {
+                self.ch1.tick(kind);
+                self.ch2.tick(kind);
+                self.ch3.tick(kind);
+                self.ch4.tick(kind);
+            },
+            .Envelope => {
+                self.ch1.tick(kind);
+                self.ch2.tick(kind);
+                self.ch4.tick(kind);
+            },
+            .Sweep => self.ch1.tick(kind),
+        }
     }
 
     pub fn onDmaAudioSampleRequest(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {

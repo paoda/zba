@@ -3,6 +3,8 @@ const util = @import("../../util.zig");
 
 const Scheduler = @import("../scheduler.zig").Scheduler;
 const FrameSequencer = @import("../apu.zig").FrameSequencer;
+const Tick = @import("../apu.zig").Apu.Tick;
+
 const Length = @import("device/Length.zig");
 const Wave = @import("signal/Wave.zig");
 
@@ -49,8 +51,12 @@ pub fn reset(self: *Self) void {
     self.enabled = false;
 }
 
-pub fn tickLength(self: *Self) void {
-    self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
+pub fn tick(self: *Self, comptime kind: Tick) void {
+    switch (kind) {
+        .Length => self.len_dev.tick(self.freq.length_enable.read(), &self.enabled),
+        .Envelope => @compileError("Channel 3 does not implement Envelope"),
+        .Sweep => @compileError("Channel 3 does not implement Sweep"),
+    }
 }
 
 /// NR30, NR31, NR32

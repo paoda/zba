@@ -8,6 +8,8 @@ const Envelope = @import("device/Envelope.zig");
 const Sweep = @import("device/Sweep.zig");
 const Square = @import("signal/Square.zig");
 
+const Tick = @import("../apu.zig").Apu.Tick;
+
 const Self = @This();
 
 /// NR10
@@ -59,16 +61,12 @@ pub fn reset(self: *Self) void {
     self.enabled = false;
 }
 
-pub fn tickSweep(self: *Self) void {
-    self.sweep_dev.tick(self);
-}
-
-pub fn tickLength(self: *Self) void {
-    self.len_dev.tick(self.freq.length_enable.read(), &self.enabled);
-}
-
-pub fn tickEnvelope(self: *Self) void {
-    self.env_dev.tick(self.envelope);
+pub fn tick(self: *Self, comptime kind: Tick) void {
+    switch (kind) {
+        .Length => self.len_dev.tick(self.freq.length_enable.read(), &self.enabled),
+        .Envelope => self.env_dev.tick(self.envelope),
+        .Sweep => self.sweep_dev.tick(self),
+    }
 }
 
 pub fn onToneSweepEvent(self: *Self, late: u64) void {
