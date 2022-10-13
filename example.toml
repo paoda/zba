@@ -4,6 +4,8 @@
 win_scale = 4
 # Enable VSYNC on the UI thread
 vsync = true
+# Mute ZBA
+mute = false
 
 [Guest]
 # Sync Emulation to Audio 

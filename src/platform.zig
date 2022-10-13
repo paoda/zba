@@ -178,10 +178,16 @@ const Audio = struct {
 
     export fn callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
         const apu = @ptrCast(*Apu, @alignCast(@alignOf(*Apu), userdata));
-        _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+
+        // TODO: Find a better way to mute this
+        if (!config.config().host.mute) {
+            _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+        } else {
+            // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
+            std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
+        }
 
         // If we don't write anything, play silence otherwise garbage will be played
-        // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
         // if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
     }
 };

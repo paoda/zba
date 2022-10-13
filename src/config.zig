@@ -18,6 +18,8 @@ const Config = struct {
         ///
         /// Note: This does not affect whether Emulation is synced to 59Hz
         vsync: bool = true,
+        /// Mute ZBA
+        mute: bool = false,
     };
 
     // Settings realted to the emulation itself
@@ -59,6 +61,7 @@ pub fn load(allocator: Allocator, config_path: []const u8) !void {
     if (table.keys.get("Host")) |host| {
         if (host.Table.keys.get("win_scale")) |scale| state.host.win_scale = scale.Integer;
         if (host.Table.keys.get("vsync")) |vsync| state.host.vsync = vsync.Boolean;
+        if (host.Table.keys.get("mute")) |mute| state.host.mute = mute.Boolean;
     }
 
     if (table.keys.get("Guest")) |guest| {
