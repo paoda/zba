@@ -14,6 +14,8 @@ audio_sync = false
 video_sync = false
 # Force RTC support
 force_rtc = false
+# Skip BIOS
+skip_bios = false
 
 [Debug]
 # Enable detailed CPU logs

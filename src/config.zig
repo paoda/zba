@@ -30,6 +30,8 @@ const Config = struct {
         video_sync: bool = true,
         /// Whether RTC I/O should always be enabled
         force_rtc: bool = false,
+        /// Skip BIOS
+        skip_bios: bool = false,
     };
 
     /// Settings related to debugging ZBA
@@ -68,6 +70,7 @@ pub fn load(allocator: Allocator, config_path: []const u8) !void {
         if (guest.Table.keys.get("audio_sync")) |sync| state.guest.audio_sync = sync.Boolean;
         if (guest.Table.keys.get("video_sync")) |sync| state.guest.video_sync = sync.Boolean;
         if (guest.Table.keys.get("force_rtc")) |forced| state.guest.force_rtc = forced.Boolean;
+        if (guest.Table.keys.get("skip_bios")) |skip| state.guest.skip_bios = skip.Boolean;
     }
 
     if (table.keys.get("Debug")) |debug| {

@@ -65,7 +65,7 @@ pub fn main() anyerror!void {
     try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
 
-    if (result.args.skip or paths.bios == null) {
+    if (config.config().guest.skip_bios or result.args.skip or paths.bios == null) {
         cpu.fastBoot();
     }
 
