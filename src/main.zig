@@ -30,29 +30,33 @@ pub fn main() anyerror!void {
     // Main Allocator for ZBA
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(!gpa.deinit());
+
     const allocator = gpa.allocator();
 
-    // TODO: Make Error message not Linux Specific
-    const data_path = try known_folders.getPath(allocator, .data) orelse exit("Unable to Determine XDG Data Path", .{});
+    // Determine the Data Directory (stores saves, config file, etc.)
+    const data_path = blk: {
+        const result = known_folders.getPath(allocator, .data);
+        const option = result catch |e| exitln("interrupted while attempting to find a data directory: {}", .{e});
+        break :blk option orelse exitln("no valid data directory could be found", .{});
+    };
     defer allocator.free(data_path);
 
-    const config_path = try configFilePath(allocator, data_path);
-    defer allocator.free(config_path);
-
-    const save_path = try savePath(allocator, data_path);
-    defer allocator.free(save_path);
-
-    try config.load(allocator, config_path);
-
-    // Handle CLI Input
-    const result = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    // Parse CLI
+    const result = clap.parse(clap.Help, &params, clap.parsers.default, .{}) catch |e| exitln("failed to parse cli: {}", .{e});
     defer result.deinit();
 
-    const paths = try handleArguments(allocator, data_path, &result);
+    // TODO: Move config file to XDG Config directory?
+    const config_path = configFilePath(allocator, data_path) catch |e| exitln("failed to determine the config file path for ZBA: {}", .{e});
+    defer allocator.free(config_path);
+
+    config.load(allocator, config_path) catch |e| exitln("failed to read config file: {}", .{e});
+
+    const paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
     defer if (paths.save) |path| allocator.free(path);
 
-    const cpu_trace = config.config().debug.cpu_trace;
-    const log_file: ?std.fs.File = if (cpu_trace) try std.fs.cwd().createFile("zba.log", .{}) else null;
+    const log_file = if (config.config().debug.cpu_trace) blk: {
+        break :blk std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e});
+    } else null;
     defer if (log_file) |file| file.close();
 
     // TODO: Take Emulator Init Code out of main.zig
@@ -62,7 +66,7 @@ pub fn main() anyerror!void {
     var bus: Bus = undefined;
     var cpu = Arm7tdmi.init(&scheduler, &bus, log_file);
 
-    try bus.init(allocator, &scheduler, &cpu, paths);
+    bus.init(allocator, &scheduler, &cpu, paths) catch |e| exitln("failed to init zba bus: {}", .{e});
     defer bus.deinit();
 
     if (config.config().guest.skip_bios or result.args.skip or paths.bios == null) {
@@ -72,7 +76,7 @@ pub fn main() anyerror!void {
     var gui = Gui.init(&bus.pak.title, &bus.apu, width, height);
     defer gui.deinit();
 
-    try gui.run(&cpu, &scheduler);
+    gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
 }
 
 pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
@@ -80,12 +84,12 @@ pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *con
     log.info("ROM path: {s}", .{rom_path});
 
     const bios_path = result.args.bios;
-    if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.info("No BIOS provided", .{});
+    if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.warn("No BIOS provided", .{});
 
     const save_path = try savePath(allocator, data_path);
     log.info("Save path: {s}", .{save_path});
 
-    return FilePaths{
+    return .{
         .rom = rom_path,
         .bios = bios_path,
         .save = save_path,
@@ -94,13 +98,16 @@ pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *con
 
 fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
     const path = try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "config.toml" });
+    errdefer allocator.free(path);
 
     // We try to create the file exclusively, meaning that we err out if the file already exists.
     // All we care about is a file being there so we can just ignore that error in particular and
     // continue down the happy pathj
     std.fs.accessAbsolute(path, .{}) catch {
         const file_handle = try std.fs.createFileAbsolute(path, .{});
-        file_handle.close();
+        defer file_handle.close();
+
+        // TODO: Write Default valeus to config file
     };
 
     return path;
@@ -120,13 +127,14 @@ fn savePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
 fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
     return switch (result.positionals.len) {
         1 => result.positionals[0],
-        0 => exit("ZBA requires a path to a GamePak ROM\n", .{}),
-        else => exit("ZBA received too many positional arguments. \n", .{}),
+        0 => exitln("ZBA requires a path to a GamePak ROM", .{}),
+        else => exitln("ZBA received too many positional arguments.", .{}),
     };
 }
 
-fn exit(comptime format: []const u8, args: anytype) noreturn {
+fn exitln(comptime format: []const u8, args: anytype) noreturn {
     const stderr = std.io.getStdErr().writer();
     stderr.print(format, args) catch {}; // Just exit already...
+    stderr.writeByte('\n') catch {};
     std.os.exit(1);
 }
