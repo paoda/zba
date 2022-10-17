@@ -20,8 +20,9 @@ pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_lev
 // CLI Arguments + Help Text
 const params = clap.parseParamsComptime(
     \\-h, --help            Display this help and exit.
+    \\-s, --skip            Skip BIOS.
     \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
-    \\<str>                 Path to the GBA GamePak ROM
+    \\<str>                 Path to the GBA GamePak ROM.
     \\
 );
 
@@ -64,7 +65,9 @@ pub fn main() anyerror!void {
     try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
 
-    if (paths.bios == null) cpu.fastBoot();
+    if (result.args.skip or paths.bios == null) {
+        cpu.fastBoot();
+    }
 
     var gui = Gui.init(&bus.pak.title, &bus.apu, width, height);
     defer gui.deinit();
