@@ -242,6 +242,7 @@ pub const Arm7tdmi = struct {
     const Self = @This();
 
     r: [16]u32,
+    pipe: Pipeline,
     sched: *Scheduler,
     bus: *Bus,
     cpsr: PSR,
@@ -262,6 +263,7 @@ pub const Arm7tdmi = struct {
     pub fn init(sched: *Scheduler, bus: *Bus, log_file: ?std.fs.File) Self {
         return Self{
             .r = [_]u32{0x00} ** 16,
+            .pipe = Pipeline.init(),
             .sched = sched,
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_001F },
@@ -410,28 +412,42 @@ pub const Arm7tdmi = struct {
         self.cpsr.mode.write(@enumToInt(next));
     }
 
+    /// Advances state so that the BIOS is skipped
+    ///
+    /// Note: This accesses the CPU's bus ptr so it only may be called
+    /// once the Bus has been properly initialized
+    ///
+    /// TODO: Make above notice impossible to do in code
     pub fn fastBoot(self: *Self) void {
         self.r = std.mem.zeroes([16]u32);
 
-        self.r[0] = 0x08000000;
-        self.r[1] = 0x000000EA;
+        // self.r[0] = 0x08000000;
+        // self.r[1] = 0x000000EA;
         self.r[13] = 0x0300_7F00;
         self.r[15] = 0x0800_0000;
 
         self.banked_r[bankedIdx(.Irq, .R13)] = 0x0300_7FA0;
         self.banked_r[bankedIdx(.Supervisor, .R13)] = 0x0300_7FE0;
 
-        self.cpsr.raw = 0x6000001F;
+        // self.cpsr.raw = 0x6000001F;
+        self.cpsr.raw = 0x0000_001F;
+
+        self.bus.bios.addr_latch = 0x0000_00DC + 8;
     }
 
     pub fn step(self: *Self) void {
+        defer {
+            if (!self.pipe.flushed) self.r[15] += if (self.cpsr.t.read()) 2 else @as(u32, 4);
+            self.pipe.flushed = false;
+        }
+
         if (self.cpsr.t.read()) {
-            const opcode = self.fetch(u16);
+            const opcode = @truncate(u16, self.pipe.step(self, u16) orelse return);
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             thumb.lut[thumb.idx(opcode)](self, self.bus, opcode);
         } else {
-            const opcode = self.fetch(u32);
+            const opcode = self.pipe.step(self, u32) orelse return;
             if (self.logger) |*trace| trace.mgbaLog(self, opcode);
 
             if (checkCond(self.cpsr, @truncate(u4, opcode >> 28))) {
@@ -472,42 +488,41 @@ pub const Arm7tdmi = struct {
     pub fn handleInterrupt(self: *Self) void {
         const should_handle = self.bus.io.ie.raw & self.bus.io.irq.raw;
 
-        if (should_handle != 0) {
-            self.bus.io.haltcnt = .Execute;
-            // log.debug("An Interrupt was Fired!", .{});
+        // Return if IME is disabled, CPSR I is set or there is nothing to handle
+        if (!self.bus.io.ime or self.cpsr.i.read() or should_handle == 0) return;
 
-            // Either IME is not true or I in CPSR is true
-            // Don't handle interrupts
-            if (!self.bus.io.ime or self.cpsr.i.read()) return;
-            // log.debug("An interrupt was Handled!", .{});
+        // If Pipeline isn't full, we have a bug
+        std.debug.assert(self.pipe.isFull());
 
-            // retAddr.gba says r15 on it's own is off by -04h in both ARM and THUMB mode
-            const r15 = self.r[15] + 4;
-            const cpsr = self.cpsr.raw;
+        // log.debug("Handling Interrupt!", .{});
+        self.bus.io.haltcnt = .Execute;
 
-            self.changeMode(.Irq);
-            self.cpsr.t.write(false);
-            self.cpsr.i.write(true);
+        // FIXME: This seems weird, but retAddr.gba suggests I need to make these changes
+        const ret_addr = self.r[15] - if (self.cpsr.t.read()) 0 else @as(u32, 4);
+        const new_spsr = self.cpsr.raw;
 
-            self.r[14] = r15;
-            self.spsr.raw = cpsr;
-            self.r[15] = 0x000_0018;
-        }
+        self.changeMode(.Irq);
+        self.cpsr.t.write(false);
+        self.cpsr.i.write(true);
+
+        self.r[14] = ret_addr;
+        self.spsr.raw = new_spsr;
+        self.r[15] = 0x0000_0018;
+        self.pipe.reload(self);
     }
 
-    inline fn fetch(self: *Self, comptime T: type) T {
+    inline fn fetch(self: *Self, comptime T: type, address: u32) T {
         comptime std.debug.assert(T == u32 or T == u16); // Opcode may be 32-bit (ARM) or 16-bit (THUMB)
-        defer self.r[15] += if (T == u32) 4 else 2;
 
-        // FIXME: You better hope this is optimized out
+        // Bus.read will advance the scheduler. There are different timings for CPU fetches,
+        // so we want to undo what Bus.read will apply. We can do this by caching the current tick
+        // This is very dumb.
+        //
+        // FIXME: Please rework this
         const tick_cache = self.sched.tick;
-        defer self.sched.tick = tick_cache + Bus.fetch_timings[@boolToInt(T == u32)][@truncate(u4, self.r[15] >> 24)];
+        defer self.sched.tick = tick_cache + Bus.fetch_timings[@boolToInt(T == u32)][@truncate(u4, address >> 24)];
 
-        return self.bus.read(T, self.r[15]);
-    }
-
-    pub fn fakePC(self: *const Self) u32 {
-        return self.r[15] + 4;
+        return self.bus.read(T, address);
     }
 
     pub fn panic(self: *const Self, comptime format: []const u8, args: anytype) noreturn {
@@ -523,6 +538,8 @@ pub const Arm7tdmi = struct {
 
         std.debug.print("spsr: 0x{X:0>8} ", .{self.spsr.raw});
         prettyPrintPsr(&self.spsr);
+
+        std.debug.print("pipeline: {??X:0>8}\n", .{self.pipe.stage});
 
         if (self.cpsr.t.read()) {
             const opcode = self.bus.dbgRead(u16, self.r[15] - 4);
@@ -587,7 +604,7 @@ pub const Arm7tdmi = struct {
         const r12 = self.r[12];
         const r13 = self.r[13];
         const r14 = self.r[14];
-        const r15 = self.r[15];
+        const r15 = self.r[15] -| if (self.cpsr.t.read()) 2 else @as(u32, 4);
 
         const c_psr = self.cpsr.raw;
 
@@ -595,7 +612,7 @@ pub const Arm7tdmi = struct {
         if (self.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const other_half = self.bus.dbgRead(u16, self.r[15]);
+                const other_half = self.bus.debugRead(u16, self.r[15] - 2);
                 const bl_opcode = @as(u32, opcode) << 16 | other_half;
 
                 log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, bl_opcode });
@@ -630,6 +647,49 @@ pub fn checkCond(cpsr: PSR, cond: u4) bool {
         0xF => false, // NV - Never (reserved in ARMv3 and up, but seems to have not changed?)
     };
 }
+
+const Pipeline = struct {
+    const Self = @This();
+    stage: [2]?u32,
+    flushed: bool,
+
+    fn init() Self {
+        return .{
+            .stage = [_]?u32{null} ** 2,
+            .flushed = false,
+        };
+    }
+
+    pub fn isFull(self: *const Self) bool {
+        return self.stage[0] != null and self.stage[1] != null;
+    }
+
+    pub fn step(self: *Self, cpu: *Arm7tdmi, comptime T: type) ?u32 {
+        comptime std.debug.assert(T == u32 or T == u16);
+
+        // FIXME: https://github.com/ziglang/zig/issues/12642
+        var opcode = self.stage[0];
+
+        self.stage[0] = self.stage[1];
+        self.stage[1] = cpu.fetch(T, cpu.r[15]);
+
+        return opcode;
+    }
+
+    pub fn reload(self: *Self, cpu: *Arm7tdmi) void {
+        if (cpu.cpsr.t.read()) {
+            self.stage[0] = cpu.fetch(u16, cpu.r[15]);
+            self.stage[1] = cpu.fetch(u16, cpu.r[15] + 2);
+            cpu.r[15] += 4;
+        } else {
+            self.stage[0] = cpu.fetch(u32, cpu.r[15]);
+            self.stage[1] = cpu.fetch(u32, cpu.r[15] + 4);
+            cpu.r[15] += 8;
+        }
+
+        self.flushed = true;
+    }
+};
 
 pub const PSR = extern union {
     mode: Bitfield(u32, 0, 5),

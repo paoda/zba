@@ -2,13 +2,13 @@
 An in-progress Game Boy Advance Emulator written in Zig ⚡!
 
 ## Tests 
-- [ ] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
+- [x] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
     - [x] `arm.gba` and `thumb.gba`
     - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
     - [x] `hello.gba`, `shades.gba`, and `stripes.gba`
     - [x] `memory.gba`
     - [x] `bios.gba`
-    - [ ] `nes.gba`
+    - [x] `nes.gba`
 - [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
     - [x] `eeprom-test` and `flash-test`
     - [x] `midikey2freq`

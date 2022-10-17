@@ -5,37 +5,33 @@ const CPSR = @import("../cpu.zig").PSR;
 
 const rotr = @import("../../util.zig").rotr;
 
-pub fn execute(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
+pub fn exec(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     var result: u32 = undefined;
     if (opcode >> 4 & 1 == 1) {
-        result = registerShift(S, cpu, opcode);
+        result = register(S, cpu, opcode);
     } else {
-        result = immShift(S, cpu, opcode);
+        result = immediate(S, cpu, opcode);
     }
 
     return result;
 }
 
-fn registerShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
+fn register(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const rs_idx = opcode >> 8 & 0xF;
+    const rm = cpu.r[opcode & 0xF];
     const rs = @truncate(u8, cpu.r[rs_idx]);
 
-    const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
-
     return switch (@truncate(u2, opcode >> 5)) {
-        0b00 => logicalLeft(S, &cpu.cpsr, rm, rs),
-        0b01 => logicalRight(S, &cpu.cpsr, rm, rs),
-        0b10 => arithmeticRight(S, &cpu.cpsr, rm, rs),
-        0b11 => rotateRight(S, &cpu.cpsr, rm, rs),
+        0b00 => lsl(S, &cpu.cpsr, rm, rs),
+        0b01 => lsr(S, &cpu.cpsr, rm, rs),
+        0b10 => asr(S, &cpu.cpsr, rm, rs),
+        0b11 => ror(S, &cpu.cpsr, rm, rs),
     };
 }
 
-pub fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
+pub fn immediate(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
     const amount = @truncate(u8, opcode >> 7 & 0x1F);
-
-    const rm_idx = opcode & 0xF;
-    const rm = if (rm_idx == 0xF) cpu.fakePC() else cpu.r[rm_idx];
+    const rm = cpu.r[opcode & 0xF];
 
     var result: u32 = undefined;
     if (amount == 0) {
@@ -64,17 +60,17 @@ pub fn immShift(comptime S: bool, cpu: *Arm7tdmi, opcode: u32) u32 {
         }
     } else {
         switch (@truncate(u2, opcode >> 5)) {
-            0b00 => result = logicalLeft(S, &cpu.cpsr, rm, amount),
-            0b01 => result = logicalRight(S, &cpu.cpsr, rm, amount),
-            0b10 => result = arithmeticRight(S, &cpu.cpsr, rm, amount),
-            0b11 => result = rotateRight(S, &cpu.cpsr, rm, amount),
+            0b00 => result = lsl(S, &cpu.cpsr, rm, amount),
+            0b01 => result = lsr(S, &cpu.cpsr, rm, amount),
+            0b10 => result = asr(S, &cpu.cpsr, rm, amount),
+            0b11 => result = ror(S, &cpu.cpsr, rm, amount),
         }
     }
 
     return result;
 }
 
-pub fn logicalLeft(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
+pub fn lsl(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
     const amount = @truncate(u5, total_amount);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -101,7 +97,7 @@ pub fn logicalLeft(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32
     return result;
 }
 
-pub fn logicalRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u32) u32 {
+pub fn lsr(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u32) u32 {
     const amount = @truncate(u5, total_amount);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -125,7 +121,7 @@ pub fn logicalRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u32) u
     return result;
 }
 
-pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
+pub fn asr(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
     const amount = @truncate(u5, total_amount);
     const bit_count: u8 = @typeInfo(u32).Int.bits;
 
@@ -142,7 +138,7 @@ pub fn arithmeticRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8)
     return result;
 }
 
-pub fn rotateRight(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
+pub fn ror(comptime S: bool, cpsr: *CPSR, rm: u32, total_amount: u8) u32 {
     const result = rotr(u32, rm, total_amount);
 
     if (S and total_amount != 0) {

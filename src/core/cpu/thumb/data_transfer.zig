@@ -12,7 +12,9 @@ pub fn fmt6(comptime rd: u3) InstrFn {
         fn inner(cpu: *Arm7tdmi, bus: *Bus, opcode: u16) void {
             // LDR
             const offset = (opcode & 0xFF) << 2;
-            cpu.r[rd] = bus.read(u32, (cpu.r[15] + 2 & 0xFFFF_FFFD) + offset);
+
+            // Bit 1 of the PC intentionally ignored
+            cpu.r[rd] = bus.read(u32, (cpu.r[15] & ~@as(u32, 2)) + offset);
         }
     }.inner;
 }

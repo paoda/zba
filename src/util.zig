@@ -176,6 +176,7 @@ pub const Logger = struct {
 
     pub fn print(self: *Self, comptime format: []const u8, args: anytype) !void {
         try self.buf.writer().print(format, args);
+        try self.buf.flush(); // FIXME: On panics, whatever is in the buffer isn't written to file
     }
 
     pub fn mgbaLog(self: *Self, cpu: *const Arm7tdmi, opcode: u32) void {
@@ -215,7 +216,7 @@ pub const Logger = struct {
             cpu.r[12],
             cpu.r[13],
             cpu.r[14],
-            cpu.r[15],
+            cpu.r[15] - if (cpu.cpsr.t.read()) 2 else @as(u32, 4),
             cpu.cpsr.raw,
             opcode,
         };

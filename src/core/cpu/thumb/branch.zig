@@ -9,16 +9,13 @@ pub fn fmt16(comptime cond: u4) InstrFn {
     return struct {
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
             // B
-            const offset = sext(u32, u8, opcode & 0xFF) << 1;
+            if (cond == 0xE or cond == 0xF)
+                cpu.panic("[CPU/THUMB.16] Undefined conditional branch with condition {}", .{cond});
 
-            const should_execute = switch (cond) {
-                0xE, 0xF => cpu.panic("[CPU/THUMB.16] Undefined conditional branch with condition {}", .{cond}),
-                else => checkCond(cpu.cpsr, cond),
-            };
+            if (!checkCond(cpu.cpsr, cond)) return;
 
-            if (should_execute) {
-                cpu.r[15] = (cpu.r[15] + 2) +% offset;
-            }
+            cpu.r[15] +%= sext(u32, u8, opcode & 0xFF) << 1;
+            cpu.pipe.reload(cpu);
         }
     }.inner;
 }
@@ -27,8 +24,8 @@ pub fn fmt18() InstrFn {
     return struct {
         // B but conditional
         fn inner(cpu: *Arm7tdmi, _: *Bus, opcode: u16) void {
-            const offset = sext(u32, u11, opcode & 0x7FF) << 1;
-            cpu.r[15] = (cpu.r[15] + 2) +% offset;
+            cpu.r[15] +%= sext(u32, u11, opcode & 0x7FF) << 1;
+            cpu.pipe.reload(cpu);
         }
     }.inner;
 }
@@ -41,13 +38,16 @@ pub fn fmt19(comptime is_low: bool) InstrFn {
 
             if (is_low) {
                 // Instruction 2
-                const old_pc = cpu.r[15];
+                const next_opcode = cpu.r[15] - 2;
 
                 cpu.r[15] = cpu.r[14] +% (offset << 1);
-                cpu.r[14] = old_pc | 1;
+                cpu.r[14] = next_opcode | 1;
+
+                cpu.pipe.reload(cpu);
             } else {
                 // Instruction 1
-                cpu.r[14] = (cpu.r[15] + 2) +% (sext(u32, u11, offset) << 12);
+                const lr_offset = sext(u32, u11, offset) << 12;
+                cpu.r[14] = (cpu.r[15] +% lr_offset) & ~@as(u32, 1);
             }
         }
     }.inner;

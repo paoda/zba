@@ -15,20 +15,8 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
             const rm = opcode & 0xF;
             const imm_offset_high = opcode >> 8 & 0xF;
 
-            var base: u32 = undefined;
-            if (rn == 0xF) {
-                base = cpu.fakePC();
-                if (!L) base += 4;
-            } else {
-                base = cpu.r[rn];
-            }
-
-            var offset: u32 = undefined;
-            if (I) {
-                offset = imm_offset_high << 4 | rm;
-            } else {
-                offset = cpu.r[rm];
-            }
+            const base = cpu.r[rn] + if (!L and rn == 0xF) 4 else @as(u32, 0);
+            const offset = if (I) imm_offset_high << 4 | rm else cpu.r[rm];
 
             const modified_base = if (U) base +% offset else base -% offset;
             var address = if (P) modified_base else base;

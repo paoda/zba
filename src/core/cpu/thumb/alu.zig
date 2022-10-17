@@ -4,16 +4,11 @@ const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const adc = @import("../arm/data_processing.zig").adc;
 const sbc = @import("../arm/data_processing.zig").sbc;
-const sub = @import("../arm/data_processing.zig").sub;
-const cmp = @import("../arm/data_processing.zig").cmp;
-const cmn = @import("../arm/data_processing.zig").cmn;
-const setTestOpFlags = @import("../arm/data_processing.zig").setTestOpFlags;
-const setLogicOpFlags = @import("../arm/data_processing.zig").setLogicOpFlags;
 
-const logicalLeft = @import("../barrel_shifter.zig").logicalLeft;
-const logicalRight = @import("../barrel_shifter.zig").logicalRight;
-const arithmeticRight = @import("../barrel_shifter.zig").arithmeticRight;
-const rotateRight = @import("../barrel_shifter.zig").rotateRight;
+const lsl = @import("../barrel_shifter.zig").lsl;
+const lsr = @import("../barrel_shifter.zig").lsr;
+const asr = @import("../barrel_shifter.zig").asr;
+const ror = @import("../barrel_shifter.zig").ror;
 
 pub fn fmt4(comptime op: u4) InstrFn {
     return struct {
@@ -22,95 +17,84 @@ pub fn fmt4(comptime op: u4) InstrFn {
             const rd = opcode & 0x7;
             const carry = @boolToInt(cpu.cpsr.c.read());
 
+            const op1 = cpu.r[rd];
+            const op2 = cpu.r[rs];
+
+            var result: u32 = undefined;
+            var overflow: bool = undefined;
             switch (op) {
-                0x0 => {
-                    // AND
-                    const result = cpu.r[rd] & cpu.r[rs];
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
+                0x0 => result = op1 & op2, // AND
+                0x1 => result = op1 ^ op2, // EOR
+                0x2 => result = lsl(true, &cpu.cpsr, op1, @truncate(u8, op2)), // LSL
+                0x3 => result = lsr(true, &cpu.cpsr, op1, @truncate(u8, op2)), // LSR
+                0x4 => result = asr(true, &cpu.cpsr, op1, @truncate(u8, op2)), // ASR
+                0x5 => result = adc(&overflow, op1, op2, carry), // ADC
+                0x6 => result = sbc(op1, op2, carry), // SBC
+                0x7 => result = ror(true, &cpu.cpsr, op1, @truncate(u8, op2)), // ROR
+                0x8 => result = op1 & op2, // TST
+                0x9 => result = 0 -% op2, // NEG
+                0xA => result = op1 -% op2, // CMP
+                0xB => overflow = @addWithOverflow(u32, op1, op2, &result), // CMN
+                0xC => result = op1 | op2, // ORR
+                0xD => result = @truncate(u32, @as(u64, op2) * @as(u64, op1)),
+                0xE => result = op1 & ~op2,
+                0xF => result = ~op2,
+            }
+
+            // Write to Destination Register
+            switch (op) {
+                0x8, 0xA, 0xB => {},
+                else => cpu.r[rd] = result,
+            }
+
+            // Write Flags
+            switch (op) {
+                0x0, 0x1, 0x2, 0x3, 0x4, 0x7, 0xC, 0xE, 0xF => {
+                    // Logic Operations
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    // C set by Barrel Shifter, V is unaffected
                 },
-                0x1 => {
-                    // EOR
-                    const result = cpu.r[rd] ^ cpu.r[rs];
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
+                0x8, 0xA => {
+                    // Test Flags
+                    // CMN (0xB) is handled with ADC
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+
+                    if (op == 0xA) {
+                        // CMP specific
+                        cpu.cpsr.c.write(op2 <= op1);
+                        cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
+                    }
                 },
-                0x2 => {
-                    // LSL
-                    const result = logicalLeft(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
-                },
-                0x3 => {
-                    // LSR
-                    const result = logicalRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
-                },
-                0x4 => {
-                    // ASR
-                    const result = arithmeticRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
-                },
-                0x5 => {
-                    // ADC
-                    cpu.r[rd] = adc(true, cpu, cpu.r[rd], cpu.r[rs], carry);
+                0x5, 0xB => {
+                    // ADC, CMN
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.c.write(overflow);
+                    cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0x6 => {
                     // SBC
-                    cpu.r[rd] = sbc(true, cpu, cpu.r[rd], cpu.r[rs], carry);
-                },
-                0x7 => {
-                    // ROR
-                    const result = rotateRight(true, &cpu.cpsr, cpu.r[rd], @truncate(u8, cpu.r[rs]));
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
-                },
-                0x8 => {
-                    // TST
-                    const result = cpu.r[rd] & cpu.r[rs];
-                    setLogicOpFlags(true, cpu, result);
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+
+                    const subtrahend = @as(u64, op2) -% carry +% 1;
+                    cpu.cpsr.c.write(subtrahend <= op1);
+                    cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0x9 => {
                     // NEG
-                    cpu.r[rd] = sub(true, cpu, 0, cpu.r[rs]);
-                },
-                0xA => {
-                    // CMP
-                    cmp(cpu, cpu.r[rd], cpu.r[rs]);
-                },
-                0xB => {
-                    // CMN
-                    cmn(cpu, cpu.r[rd], cpu.r[rs]);
-                },
-                0xC => {
-                    // ORR
-                    const result = cpu.r[rd] | cpu.r[rs];
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
+                    cpu.cpsr.n.write(result >> 31 & 1 == 1);
+                    cpu.cpsr.z.write(result == 0);
+                    cpu.cpsr.c.write(op2 <= 0);
+                    cpu.cpsr.v.write(((0 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0xD => {
-                    // MUL
-                    const temp = @as(u64, cpu.r[rs]) * @as(u64, cpu.r[rd]);
-                    const result = @truncate(u32, temp);
-                    cpu.r[rd] = result;
-
+                    // Multiplication
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
                     // V is unaffected, assuming similar behaviour to ARMv4 MUL C is undefined
-                },
-                0xE => {
-                    // BIC
-                    const result = cpu.r[rd] & ~cpu.r[rs];
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
-                },
-                0xF => {
-                    // MVN
-                    const result = ~cpu.r[rs];
-                    cpu.r[rd] = result;
-                    setLogicOpFlags(true, cpu, result);
                 },
             }
         }
