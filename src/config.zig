@@ -3,6 +3,7 @@ const toml = @import("toml");
 
 const Allocator = std.mem.Allocator;
 
+const log = std.log.scoped(.Config);
 var state: Config = .{};
 
 const Config = struct {
@@ -51,6 +52,8 @@ pub fn config() *const Config {
 pub fn load(allocator: Allocator, config_path: []const u8) !void {
     var config_file = try std.fs.cwd().openFile(config_path, .{});
     defer config_file.close();
+
+    log.info("loaded from {s}", .{config_path});
 
     const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
     defer allocator.free(contents);
