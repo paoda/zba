@@ -68,6 +68,8 @@ pub const Gpio = struct {
         log.info("Device: {}", .{kind});
 
         const self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
+
         self.* = .{
             .data = 0b0000,
             .direction = 0b1111, // TODO: What is GPIO DIrection set to by default?
