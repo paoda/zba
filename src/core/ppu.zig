@@ -12,9 +12,6 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
 const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
-/// This is used to generate byuu / Talurabi's Color Correction algorithm
-const COLOUR_LUT = genColourLut();
-
 pub const width = 240;
 pub const height = 160;
 pub const framebuf_pitch = width * @sizeOf(u32);
@@ -392,7 +389,7 @@ pub const Ppu = struct {
                     const maybe_btm = self.scanline.btm()[i];
 
                     const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -419,7 +416,7 @@ pub const Ppu = struct {
                     const maybe_btm = self.scanline.btm()[i];
 
                     const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -445,7 +442,7 @@ pub const Ppu = struct {
                     const maybe_btm = self.scanline.btm()[i];
 
                     const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
 
                 // Reset Current Scanline Pixel Buffer and list of fetched sprites
@@ -460,7 +457,7 @@ pub const Ppu = struct {
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
                     const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             0x4 => {
@@ -471,7 +468,7 @@ pub const Ppu = struct {
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             0x5 => {
@@ -488,7 +485,7 @@ pub const Ppu = struct {
                     const bgr555 =
                         if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.getBackdrop();
 
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], COLOUR_LUT[bgr555 & 0x7FFF]);
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
@@ -1063,45 +1060,12 @@ fn spriteDimensions(shape: u2, size: u2) [2]u8 {
     };
 }
 
-fn toRgba8888(bgr555: u16) u32 {
+inline fn rgba888(bgr555: u16) u32 {
     const b = @as(u32, bgr555 >> 10 & 0x1F);
     const g = @as(u32, bgr555 >> 5 & 0x1F);
     const r = @as(u32, bgr555 & 0x1F);
 
     return (r << 3 | r >> 2) << 24 | (g << 3 | g >> 2) << 16 | (b << 3 | b >> 2) << 8 | 0xFF;
-}
-
-fn genColourLut() [0x8000]u32 {
-    return comptime {
-        @setEvalBranchQuota(0x10001);
-
-        var lut: [0x8000]u32 = undefined;
-        for (lut) |*px, i| px.* = toRgba8888(i);
-        return lut;
-    };
-}
-
-// FIXME: The implementation is incorrect and using it in the LUT crashes the compiler (OOM)
-/// Implementation courtesy of byuu and Talarubi at https://near.sh/articles/video/color-emulation
-fn toRgba8888Talarubi(bgr555: u16) u32 {
-    @setRuntimeSafety(false);
-
-    const lcd_gamma: f64 = 4;
-    const out_gamma: f64 = 2.2;
-
-    const b = @as(u32, bgr555 >> 10 & 0x1F);
-    const g = @as(u32, bgr555 >> 5 & 0x1F);
-    const r = @as(u32, bgr555 & 0x1F);
-
-    const lb = std.math.pow(f64, @intToFloat(f64, b << 3 | b >> 2) / 31, lcd_gamma);
-    const lg = std.math.pow(f64, @intToFloat(f64, g << 3 | g >> 2) / 31, lcd_gamma);
-    const lr = std.math.pow(f64, @intToFloat(f64, r << 3 | r >> 2) / 31, lcd_gamma);
-
-    const out_b = std.math.pow(f64, (220 * lb + 10 * lg + 50 * lr) / 255, 1 / out_gamma);
-    const out_g = std.math.pow(f64, (30 * lb + 230 * lg + 10 * lr) / 255, 1 / out_gamma);
-    const out_r = std.math.pow(f64, (0 * lb + 50 * lg + 255 * lr) / 255, 1 / out_gamma);
-
-    return @floatToInt(u32, out_r) << 24 | @floatToInt(u32, out_g) << 16 | @floatToInt(u32, out_b) << 8 | 0xFF;
 }
 
 fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
