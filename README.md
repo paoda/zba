@@ -12,7 +12,6 @@ features and the set of possible improvements would be in memory timing or in UI
 ### TODO 
 - [ ] Affine Sprites
 - [ ] Windowing (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/window))
-- [ ] Shaders (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/opengl))
 - [ ] Audio Resampler (Having issues with SDL2's)
 - [ ] Immediate Mode GUI
 - [ ] Refactoring for easy-ish perf boosts
@@ -51,7 +50,7 @@ features and the set of possible improvements would be in memory timing or in UI
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [0.10.0-dev.4324+c23b3e6fd](https://github.com/ziglang/zig/tree/c23b3e6fd)
+Most recently built on Zig [0.10.0-dev.4474+b41b35f57](https://github.com/ziglang/zig/tree/b41b35f57)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
