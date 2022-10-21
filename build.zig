@@ -13,6 +13,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("zba", "src/main.zig");
+    exe.setMainPkgPath("."); // Necessary so that src/main.zig can embed example.toml
     exe.setTarget(target);
 
     // Known Folders (%APPDATA%, XDG, etc.)

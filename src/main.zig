@@ -37,7 +37,10 @@ pub fn main() anyerror!void {
     const data_path = blk: {
         const result = known_folders.getPath(allocator, .data);
         const option = result catch |e| exitln("interrupted while attempting to find a data directory: {}", .{e});
-        break :blk option orelse exitln("no valid data directory could be found", .{});
+        const path = option orelse exitln("no valid data directory could be found", .{});
+        ensureDirectoriesExist(path) catch |e| exitln("failed to create directories under \"{s}\": {}", .{ path, e });
+
+        break :blk path;
     };
     defer allocator.free(data_path);
 
@@ -86,7 +89,7 @@ pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *con
     const bios_path = result.args.bios;
     if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.warn("No BIOS provided", .{});
 
-    const save_path = try savePath(allocator, data_path);
+    const save_path = try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "save" });
     log.info("Save path: {s}", .{save_path});
 
     return .{
@@ -103,25 +106,27 @@ fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
     // We try to create the file exclusively, meaning that we err out if the file already exists.
     // All we care about is a file being there so we can just ignore that error in particular and
     // continue down the happy pathj
-    std.fs.accessAbsolute(path, .{}) catch {
-        const file_handle = try std.fs.createFileAbsolute(path, .{});
-        defer file_handle.close();
+    std.fs.accessAbsolute(path, .{}) catch |e| {
+        if (e != error.FileNotFound) return e;
 
-        // TODO: Write Default valeus to config file
+        const config_file = try std.fs.createFileAbsolute(path, .{});
+        defer config_file.close();
+
+        try config_file.writeAll(@embedFile("../example.toml"));
     };
 
     return path;
 }
 
-fn savePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
+fn ensureDirectoriesExist(data_path: []const u8) !void {
     var dir = try std.fs.openDirAbsolute(data_path, .{});
     defer dir.close();
 
-    // Will either make the path recursively, or just exit early since it already exists
-    try dir.makePath("zba" ++ [_]u8{std.fs.path.sep} ++ "save");
+    // We want to make sure: %APPDATA%/zba and %APPDATA%/zba/save exist
+    // (~/.local/share/zba/save for linux, ??? for macOS)
 
-    // FIXME: Do we have to allocate? :sad:
-    return try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "save" });
+    // Will recursively create directories
+    try dir.makePath("zba" ++ [_]u8{std.fs.path.sep} ++ "save");
 }
 
 fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
