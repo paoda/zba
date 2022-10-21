@@ -1,7 +1,7 @@
 [Host]
 # Using nearest-neighbour scaling, how many times the native resolution 
 # of the game bow should the screen be?
-win_scale = 4
+win_scale = 3
 # Enable VSYNC on the UI thread
 vsync = true
 # Mute ZBA
@@ -9,9 +9,9 @@ mute = false
 
 [Guest]
 # Sync Emulation to Audio 
-audio_sync = false
+audio_sync = true
 # Sync Emulation to Video
-video_sync = false
+video_sync = true
 # Force RTC support
 force_rtc = false
 # Skip BIOS
