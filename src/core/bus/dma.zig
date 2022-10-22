@@ -11,6 +11,8 @@ const log = std.log.scoped(.DmaTransfer);
 const setHi = util.setHi;
 const setLo = util.setLo;
 
+const rotr = @import("../../util.zig").rotr;
+
 pub fn create() DmaTuple {
     return .{ DmaController(0).init(), DmaController(1).init(), DmaController(2).init(), DmaController(3).init() };
 }
@@ -99,6 +101,7 @@ fn DmaController(comptime id: u2) type {
 
         const sad_mask: u32 = if (id == 0) 0x07FF_FFFF else 0x0FFF_FFFF;
         const dad_mask: u32 = if (id != 3) 0x07FF_FFFF else 0x0FFF_FFFF;
+        const WordCount = if (id == 3) u16 else u14;
 
         /// Write-only. The first address in a DMA transfer. (DMASAD)
         /// Note: use writeSrc instead of manipulating src_addr directly
@@ -107,17 +110,19 @@ fn DmaController(comptime id: u2) type {
         /// Note: Use writeDst instead of manipulatig dst_addr directly
         dad: u32,
         /// Write-only. The Word Count for the DMA Transfer (DMACNT_L)
-        word_count: if (id == 3) u16 else u14,
+        word_count: WordCount,
         /// Read / Write. DMACNT_H
         /// Note: Use writeControl instead of manipulating cnt directly.
         cnt: DmaControl,
 
+        /// Internal. The last successfully read value
+        data_latch: u32,
         /// Internal. Currrent Source Address
         sad_latch: u32,
         /// Internal. Current Destination Address
         dad_latch: u32,
         /// Internal. Word Count
-        _word_count: if (id == 3) u16 else u14,
+        _word_count: WordCount,
 
         /// Some DMA Transfers are enabled during Hblank / VBlank and / or
         /// have delays. Thefore bit 15 of DMACNT isn't actually something
@@ -134,6 +139,8 @@ fn DmaController(comptime id: u2) type {
                 // Internals
                 .sad_latch = 0,
                 .dad_latch = 0,
+                .data_latch = 0,
+
                 ._word_count = 0,
                 .in_progress = false,
             };
@@ -158,7 +165,7 @@ fn DmaController(comptime id: u2) type {
                 // Reload Internals on Rising Edge.
                 self.sad_latch = self.sad;
                 self.dad_latch = self.dad;
-                self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
+                self._word_count = if (self.word_count == 0) std.math.maxInt(WordCount) else self.word_count;
 
                 // Only a Start Timing of 00 has a DMA Transfer immediately begin
                 self.in_progress = new.start_timing.read() == 0b00;
@@ -181,11 +188,19 @@ fn DmaController(comptime id: u2) type {
             const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
 
             const mask = if (transfer_type) ~@as(u32, 3) else ~@as(u32, 1);
+            const sad_addr = self.sad_latch & mask;
+            const dad_addr = self.dad_latch & mask;
 
             if (transfer_type) {
-                cpu.bus.write(u32, self.dad_latch & mask, cpu.bus.read(u32, self.sad_latch & mask));
+                if (sad_addr >= 0x0200_0000) self.data_latch = cpu.bus.read(u32, sad_addr);
+                cpu.bus.write(u32, dad_addr, self.data_latch);
             } else {
-                cpu.bus.write(u16, self.dad_latch & mask, cpu.bus.read(u16, self.sad_latch & mask));
+                if (sad_addr >= 0x0200_0000) {
+                    const value: u32 = cpu.bus.read(u16, sad_addr);
+                    self.data_latch = value << 16 | value;
+                }
+
+                cpu.bus.write(u16, dad_addr, @truncate(u16, rotr(u32, self.data_latch, 8 * (dad_addr & 3))));
             }
 
             switch (sad_adj) {
