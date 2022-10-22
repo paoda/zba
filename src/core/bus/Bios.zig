@@ -19,7 +19,7 @@ pub fn read(self: *Self, comptime T: type, r15: u32, addr: u32) T {
     }
 
     log.debug("Rejected read since r15=0x{X:0>8}", .{r15});
-    return @truncate(T, self._read(T, self.addr_latch + 8));
+    return @truncate(T, self._read(T, self.addr_latch));
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, r15: u32, addr: u32) T {
