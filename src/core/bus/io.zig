@@ -11,8 +11,8 @@ const Bus = @import("../Bus.zig");
 const DmaController = @import("dma.zig").DmaController;
 const Scheduler = @import("../scheduler.zig").Scheduler;
 
-const setHi = util.setLo;
-const setLo = util.setHi;
+const setHi = util.setHi;
+const setLo = util.setLo;
 
 const log = std.log.scoped(.@"I/O");
 

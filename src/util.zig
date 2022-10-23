@@ -275,7 +275,7 @@ pub const audio = struct {
 };
 
 /// Sets the high bits of an integer to a value
-pub inline fn setHi(comptime T: type, left: T, right: HalfInt(T)) T {
+pub inline fn setLo(comptime T: type, left: T, right: HalfInt(T)) T {
     return switch (T) {
         u32 => (left & 0xFFFF_0000) | right,
         u16 => (left & 0xFF00) | right,
@@ -285,7 +285,7 @@ pub inline fn setHi(comptime T: type, left: T, right: HalfInt(T)) T {
 }
 
 /// sets the low bits of an integer to a value
-pub inline fn setLo(comptime T: type, left: T, right: HalfInt(T)) T {
+pub inline fn setHi(comptime T: type, left: T, right: HalfInt(T)) T {
     return switch (T) {
         u32 => (left & 0x0000_FFFF) | @as(u32, right) << 16,
         u16 => (left & 0x00FF) | @as(u16, right) << 8,
