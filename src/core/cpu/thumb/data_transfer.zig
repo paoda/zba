@@ -46,11 +46,8 @@ pub fn fmt78(comptime op: u2, comptime T: bool) InstrFn {
                     },
                     0b11 => {
                         // LDRSH
-                        cpu.r[rd] = if (address & 1 == 1) blk: {
-                            break :blk sext(u32, u8, bus.read(u8, address));
-                        } else blk: {
-                            break :blk sext(u32, u16, bus.read(u16, address));
-                        };
+                        const value = bus.read(u16, address);
+                        cpu.r[rd] = if (address & 1 == 1) sext(u32, u8, @truncate(u8, value >> 8)) else sext(u32, u16, value);
                     },
                 }
             } else {

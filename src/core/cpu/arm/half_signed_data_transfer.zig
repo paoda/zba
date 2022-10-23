@@ -35,11 +35,8 @@ pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I:
                     },
                     0b11 => {
                         // LDRSH
-                        result = if (address & 1 == 1) blk: {
-                            break :blk sext(u32, u8, bus.read(u8, address));
-                        } else blk: {
-                            break :blk sext(u32, u16, bus.read(u16, address));
-                        };
+                        const value = bus.read(u16, address);
+                        result = if (address & 1 == 1) sext(u32, u8, @truncate(u8, value >> 8)) else sext(u32, u16, value);
                     },
                     0b00 => unreachable, // SWP
                 }
