@@ -169,7 +169,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         }
     };
 
-    return @truncate(T, rotr(u32, word, 8 * (address & 3)));
+    return @truncate(T, word);
 }
 
 pub fn read(self: *Self, comptime T: type, address: u32) T {
