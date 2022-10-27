@@ -20,7 +20,8 @@ const setLo = @import("../util.zig").setLo;
 
 const log = std.log.scoped(.APU);
 
-pub const host_sample_rate = 1 << 15;
+pub const host_rate = @import("../platform.zig").sample_rate;
+pub const host_format = @import("../platform.zig").sample_format;
 
 pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
     const byte = @truncate(u8, addr);
@@ -189,7 +190,7 @@ pub const Apu = struct {
             .bias = .{ .raw = 0x0200 },
 
             .sampling_cycle = 0b00,
-            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, 1 << 15, SDL.AUDIO_U16, 2, host_sample_rate).?,
+            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, 1 << 15, host_format, 2, host_rate).?,
             .sched = sched,
 
             .capacitor = 0,
@@ -356,7 +357,7 @@ pub const Apu = struct {
         defer SDL.SDL_FreeAudioStream(old_stream);
 
         self.sampling_cycle = self.bias.sampling_cycle.read();
-        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, sample_rate), SDL.AUDIO_U16, 2, host_sample_rate).?;
+        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, sample_rate), host_format, 2, host_rate).?;
     }
 
     fn interval(self: *const Self) u64 {

@@ -36,7 +36,7 @@ const RunKind = enum {
 };
 
 pub fn run(quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: *FpsTracker) void {
-    const audio_sync = config.config().guest.audio_sync;
+    const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     if (config.config().guest.video_sync) {

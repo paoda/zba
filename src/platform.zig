@@ -15,6 +15,9 @@ const pitch = @import("core/ppu.zig").framebuf_pitch;
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
+pub const sample_rate = 44100;
+pub const sample_format = SDL.AUDIO_F32;
+
 const default_title: []const u8 = "ZBA";
 
 pub const Gui = struct {
@@ -253,7 +256,6 @@ pub const Gui = struct {
 const Audio = struct {
     const Self = @This();
     const log = std.log.scoped(.PlatformAudio);
-    const sample_rate = @import("core/apu.zig").host_sample_rate;
 
     device: SDL.SDL_AudioDeviceID,
 
@@ -261,7 +263,7 @@ const Audio = struct {
         var have: SDL.SDL_AudioSpec = undefined;
         var want: SDL.SDL_AudioSpec = std.mem.zeroes(SDL.SDL_AudioSpec);
         want.freq = sample_rate;
-        want.format = SDL.AUDIO_U16;
+        want.format = sample_format;
         want.channels = 2;
         want.samples = 0x100;
         want.callback = Self.callback;
@@ -270,7 +272,8 @@ const Audio = struct {
         const device = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
         if (device == 0) panic();
 
-        SDL.SDL_PauseAudioDevice(device, 0); // Unpause Audio
+        if (!config.config().host.mute)
+            SDL.SDL_PauseAudioDevice(device, 0); // Unpause Audio
 
         return .{ .device = device };
     }
@@ -281,18 +284,10 @@ const Audio = struct {
     }
 
     export fn callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
-        const apu = @ptrCast(*Apu, @alignCast(@alignOf(*Apu), userdata));
+        const T = *Apu;
+        const apu = @ptrCast(T, @alignCast(@alignOf(T), userdata));
 
-        // TODO: Find a better way to mute this
-        if (!config.config().host.mute) {
-            _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
-        } else {
-            // FIXME: I don't think this hack to remove DC Offset is acceptable :thinking:
-            std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
-        }
-
-        // If we don't write anything, play silence otherwise garbage will be played
-        // if (written == 0) std.mem.set(u8, stream[0..@intCast(usize, len)], 0x40);
+        _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
     }
 };
 
