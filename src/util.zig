@@ -275,3 +275,73 @@ fn HalfInt(comptime T: type) type {
 
     return std.meta.Int(type_info.Int.signedness, type_info.Int.bits >> 1);
 }
+
+const Mutex = std.Thread.Mutex;
+
+pub fn RingBuffer(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        const Index = usize;
+        const max_capacity = (std.math.powi(Index, 2, @typeInfo(Index).Int.bits - 1) catch @compileError("uhhhhh")) - 1;
+
+        read: Index,
+        write: Index,
+
+        buf: []T,
+
+        mutex: Mutex,
+
+        const Error = error{buffer_full};
+
+        pub fn init(buf: []T) Self {
+            std.debug.assert(std.math.isPowerOfTwo(buf.len)); // capacity must be a power of two
+            std.debug.assert(buf.len <= max_capacity); // Capacity must be half the range of the index data types
+
+            return .{ .read = 0, .write = 0, .buf = buf, .mutex = .{} };
+        }
+
+        pub fn pushPair(self: *Self, left: T, right: T) Error!void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            // TODO: Make this less convoluted
+            if (self.len() + 1 >= self.buf.len) return error.buffer_full;
+            defer self.write += 2;
+
+            self.buf[self.write & (self.buf.len - 1)] = left;
+            self.buf[(self.write + 1) & (self.buf.len - 1)] = right;
+        }
+
+        pub fn push(self: *Self, value: T) Error!void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            if (self.isFull()) return error.buffer_full;
+            defer self.write += 1;
+
+            self.buf[self.write & (self.buf.len - 1)] = value;
+        }
+
+        pub fn pop(self: *Self) ?T {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            if (self.isEmpty()) return null;
+            defer self.read += 1;
+
+            return self.buf[self.read & (self.buf.len - 1)];
+        }
+
+        fn isFull(self: *const Self) bool {
+            return self.len() == self.buf.len;
+        }
+
+        fn isEmpty(self: *const Self) bool {
+            return self.read == self.write;
+        }
+
+        pub fn len(self: *const Self) Index {
+            return self.write - self.read;
+        }
+    };
+}
