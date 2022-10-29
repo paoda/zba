@@ -36,7 +36,7 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x4C => null, // MOSAIC, undefined in high byte
             0x50 => @as(T, ppu.bldalpha.raw) << 16 | ppu.bldcnt.raw,
             0x54 => null, // BLDY, undefined in high half-wrd
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (byte) {
             0x00 => ppu.dispcnt.raw,
@@ -56,27 +56,27 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x50 => ppu.bldcnt.raw,
             0x52 => ppu.bldalpha.raw,
             0x54 => null, // BLDY
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
-            0x00...0x01 => @truncate(T, ppu.dispcnt.raw >> shift(byte)),
+            0x00, 0x01 => @truncate(T, ppu.dispcnt.raw >> shift(byte)),
             0x02...0x03 => null,
-            0x04...0x05 => @truncate(T, ppu.dispstat.raw >> shift(byte)),
-            0x06...0x07 => @truncate(T, ppu.vcount.raw >> shift(byte)),
-            0x08...0x09 => @truncate(T, ppu.bg[0].cnt.raw >> shift(byte)),
-            0x0A...0x0B => @truncate(T, ppu.bg[1].cnt.raw >> shift(byte)),
-            0x0C...0x0D => @truncate(T, ppu.bg[2].cnt.raw >> shift(byte)),
-            0x0E...0x0F => @truncate(T, ppu.bg[3].cnt.raw >> shift(byte)),
+            0x04, 0x05 => @truncate(T, ppu.dispstat.raw >> shift(byte)),
+            0x06, 0x07 => @truncate(T, ppu.vcount.raw >> shift(byte)),
+            0x08, 0x09 => @truncate(T, ppu.bg[0].cnt.raw >> shift(byte)),
+            0x0A, 0x0B => @truncate(T, ppu.bg[1].cnt.raw >> shift(byte)),
+            0x0C, 0x0D => @truncate(T, ppu.bg[2].cnt.raw >> shift(byte)),
+            0x0E, 0x0F => @truncate(T, ppu.bg[3].cnt.raw >> shift(byte)),
             0x10...0x1F => null, // BGXHOFS/VOFS
             0x20...0x3F => null, // BG2/3 Rot Scaling Registers
             0x40...0x47 => null, // WINXH/V Registers
-            0x48...0x49 => @truncate(T, ppu.win.in.raw >> shift(byte)),
-            0x4A...0x4B => @truncate(T, ppu.win.out.raw >> shift(byte)),
+            0x48, 0x49 => @truncate(T, ppu.win.in.raw >> shift(byte)),
+            0x4A, 0x4B => @truncate(T, ppu.win.out.raw >> shift(byte)),
             0x4C...0x4D => null, // MOSAIC
-            0x50...0x51 => @truncate(T, ppu.bldcnt.raw >> shift(byte)),
-            0x52...0x53 => @truncate(T, ppu.bldalpha.raw >> shift(byte)),
+            0x50, 0x51 => @truncate(T, ppu.bldcnt.raw >> shift(byte)),
+            0x52, 0x53 => @truncate(T, ppu.bldalpha.raw >> shift(byte)),
             0x54...0x55 => null, // BLDY
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("PPU: Unsupported read width"),
     };

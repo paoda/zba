@@ -143,7 +143,7 @@ pub const io = struct {
             return 0;
         }
 
-        pub fn undef(comptime T: type, log: anytype, comptime format: []const u8, args: anytype) ?T {
+        pub fn undef(comptime T: type, comptime log: anytype, comptime format: []const u8, args: anytype) ?T {
             @setCold(true);
 
             const unhandled_io = config.config().debug.unhandled_io;
@@ -151,6 +151,13 @@ pub const io = struct {
             log.warn(format, args);
             if (builtin.mode == .Debug and !unhandled_io) std.debug.panic("TODO: Implement I/O Register", .{});
 
+            return null;
+        }
+
+        pub fn err(comptime T: type, comptime log: anytype, comptime format: []const u8, args: anytype) ?T {
+            @setCold(true);
+
+            log.err(format, args);
             return null;
         }
     };

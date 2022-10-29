@@ -23,7 +23,7 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
             0x4 => @as(T, tim.*[1].cnt.raw) << 16 | tim.*[1].timcntL(),
             0x8 => @as(T, tim.*[2].cnt.raw) << 16 | tim.*[2].timcntL(),
             0xC => @as(T, tim.*[3].cnt.raw) << 16 | tim.*[3].timcntL(),
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (nybble) {
             0x0 => tim.*[0].timcntL(),
@@ -34,7 +34,7 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
             0xA => tim.*[2].cnt.raw,
             0xC => tim.*[3].timcntL(),
             0xE => tim.*[3].cnt.raw,
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (nybble) {
             0x0, 0x1 => @truncate(T, tim.*[0].timcntL() >> shift(nybble)),
@@ -45,7 +45,6 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
             0xA, 0xB => @truncate(T, tim.*[2].cnt.raw >> shift(nybble)),
             0xC, 0xD => @truncate(T, tim.*[3].timcntL() >> shift(nybble)),
             0xE, 0xF => @truncate(T, tim.*[3].cnt.raw >> shift(nybble)),
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("TIM: Unsupported read width"),
     };
