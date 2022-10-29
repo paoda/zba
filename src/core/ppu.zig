@@ -27,14 +27,14 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
         u32 => switch (byte) {
             0x00 => ppu.dispcnt.raw, // Green Swap is in high half-word
             0x04 => @as(T, ppu.vcount.raw) << 16 | ppu.dispstat.raw,
-            0x08 => @as(T, ppu.bg[1].cnt.raw) << 16 | ppu.bg[0].cnt.raw,
+            0x08 => @as(T, ppu.bg[1].bg1Cnt()) << 16 | ppu.bg[0].bg0Cnt(),
             0x0C => @as(T, ppu.bg[3].cnt.raw) << 16 | ppu.bg[2].cnt.raw,
             0x10...0x1C => null, // BGXHOFS/VOFS
             0x20...0x3C => null, // BG2/3 Rot Scaling Registers
             0x40...0x44 => null, // WINXH/V Registers
-            0x48 => @as(T, ppu.win.out.raw) << 16 | ppu.win.in.raw,
+            0x48 => @as(T, ppu.win.out()) << 16 | ppu.win.in(),
             0x4C => null, // MOSAIC, undefined in high byte
-            0x50 => @as(T, ppu.bldalpha.raw) << 16 | ppu.bldcnt.raw,
+            0x50 => @as(T, ppu.bld.getAlpha()) << 16 | ppu.bld.getCnt(),
             0x54 => null, // BLDY, undefined in high half-wrd
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
@@ -43,18 +43,18 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x02 => null, // Green Swap
             0x04 => ppu.dispstat.raw,
             0x06 => ppu.vcount.raw,
-            0x08 => ppu.bg[0].cnt.raw,
-            0x0A => ppu.bg[1].cnt.raw,
+            0x08 => ppu.bg[0].bg0Cnt(),
+            0x0A => ppu.bg[1].bg1Cnt(),
             0x0C => ppu.bg[2].cnt.raw,
             0x0E => ppu.bg[3].cnt.raw,
             0x10...0x1E => null, // BGXHOFS/VOFS
             0x20...0x3E => null, // BG2/3 Rot Scaling Registers
             0x40...0x46 => null, // WINXH/V Registers
-            0x48 => ppu.win.in.raw,
-            0x4A => ppu.win.out.raw,
+            0x48 => ppu.win.in(),
+            0x4A => ppu.win.out(),
             0x4C => null, // MOSAIC
-            0x50 => ppu.bldcnt.raw,
-            0x52 => ppu.bldalpha.raw,
+            0x50 => ppu.bld.getCnt(),
+            0x52 => ppu.bld.getAlpha(),
             0x54 => null, // BLDY
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
@@ -63,18 +63,18 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x02...0x03 => null,
             0x04, 0x05 => @truncate(T, ppu.dispstat.raw >> shift(byte)),
             0x06, 0x07 => @truncate(T, ppu.vcount.raw >> shift(byte)),
-            0x08, 0x09 => @truncate(T, ppu.bg[0].cnt.raw >> shift(byte)),
-            0x0A, 0x0B => @truncate(T, ppu.bg[1].cnt.raw >> shift(byte)),
+            0x08, 0x09 => @truncate(T, ppu.bg[0].bg0Cnt() >> shift(byte)),
+            0x0A, 0x0B => @truncate(T, ppu.bg[1].bg1Cnt() >> shift(byte)),
             0x0C, 0x0D => @truncate(T, ppu.bg[2].cnt.raw >> shift(byte)),
             0x0E, 0x0F => @truncate(T, ppu.bg[3].cnt.raw >> shift(byte)),
             0x10...0x1F => null, // BGXHOFS/VOFS
             0x20...0x3F => null, // BG2/3 Rot Scaling Registers
             0x40...0x47 => null, // WINXH/V Registers
-            0x48, 0x49 => @truncate(T, ppu.win.in.raw >> shift(byte)),
-            0x4A, 0x4B => @truncate(T, ppu.win.out.raw >> shift(byte)),
+            0x48, 0x49 => @truncate(T, ppu.win.in() >> shift(byte)),
+            0x4A, 0x4B => @truncate(T, ppu.win.out() >> shift(byte)),
             0x4C...0x4D => null, // MOSAIC
-            0x50, 0x51 => @truncate(T, ppu.bldcnt.raw >> shift(byte)),
-            0x52, 0x53 => @truncate(T, ppu.bldalpha.raw >> shift(byte)),
+            0x50, 0x51 => @truncate(T, ppu.bld.getCnt() >> shift(byte)),
+            0x52, 0x53 => @truncate(T, ppu.bld.getAlpha() >> shift(byte)),
             0x54...0x55 => null, // BLDY
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
@@ -111,10 +111,10 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x48 => ppu.win.setIo(value),
             0x4C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
             0x50 => {
-                ppu.bldcnt.raw = @truncate(u16, value);
-                ppu.bldalpha.raw = @truncate(u16, value >> 16);
+                ppu.bld.cnt.raw = @truncate(u16, value);
+                ppu.bld.alpha.raw = @truncate(u16, value >> 16);
             },
-            0x54 => ppu.bldy.raw = @truncate(u16, value),
+            0x54 => ppu.bld.y.raw = @truncate(u16, value),
             0x58...0x5C => {}, // Unused
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
@@ -154,12 +154,12 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x42 => ppu.win.h[1].raw = value,
             0x44 => ppu.win.v[0].raw = value,
             0x46 => ppu.win.v[1].raw = value,
-            0x48 => ppu.win.in.raw = value,
-            0x4A => ppu.win.out.raw = value,
+            0x48 => ppu.win._in.raw = value,
+            0x4A => ppu.win._out.raw = value,
             0x4C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
-            0x50 => ppu.bldcnt.raw = value,
-            0x52 => ppu.bldalpha.raw = value,
-            0x54 => ppu.bldy.raw = value,
+            0x50 => ppu.bld.cnt.raw = value,
+            0x52 => ppu.bld.alpha.raw = value,
+            0x54 => ppu.bld.y.raw = value,
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u8 => switch (byte) {
@@ -169,10 +169,10 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x09 => ppu.bg[0].cnt.raw = setHi(u16, ppu.bg[0].cnt.raw, value),
             0x0A => ppu.bg[1].cnt.raw = setLo(u16, ppu.bg[1].cnt.raw, value),
             0x0B => ppu.bg[1].cnt.raw = setHi(u16, ppu.bg[1].cnt.raw, value),
-            0x48 => ppu.win.in.raw = setLo(u16, ppu.win.in.raw, value),
-            0x49 => ppu.win.in.raw = setHi(u16, ppu.win.in.raw, value),
-            0x4A => ppu.win.out.raw = setLo(u16, ppu.win.out.raw, value),
-            0x54 => ppu.bldy.raw = setLo(u16, ppu.bldy.raw, value),
+            0x48 => ppu.win._in.raw = setLo(u16, ppu.win._in.raw, value),
+            0x49 => ppu.win._in.raw = setHi(u16, ppu.win._in.raw, value),
+            0x4A => ppu.win._out.raw = setLo(u16, ppu.win._out.raw, value),
+            0x54 => ppu.bld.y.raw = setLo(u16, ppu.bld.y.raw, value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         else => @compileError("PPU: Unsupported write width"),
@@ -192,9 +192,7 @@ pub const Ppu = struct {
     dispstat: io.DisplayStatus,
     vcount: io.VCount,
 
-    bldcnt: io.BldCnt,
-    bldalpha: io.BldAlpha,
-    bldy: io.BldY,
+    bld: Blend,
 
     vram: Vram,
     palette: Palette,
@@ -225,12 +223,10 @@ pub const Ppu = struct {
             .win = Window.init(),
             .bg = [_]Background{Background.init()} ** 4,
             .aff_bg = [_]AffineBackground{AffineBackground.init()} ** 2,
+            .bld = Blend.create(),
             .dispcnt = .{ .raw = 0x0000 },
             .dispstat = .{ .raw = 0x0000 },
             .vcount = .{ .raw = 0x0000 },
-            .bldcnt = .{ .raw = 0x0000 },
-            .bldalpha = .{ .raw = 0x0000 },
-            .bldy = .{ .raw = 0x0000 },
 
             .scanline = try Scanline.init(allocator),
             .scanline_sprites = sprites,
@@ -325,7 +321,7 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (!shouldDrawSprite(self.bldcnt, &self.scanline, x)) continue;
+            if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -354,7 +350,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                copyToSpriteBuffer(self.bldcnt, &self.scanline, x, bgr555);
+                copyToSpriteBuffer(self.bld.cnt, &self.scanline, x, bgr555);
             }
         }
     }
@@ -375,7 +371,7 @@ pub const Ppu = struct {
             const x = (sprite.x() +% i) % width;
             const ix = @bitCast(i9, x);
 
-            if (!shouldDrawSprite(self.bldcnt, &self.scanline, x)) continue;
+            if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
             const sprite_start = sprite.x();
             const isprite_start = @bitCast(i9, sprite_start);
@@ -410,7 +406,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                copyToSpriteBuffer(self.bldcnt, &self.scanline, x, bgr555);
+                copyToSpriteBuffer(self.bld.cnt, &self.scanline, x, bgr555);
             }
         }
     }
@@ -437,7 +433,7 @@ pub const Ppu = struct {
             aff_x += self.aff_bg[n - 2].pa;
             aff_y += self.aff_bg[n - 2].pc;
 
-            if (!shouldDrawBackground(n, self.bldcnt, &self.scanline, i)) continue;
+            if (!shouldDrawBackground(n, self.bld.cnt, &self.scanline, i)) continue;
 
             if (self.bg[n].cnt.display_overflow.read()) {
                 ix = if (ix > px_width) @rem(ix, px_width) else if (ix < 0) px_width + @rem(ix, px_width) else ix;
@@ -456,7 +452,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                copyToBackgroundBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+                copyToBackgroundBuffer(n, self.bld.cnt, &self.scanline, i, bgr555);
             }
         }
 
@@ -485,7 +481,7 @@ pub const Ppu = struct {
 
         var i: u32 = 0;
         while (i < width) : (i += 1) {
-            if (!shouldDrawBackground(n, self.bldcnt, &self.scanline, i)) continue;
+            if (!shouldDrawBackground(n, self.bld.cnt, &self.scanline, i)) continue;
 
             const x = hofs + i;
 
@@ -513,7 +509,7 @@ pub const Ppu = struct {
 
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, pal_id * 2);
-                copyToBackgroundBuffer(n, self.bldcnt, &self.scanline, i, bgr555);
+                copyToBackgroundBuffer(n, self.bld.cnt, &self.scanline, i, bgr555);
             }
         }
     }
@@ -657,11 +653,11 @@ pub const Ppu = struct {
 
     fn getBgr555(self: *Self, maybe_top: ?u16, maybe_btm: ?u16) u16 {
         if (maybe_btm) |btm| {
-            return switch (self.bldcnt.mode.read()) {
+            return switch (self.bld.cnt.mode.read()) {
                 0b00 => if (maybe_top) |top| top else btm,
-                0b01 => if (maybe_top) |top| alphaBlend(btm, top, self.bldalpha) else btm,
+                0b01 => if (maybe_top) |top| alphaBlend(btm, top, self.bld.alpha) else btm,
                 0b10 => blk: {
-                    const evy: u16 = self.bldy.evy.read();
+                    const evy: u16 = self.bld.y.evy.read();
 
                     const r = btm & 0x1F;
                     const g = (btm >> 5) & 0x1F;
@@ -674,7 +670,7 @@ pub const Ppu = struct {
                     break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
                 },
                 0b11 => blk: {
-                    const evy: u16 = self.bldy.evy.read();
+                    const evy: u16 = self.bld.y.evy.read();
 
                     const btm_r = btm & 0x1F;
                     const btm_g = (btm >> 5) & 0x1F;
@@ -935,23 +931,55 @@ const Oam = struct {
     }
 };
 
+const Blend = struct {
+    const Self = @This();
+
+    cnt: io.BldCnt,
+    alpha: io.BldAlpha,
+    y: io.BldY,
+
+    pub fn create() Self {
+        return .{
+            .cnt = .{ .raw = 0x000 },
+            .alpha = .{ .raw = 0x000 },
+            .y = .{ .raw = 0x000 },
+        };
+    }
+
+    pub fn getCnt(self: *const Self) u16 {
+        return self.cnt.raw & 0x3FFF;
+    }
+
+    pub fn getAlpha(self: *const Self) u16 {
+        return self.alpha.raw & 0x1F1F;
+    }
+};
+
 const Window = struct {
     const Self = @This();
 
     h: [2]io.WinH,
     v: [2]io.WinV,
 
-    out: io.WinOut,
-    in: io.WinIn,
+    _out: io.WinOut,
+    _in: io.WinIn,
 
     fn init() Self {
         return .{
             .h = [_]io.WinH{.{ .raw = 0 }} ** 2,
             .v = [_]io.WinV{.{ .raw = 0 }} ** 2,
 
-            .out = .{ .raw = 0 },
-            .in = .{ .raw = 0 },
+            ._out = .{ .raw = 0 },
+            ._in = .{ .raw = 0 },
         };
+    }
+
+    pub fn in(self: *const Self) u16 {
+        return self._in.raw & 0x3F3F;
+    }
+
+    pub fn out(self: *const Self) u16 {
+        return self._out.raw & 0x3F3F;
     }
 
     pub fn setH(self: *Self, value: u32) void {
@@ -965,8 +993,8 @@ const Window = struct {
     }
 
     pub fn setIo(self: *Self, value: u32) void {
-        self.in.raw = @truncate(u16, value);
-        self.out.raw = @truncate(u16, value >> 16);
+        self._in.raw = @truncate(u16, value);
+        self._out.raw = @truncate(u16, value >> 16);
     }
 };
 
@@ -986,6 +1014,17 @@ const Background = struct {
             .hofs = .{ .raw = 0x0000 },
             .vofs = .{ .raw = 0x0000 },
         };
+    }
+
+    /// For whatever reason, some higher bits of BG0CNT
+    /// are masked out
+    pub inline fn bg0Cnt(self: *const Self) u16 {
+        return self.cnt.raw & 0xDFFF;
+    }
+
+    /// BG1CNT inherits the same mask as BG0CNTs
+    pub inline fn bg1Cnt(self: *const Self) u16 {
+        return self.bg0Cnt();
     }
 };
 
