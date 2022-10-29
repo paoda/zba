@@ -112,6 +112,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
     };
 }
 
+/// TODO: Should open bus read addresses be force-aligned?
 fn readIo(self: *const Self, comptime T: type, unaligned_address: u32) T {
     const maybe_value = io.read(self, T, forceAlign(T, unaligned_address));
     return if (maybe_value) |value| value else self.openBus(T, unaligned_address);

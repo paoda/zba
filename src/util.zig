@@ -144,6 +144,8 @@ pub const io = struct {
         }
 
         pub fn undef(comptime T: type, log: anytype, comptime format: []const u8, args: anytype) ?T {
+            @setCold(true);
+
             const unhandled_io = config.config().debug.unhandled_io;
 
             log.warn(format, args);
