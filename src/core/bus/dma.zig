@@ -24,35 +24,49 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
     return switch (T) {
         u32 => switch (byte) {
             0xB0, 0xB4 => null, // DMA0SAD, DMA0DAD,
-            0xB8 => @as(T, dma.*[0].cnt.raw) << 16, // DMA0CNT_L is write-only
+            0xB8 => @as(T, dma.*[0].dmacntH()) << 16, // DMA0CNT_L is write-only
             0xBC, 0xC0 => null, // DMA1SAD, DMA1DAD
-            0xC4 => @as(T, dma.*[1].cnt.raw) << 16, // DMA1CNT_L is write-only
+            0xC4 => @as(T, dma.*[1].dmacntH()) << 16, // DMA1CNT_L is write-only
             0xC8, 0xCC => null, // DMA2SAD, DMA2DAD
-            0xD0 => @as(T, dma.*[2].cnt.raw) << 16, // DMA2CNT_L is write-only
+            0xD0 => @as(T, dma.*[2].dmacntH()) << 16, // DMA2CNT_L is write-only
             0xD4, 0xD8 => null, // DMA3SAD, DMA3DAD
-            0xDC => @as(T, dma.*[3].cnt.raw) << 16, // DMA3CNT_L is write-only
+            0xDC => @as(T, dma.*[3].dmacntH()) << 16, // DMA3CNT_L is write-only
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (byte) {
-            0xB0...0xB8 => null, // DMA0SAD, DMA0DAD, DMA0CNT_L
-            0xBA => dma.*[0].cnt.raw,
-            0xBC...0xC4 => null, // DMA1SAD, DMA1DAD, DMA1CNT_L
-            0xC6 => dma.*[1].cnt.raw,
-            0xC8...0xD0 => null, // DMA2SAD, DMA2DAD, DMA2CNT_L
-            0xD2 => dma.*[2].cnt.raw,
-            0xD4...0xDC => null, // DMA3SAD, DMA3DAD, DMA3CNT_L
-            0xDE => dma.*[3].cnt.raw,
+            0xB0, 0xB2, 0xB4, 0xB6 => null, // DMA0SAD, DMA0DAD
+            0xB8 => 0x0000, // DMA0CNT_L, suite.gba expects 0x0000 instead of 0xDEAD
+            0xBA => dma.*[0].dmacntH(),
+
+            0xBC, 0xBE, 0xC0, 0xC2 => null, // DMA1SAD, DMA1DAD
+            0xC4 => 0x0000, // DMA1CNT_L
+            0xC6 => dma.*[1].dmacntH(),
+
+            0xC8, 0xCA, 0xCC, 0xCE => null, // DMA2SAD, DMA2DAD
+            0xD0 => 0x0000, // DMA2CNT_L
+            0xD2 => dma.*[2].dmacntH(),
+
+            0xD4, 0xD6, 0xD8, 0xDA => null, // DMA3SAD, DMA3DAD
+            0xDC => 0x0000, // DMA3CNT_L
+            0xDE => dma.*[3].dmacntH(),
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
-            0xB0...0xB9 => null, // DMA0SAD, DMA0DAD, DMA0CNT_L
-            0xBA, 0xBB => @truncate(T, dma.*[0].cnt.raw >> shift(byte)),
-            0xBC...0xC5 => null, // DMA1SAD, DMA1DAD, DMA1CNT_L
-            0xC6, 0xC7 => @truncate(T, dma.*[1].cnt.raw >> shift(byte)),
-            0xC8...0xD1 => null, // DMA2SAD, DMA2DAD, DMA2CNT_L
-            0xD2, 0xD3 => @truncate(T, dma.*[2].cnt.raw >> shift(byte)),
-            0xD4...0xDD => null, // DMA3SAD, DMA3DAD, DMA3CNT_L
-            0xDE, 0xDF => @truncate(T, dma.*[3].cnt.raw >> shift(byte)),
+            0xB0...0xB7 => null, // DMA0SAD, DMA0DAD
+            0xB8, 0xB9 => 0x00, // DMA0CNT_L
+            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> shift(byte)),
+
+            0xBC...0xC3 => null, // DMA1SAD, DMA1DAD
+            0xC4, 0xC5 => 0x00, // DMA1CNT_L
+            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> shift(byte)),
+
+            0xC8...0xCF => null, // DMA2SAD, DMA2DAD
+            0xD0, 0xD1 => 0x00, // DMA2CNT_L
+            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> shift(byte)),
+
+            0xD4...0xDB => null, // DMA3SAD, DMA3DAD
+            0xDC, 0xDD => 0x00, // DMA3CNT_L
+            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> shift(byte)),
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("DMA: Unsupported read width"),
@@ -175,6 +189,10 @@ fn DmaController(comptime id: u2) type {
 
         pub fn setDmacntL(self: *Self, halfword: u16) void {
             self.word_count = @truncate(@TypeOf(self.word_count), halfword);
+        }
+
+        pub fn dmacntH(self: *const Self) u16 {
+            return self.cnt.raw & if (id == 3) 0xFFE0 else 0xF7E0;
         }
 
         pub fn setDmacntH(self: *Self, halfword: u16) void {
