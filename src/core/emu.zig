@@ -9,18 +9,22 @@ const FpsTracker = @import("../util.zig").FpsTracker;
 const Timer = std.time.Timer;
 const Atomic = std.atomic.Atomic;
 
-// 228 Lines which consist of 308 dots (which are 4 cycles long)
-const cycles_per_frame: u64 = 228 * (308 * 4); //280896
-const clock_rate: u64 = 1 << 24; // 16.78MHz
+/// 4 Cycles in 1 dot
+const cycles_per_dot = 4;
 
-// TODO: Don't truncate this, be more accurate w/ timing
-// 59.6046447754ns (truncated to just 59ns)
-const clock_period: u64 = std.time.ns_per_s / clock_rate;
-const frame_period = (clock_period * cycles_per_frame);
+/// The GBA draws 228 Horizontal which each consist 308 dots
+/// (note: not all lines are visible)
+const cycles_per_frame = 228 * (308 * cycles_per_dot); //280896
 
-// 59.7275005696Hz
-pub const frame_rate = @intToFloat(f64, std.time.ns_per_s) /
-    ((@intToFloat(f64, std.time.ns_per_s) / @intToFloat(f64, clock_rate)) * @intToFloat(f64, cycles_per_frame));
+/// The GBA ARM7TDMI runs at 2^24 Hz
+const clock_rate = 1 << 24; // 16.78MHz
+
+/// The # of nanoseconds a frame should take
+const frame_period = (std.time.ns_per_s * cycles_per_frame) / clock_rate;
+
+/// Exact Value:  59.7275005696Hz
+/// The inverse of the frame period
+pub const frame_rate: f64 = @intToFloat(f64, clock_rate) / cycles_per_frame;
 
 const log = std.log.scoped(.Emulation);
 
