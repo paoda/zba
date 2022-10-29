@@ -8,6 +8,8 @@ const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 pub const TimerTuple = std.meta.Tuple(&[_]type{ Timer(0), Timer(1), Timer(2), Timer(3) });
 const log = std.log.scoped(.Timer);
 
+const shift = util.shift;
+
 pub fn create(sched: *Scheduler) TimerTuple {
     return .{ Timer(0).init(sched), Timer(1).init(sched), Timer(2).init(sched), Timer(3).init(sched) };
 }
@@ -34,7 +36,17 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
             0xE => tim.*[3].cnt.raw,
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        u8 => switch (nybble) {
+            0x0, 0x1 => @truncate(T, tim.*[0].timcntL() >> shift(nybble)),
+            0x2, 0x3 => @truncate(T, tim.*[0].cnt.raw >> shift(nybble)),
+            0x4, 0x5 => @truncate(T, tim.*[1].timcntL() >> shift(nybble)),
+            0x6, 0x7 => @truncate(T, tim.*[1].cnt.raw >> shift(nybble)),
+            0x8, 0x9 => @truncate(T, tim.*[2].timcntL() >> shift(nybble)),
+            0xA, 0xB => @truncate(T, tim.*[2].cnt.raw >> shift(nybble)),
+            0xC, 0xD => @truncate(T, tim.*[3].timcntL() >> shift(nybble)),
+            0xE, 0xF => @truncate(T, tim.*[3].cnt.raw >> shift(nybble)),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        },
         else => @compileError("TIM: Unsupported read width"),
     };
 }
