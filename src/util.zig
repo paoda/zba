@@ -12,9 +12,9 @@ pub fn sext(comptime T: type, comptime U: type, value: T) T {
 
     const iT = std.meta.Int(.signed, @typeInfo(T).Int.bits);
     const ExtU = if (@typeInfo(U).Int.signedness == .unsigned) T else iT;
-    const shift = @intCast(Log2Int(T), @typeInfo(T).Int.bits - @typeInfo(U).Int.bits);
+    const shift_amt = @intCast(Log2Int(T), @typeInfo(T).Int.bits - @typeInfo(U).Int.bits);
 
-    return @bitCast(T, @bitCast(iT, @as(ExtU, @truncate(U, value)) << shift) >> shift);
+    return @bitCast(T, @bitCast(iT, @as(ExtU, @truncate(U, value)) << shift_amt) >> shift_amt);
 }
 
 /// See https://godbolt.org/z/W3en9Eche
@@ -275,6 +275,13 @@ pub const audio = struct {
         };
     };
 };
+
+/// Calculates the correct shift offset for an aligned/unaligned u8 read
+///
+/// TODO: Rename this
+pub inline fn shift(byte: u8) u4 {
+    return @truncate(u4, byte & 1) << 3;
+}
 
 /// Sets the high bits of an integer to a value
 pub inline fn setLo(comptime T: type, left: T, right: HalfInt(T)) T {

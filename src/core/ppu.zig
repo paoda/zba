@@ -13,6 +13,7 @@ const log = std.log.scoped(.PPU);
 
 const setHi = util.setHi;
 const setLo = util.setLo;
+const shift = util.shift;
 const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 pub const width = 240;
@@ -79,13 +80,6 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
         },
         else => @compileError("PPU: Unsupported read width"),
     };
-}
-
-/// Calculates the correct shift offset for an aligned/unaligned u8 read
-///
-/// TODO: Rename this
-inline fn shift(byte: u8) u4 {
-    return @truncate(u4, byte & 1) << 3;
 }
 
 pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {

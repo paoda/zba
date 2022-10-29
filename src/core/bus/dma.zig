@@ -10,6 +10,7 @@ const log = std.log.scoped(.DmaTransfer);
 
 const setHi = util.setHi;
 const setLo = util.setLo;
+const shift = util.shift;
 
 const rotr = @import("../../util.zig").rotr;
 
@@ -22,20 +23,38 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
 
     return switch (T) {
         u32 => switch (byte) {
-            0xB8 => @as(T, dma.*[0].cnt.raw) << 16,
-            0xC4 => @as(T, dma.*[1].cnt.raw) << 16,
-            0xD0 => @as(T, dma.*[2].cnt.raw) << 16,
-            0xDC => @as(T, dma.*[3].cnt.raw) << 16,
+            0xB0, 0xB4 => null, // DMA0SAD, DMA0DAD,
+            0xB8 => @as(T, dma.*[0].cnt.raw) << 16, // DMA0CNT_L is write-only
+            0xBC, 0xC0 => null, // DMA1SAD, DMA1DAD
+            0xC4 => @as(T, dma.*[1].cnt.raw) << 16, // DMA1CNT_L is write-only
+            0xC8, 0xCC => null, // DMA2SAD, DMA2DAD
+            0xD0 => @as(T, dma.*[2].cnt.raw) << 16, // DMA2CNT_L is write-only
+            0xD4, 0xD8 => null, // DMA3SAD, DMA3DAD
+            0xDC => @as(T, dma.*[3].cnt.raw) << 16, // DMA3CNT_L is write-only
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
         u16 => switch (byte) {
+            0xB0...0xB8 => null, // DMA0SAD, DMA0DAD, DMA0CNT_L
             0xBA => dma.*[0].cnt.raw,
+            0xBC...0xC4 => null, // DMA1SAD, DMA1DAD, DMA1CNT_L
             0xC6 => dma.*[1].cnt.raw,
+            0xC8...0xD0 => null, // DMA2SAD, DMA2DAD, DMA2CNT_L
             0xD2 => dma.*[2].cnt.raw,
+            0xD4...0xDC => null, // DMA3SAD, DMA3DAD, DMA3CNT_L
             0xDE => dma.*[3].cnt.raw,
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        u8 => switch (byte) {
+            0xB0...0xB9 => null, // DMA0SAD, DMA0DAD, DMA0CNT_L
+            0xBA...0xBB => @truncate(T, dma.*[0].cnt.raw >> shift(byte)),
+            0xBC...0xC5 => null, // DMA1SAD, DMA1DAD, DMA1CNT_L
+            0xC6...0xC7 => @truncate(T, dma.*[1].cnt.raw >> shift(byte)),
+            0xC8...0xD1 => null, // DMA2SAD, DMA2DAD, DMA2CNT_L
+            0xD2...0xD3 => @truncate(T, dma.*[2].cnt.raw >> shift(byte)),
+            0xD4...0xDD => null, // DMA3SAD, DMA3DAD, DMA3CNT_L
+            0xDE...0xDF => @truncate(T, dma.*[3].cnt.raw >> shift(byte)),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        },
         else => @compileError("DMA: Unsupported read width"),
     };
 }
