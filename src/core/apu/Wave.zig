@@ -71,6 +71,11 @@ pub fn setSound3CntL(self: *Self, value: u8) void {
     if (!self.select.enabled.read()) self.enabled = false;
 }
 
+/// NR30
+pub fn sound3CntL(self: *const Self) u8 {
+    return self.select.raw & 0xE0;
+}
+
 /// NR31, NR32
 pub fn sound3CntH(self: *const Self) u16 {
     return @as(u16, self.length & 0xE0) << 8;
@@ -92,6 +97,11 @@ pub fn setNr31(self: *Self, len: u8) void {
 pub fn setSound3CntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
     self.setNr33(@truncate(u8, value));
     self.setNr34(fs, @truncate(u8, value >> 8));
+}
+
+/// NR33, NR34
+pub fn sound3CntX(self: *const Self) u16 {
+    return self.freq.raw & 0x4000;
 }
 
 /// NR33

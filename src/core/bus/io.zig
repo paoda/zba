@@ -45,6 +45,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             // Display
             0x0400_0000...0x0400_0054 => ppu.read(T, &bus.ppu, address),
 
+            // Sound
+            0x0400_0060...0x0400_00A4 => apu.read(T, &bus.apu, address),
+
             // DMA Transfers
             0x0400_00B0...0x0400_00DC => dma.read(T, &bus.dma, address),
 
@@ -70,7 +73,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0000...0x0400_0054 => ppu.read(T, &bus.ppu, address),
 
             // Sound
-            0x0400_0060...0x0400_009E => apu.read(T, &bus.apu, address),
+            0x0400_0060...0x0400_00A6 => apu.read(T, &bus.apu, address),
 
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address),
@@ -100,6 +103,12 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
 
             // Sound
             0x0400_0060...0x0400_00A7 => apu.read(T, &bus.apu, address),
+
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address),
+
+            // Timers
+            0x0400_0100...0x0400_010E => timer.read(T, &bus.tim, address),
 
             // Serial Communication 1
             0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT_L", .{T}),

@@ -12,9 +12,10 @@ const Noise = @import("apu/Noise.zig");
 
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
-const intToBytes = @import("../util.zig").intToBytes;
-const setHi = @import("../util.zig").setHi;
-const setLo = @import("../util.zig").setLo;
+const setHi = util.setHi;
+const setLo = util.setLo;
+const shift = util.shift;
+const intToBytes = util.intToBytes;
 
 const log = std.log.scoped(.APU);
 
@@ -25,42 +26,80 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
     const byte = @truncate(u8, addr);
 
     return switch (T) {
+        u32 => switch (byte) {
+            0x60 => @as(T, apu.ch1.sound1CntH()) << 16 | apu.ch1.sound1CntL(),
+            0x64 => apu.ch1.sound1CntX(),
+            0x68 => apu.ch2.sound2CntL(),
+            0x6C => apu.ch2.sound2CntH(),
+            0x70 => @as(T, apu.ch3.sound3CntH()) << 16 | apu.ch3.sound3CntL(),
+            0x74 => apu.ch3.sound3CntX(),
+            0x78 => apu.ch4.sound4CntL(),
+            0x7C => apu.ch4.sound4CntH(),
+            0x80 => @as(T, apu.dma_cnt.raw) << 16 | apu.psg_cnt.raw, // SOUNDCNT_H, SOUNDCNT_L
+            0x84 => apu.soundCntX(),
+            0x88 => apu.bias.raw, // SOUNDBIAS, high is unused
+            0x8C => null,
+            0x90, 0x94, 0x8, 0x9C => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
+            0xA0 => null, // FIFO_A
+            0xA4 => null, // FIFO_B
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
+        },
         u16 => switch (byte) {
             0x60 => apu.ch1.sound1CntL(),
             0x62 => apu.ch1.sound1CntH(),
             0x64 => apu.ch1.sound1CntX(),
+            0x66 => null,
             0x68 => apu.ch2.sound2CntL(),
+            0x6A => null,
             0x6C => apu.ch2.sound2CntH(),
-
-            0x70 => apu.ch3.select.raw & 0xE0, // SOUND3CNT_L
+            0x6E => null,
+            0x70 => apu.ch3.sound3CntL(),
             0x72 => apu.ch3.sound3CntH(),
-            0x74 => apu.ch3.freq.raw & 0x4000, // SOUND3CNT_X
-
+            0x74 => apu.ch3.sound3CntX(),
+            0x76 => null,
             0x78 => apu.ch4.sound4CntL(),
+            0x7A => null,
             0x7C => apu.ch4.sound4CntH(),
-
-            0x80 => apu.psg_cnt.raw & 0xFF77, // SOUNDCNT_L
-            0x82 => apu.dma_cnt.raw & 0x770F, // SOUNDCNT_H
+            0x7E => null,
+            0x80 => apu.soundCntL(),
+            0x82 => apu.soundCntH(),
             0x84 => apu.soundCntX(),
+            0x86 => null,
             0x88 => apu.bias.raw, // SOUNDBIAS
-            0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            0x8A, 0x8C, 0x8E => null,
+            0x90, 0x92, 0x94, 0x96, 0x98, 0x9A, 0x9C, 0x9E => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
+            0xA0, 0xA2 => null, // FIFO_A
+            0xA4, 0xA6 => null, // FIFO_B
+            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte) {
-            0x60 => apu.ch1.sound1CntL(), // NR10
-            0x62 => apu.ch1.duty.raw, // NR11
-            0x63 => apu.ch1.envelope.raw, // NR12
-            0x68 => apu.ch2.duty.raw, // NR21
-            0x69 => apu.ch2.envelope.raw, // NR22
-            0x73 => apu.ch3.vol.raw, // NR32
-            0x79 => apu.ch4.envelope.raw, // NR42
-            0x7C => apu.ch4.poly.raw, // NR43
-            0x81 => @truncate(u8, apu.psg_cnt.raw >> 8), // NR51
-            0x84 => apu.soundCntX(),
-            0x89 => @truncate(u8, apu.bias.raw >> 8), // SOUNDBIAS_H
-            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+            0x60, 0x61 => @truncate(T, @as(u16, apu.ch1.sound1CntL()) >> shift(byte)),
+            0x62, 0x63 => @truncate(T, apu.ch1.sound1CntH() >> shift(byte)),
+            0x64, 0x65 => @truncate(T, apu.ch1.sound1CntX() >> shift(byte)),
+            0x66, 0x67 => null,
+            0x68, 0x69 => @truncate(T, apu.ch2.sound2CntL() >> shift(byte)),
+            0x6A, 0x6B => null,
+            0x6C, 0x6D => @truncate(T, apu.ch2.sound2CntH() >> shift(byte)),
+            0x6E, 0x6F => null,
+            0x70, 0x71 => @truncate(T, @as(u16, apu.ch3.sound3CntL()) >> shift(byte)), // SOUND3CNT_L
+            0x72, 0x73 => @truncate(T, apu.ch3.sound3CntH() >> shift(byte)),
+            0x74, 0x75 => @truncate(T, apu.ch3.sound3CntX() >> shift(byte)), // SOUND3CNT_L
+            0x76, 0x77 => null,
+            0x78, 0x79 => @truncate(T, apu.ch4.sound4CntL() >> shift(byte)),
+            0x7A, 0x7B => null,
+            0x7C, 0x7D => @truncate(T, apu.ch4.sound4CntH() >> shift(byte)),
+            0x7E, 0x7F => null,
+            0x80, 0x81 => @truncate(T, apu.soundCntL() >> shift(byte)), // SOUNDCNT_L
+            0x82, 0x83 => @truncate(T, apu.soundCntH() >> shift(byte)), // SOUNDCNT_H
+            0x84, 0x85 => @truncate(T, @as(u16, apu.soundCntX()) >> shift(byte)),
+            0x86, 0x87 => null,
+            0x88, 0x89 => @truncate(T, apu.bias.raw >> shift(byte)), // SOUNDBIAS
+            0x8A...0x8F => null,
+            0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
+            0xA0, 0xA1, 0xA2, 0xA3 => null, // FIFO_A
+            0xA4, 0xA5, 0xA6, 0xA7 => null, // FIFO_B
+            else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u32 => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
         else => @compileError("APU: Unsupported read width"),
     };
 }
@@ -219,6 +258,11 @@ pub const Apu = struct {
         self.setSoundCntH(@truncate(u16, value >> 16));
     }
 
+    /// SOUNDCNT_L
+    pub fn soundCntL(self: *const Self) u16 {
+        return self.psg_cnt.raw & 0xFF77;
+    }
+
     /// SOUNDCNT_H
     pub fn setSoundCntH(self: *Self, value: u16) void {
         const new: io.DmaSoundControl = .{ .raw = value };
@@ -229,6 +273,11 @@ pub const Apu = struct {
         if (new.chB_reset.read()) self.chB.fifo = SoundFifo.init();
 
         self.dma_cnt = new;
+    }
+
+    /// SOUNDCNT_H
+    pub fn soundCntH(self: *const Self) u16 {
+        return self.dma_cnt.raw & 0x770F;
     }
 
     /// NR52

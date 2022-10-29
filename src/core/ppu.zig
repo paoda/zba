@@ -76,7 +76,7 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x50, 0x51 => @truncate(T, ppu.bldcnt.raw >> shift(byte)),
             0x52, 0x53 => @truncate(T, ppu.bldalpha.raw >> shift(byte)),
             0x54...0x55 => null, // BLDY
-            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("PPU: Unsupported read width"),
     };

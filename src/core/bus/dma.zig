@@ -53,7 +53,7 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
             0xD2, 0xD3 => @truncate(T, dma.*[2].cnt.raw >> shift(byte)),
             0xD4...0xDD => null, // DMA3SAD, DMA3DAD, DMA3CNT_L
             0xDE, 0xDF => @truncate(T, dma.*[3].cnt.raw >> shift(byte)),
-            else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
+            else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("DMA: Unsupported read width"),
     };
