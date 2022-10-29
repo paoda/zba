@@ -132,11 +132,10 @@ fn videoSync(timer: *Timer, wake_time: u64) u64 {
 
 // TODO: Better sleep impl?
 fn sleep(timer: *Timer, wake_time: u64) ?u64 {
-    // const step = std.time.ns_per_ms * 10; // 10ms
     const timestamp = timer.read();
 
     // ns_late is non zero if we are late.
-    const ns_late = timestamp -| wake_time;
+    var ns_late = timestamp -| wake_time;
 
     // If we're more than a frame late, skip the rest of this loop
     // Recalculate what our new wake time should be so that we can
@@ -144,15 +143,18 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
     if (ns_late > frame_period) return timestamp + frame_period;
     const sleep_for = frame_period - ns_late;
 
-    // // Employ several sleep calls in periods of 10ms
-    // // By doing this the behaviour should average out to be
-    // // more consistent
-    // const loop_count = sleep_for / step; // How many groups of 10ms
+    const step = 2 * std.time.ns_per_ms; // Granularity of 2ms
+    const times = sleep_for / step;
+    var i: usize = 0;
 
-    // var i: usize = 0;
-    // while (i < loop_count) : (i += 1) std.time.sleep(step);
+    while (i < times) : (i += 1) {
+        std.time.sleep(step);
 
-    std.time.sleep(sleep_for);
+        // Upon wakeup, check to see if this particular sleep was longer than expected
+        // if so we should exit early, but probably not skip a whole frame period
+        ns_late = timer.read() -| wake_time;
+        if (ns_late > frame_period) return null;
+    }
 
     return null;
 }
