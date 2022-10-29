@@ -126,7 +126,7 @@ fn ensureDirectoriesExist(data_path: []const u8) !void {
     // (~/.local/share/zba/save for linux, ??? for macOS)
 
     // Will recursively create directories
-    try dir.makePath("zba" ++ [_]u8{std.fs.path.sep} ++ "save");
+    try dir.makePath("zba" ++ std.fs.path.sep_str ++ "save");
 }
 
 fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
