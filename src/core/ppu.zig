@@ -1,5 +1,6 @@
 const std = @import("std");
 const io = @import("bus/io.zig");
+const util = @import("../util.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
@@ -9,11 +10,150 @@ const Bitfield = @import("bitfield").Bitfield;
 
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
+
+const setHi = util.setHi;
+const setLo = util.setLo;
 const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 pub const width = 240;
 pub const height = 160;
 pub const framebuf_pitch = width * @sizeOf(u32);
+
+pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
+    const byte = @truncate(u8, addr);
+
+    return switch (T) {
+        u32 => switch (byte) {
+            0x00 => ppu.dispcnt.raw,
+            0x04 => @as(T, ppu.vcount.raw) << 16 | ppu.dispstat.raw,
+            0x06 => @as(T, ppu.bg[0].cnt.raw) << 16 | ppu.vcount.raw,
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        },
+        u16 => switch (byte) {
+            0x00 => ppu.dispcnt.raw,
+            0x04 => ppu.dispstat.raw,
+            0x06 => ppu.vcount.raw,
+            0x08 => ppu.bg[0].cnt.raw,
+            0x0A => ppu.bg[1].cnt.raw,
+            0x0C => ppu.bg[2].cnt.raw,
+            0x0E => ppu.bg[3].cnt.raw,
+            0x4C => util.io.read.todo(log, "Read {} from MOSAIC", .{T}),
+            0x50 => ppu.bldcnt.raw,
+            0x52 => ppu.bldalpha.raw,
+            0x54 => ppu.bldy.raw,
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        },
+        u8 => switch (byte) {
+            0x00 => @truncate(T, ppu.dispcnt.raw),
+            0x04 => @truncate(T, ppu.dispstat.raw),
+            0x05 => @truncate(T, ppu.dispcnt.raw >> 8),
+            0x06 => @truncate(T, ppu.vcount.raw),
+            0x08 => @truncate(T, ppu.bg[0].cnt.raw),
+            0x09 => @truncate(T, ppu.bg[0].cnt.raw >> 8),
+            0x0A => @truncate(T, ppu.bg[1].cnt.raw),
+            0x0B => @truncate(T, ppu.bg[1].cnt.raw >> 8),
+            else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, addr }),
+        },
+        else => @compileError("PPU: Unsupported read width"),
+    };
+}
+
+pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
+    const byte = @truncate(u8, addr); // prefixed with 0x0400_00
+
+    switch (T) {
+        u32 => switch (byte) {
+            0x00 => ppu.dispcnt.raw = @truncate(u16, value),
+            0x04 => {
+                ppu.dispstat.raw = @truncate(u16, value);
+                ppu.vcount.raw = @truncate(u16, value >> 16);
+            },
+            0x08 => ppu.setAdjCnts(0, value),
+            0x0C => ppu.setAdjCnts(2, value),
+            0x10 => ppu.setBgOffsets(0, value),
+            0x14 => ppu.setBgOffsets(1, value),
+            0x18 => ppu.setBgOffsets(2, value),
+            0x1C => ppu.setBgOffsets(3, value),
+            0x20 => ppu.aff_bg[0].writePaPb(value),
+            0x24 => ppu.aff_bg[0].writePcPd(value),
+            0x28 => ppu.aff_bg[0].setX(ppu.dispstat.vblank.read(), value),
+            0x2C => ppu.aff_bg[0].setY(ppu.dispstat.vblank.read(), value),
+            0x30 => ppu.aff_bg[1].writePaPb(value),
+            0x34 => ppu.aff_bg[1].writePcPd(value),
+            0x38 => ppu.aff_bg[1].setX(ppu.dispstat.vblank.read(), value),
+            0x3C => ppu.aff_bg[1].setY(ppu.dispstat.vblank.read(), value),
+            0x40 => ppu.win.setH(value),
+            0x44 => ppu.win.setV(value),
+            0x48 => ppu.win.setIo(value),
+            0x4C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
+            0x50 => {
+                ppu.bldcnt.raw = @truncate(u16, value);
+                ppu.bldalpha.raw = @truncate(u16, value >> 16);
+            },
+            0x54 => ppu.bldy.raw = @truncate(u16, value),
+            0x58...0x5C => {}, // Unused
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
+        },
+        u16 => switch (byte) {
+            0x00 => ppu.dispcnt.raw = value,
+            0x04 => ppu.dispstat.raw = value,
+            0x06 => {}, // vcount is read-only
+            0x08 => ppu.bg[0].cnt.raw = value,
+            0x0A => ppu.bg[1].cnt.raw = value,
+            0x0C => ppu.bg[2].cnt.raw = value,
+            0x0E => ppu.bg[3].cnt.raw = value,
+            0x10 => ppu.bg[0].hofs.raw = value, // TODO: Don't write out every HOFS / VOFS?
+            0x12 => ppu.bg[0].vofs.raw = value,
+            0x14 => ppu.bg[1].hofs.raw = value,
+            0x16 => ppu.bg[1].vofs.raw = value,
+            0x18 => ppu.bg[2].hofs.raw = value,
+            0x1A => ppu.bg[2].vofs.raw = value,
+            0x1C => ppu.bg[3].hofs.raw = value,
+            0x1E => ppu.bg[3].vofs.raw = value,
+            0x20 => ppu.aff_bg[0].pa = @bitCast(i16, value),
+            0x22 => ppu.aff_bg[0].pb = @bitCast(i16, value),
+            0x24 => ppu.aff_bg[0].pc = @bitCast(i16, value),
+            0x26 => ppu.aff_bg[0].pd = @bitCast(i16, value),
+            0x28 => ppu.aff_bg[0].x = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[0].x), value)),
+            0x2A => ppu.aff_bg[0].x = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[0].x), value)),
+            0x2C => ppu.aff_bg[0].y = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[0].y), value)),
+            0x2E => ppu.aff_bg[0].y = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[0].y), value)),
+            0x30 => ppu.aff_bg[1].pa = @bitCast(i16, value),
+            0x32 => ppu.aff_bg[1].pb = @bitCast(i16, value),
+            0x34 => ppu.aff_bg[1].pc = @bitCast(i16, value),
+            0x36 => ppu.aff_bg[1].pd = @bitCast(i16, value),
+            0x38 => ppu.aff_bg[1].x = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[1].x), value)),
+            0x3A => ppu.aff_bg[1].x = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[1].x), value)),
+            0x3C => ppu.aff_bg[1].y = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[1].y), value)),
+            0x3E => ppu.aff_bg[1].y = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[1].y), value)),
+            0x40 => ppu.win.h[0].raw = value,
+            0x42 => ppu.win.h[1].raw = value,
+            0x44 => ppu.win.v[0].raw = value,
+            0x46 => ppu.win.v[1].raw = value,
+            0x48 => ppu.win.in.raw = value,
+            0x4A => ppu.win.out.raw = value,
+            0x4C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
+            0x50 => ppu.bldcnt.raw = value,
+            0x52 => ppu.bldalpha.raw = value,
+            0x54 => ppu.bldy.raw = value,
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
+        },
+        u8 => switch (byte) {
+            0x04 => ppu.dispstat.raw = setLo(u16, ppu.dispstat.raw, value),
+            0x05 => ppu.dispstat.raw = setHi(u16, ppu.dispstat.raw, value),
+            0x08 => ppu.bg[0].cnt.raw = setLo(u16, ppu.bg[0].cnt.raw, value),
+            0x09 => ppu.bg[0].cnt.raw = setHi(u16, ppu.bg[0].cnt.raw, value),
+            0x0A => ppu.bg[1].cnt.raw = setLo(u16, ppu.bg[1].cnt.raw, value),
+            0x0B => ppu.bg[1].cnt.raw = setHi(u16, ppu.bg[1].cnt.raw, value),
+            0x48 => ppu.win.in.raw = setLo(u16, ppu.win.in.raw, value),
+            0x49 => ppu.win.in.raw = setHi(u16, ppu.win.in.raw, value),
+            0x4A => ppu.win.out.raw = setLo(u16, ppu.win.out.raw, value),
+            0x54 => ppu.bldy.raw = setLo(u16, ppu.bldy.raw, value),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+        },
+        else => @compileError("PPU: Unsupported write width"),
+    }
+}
 
 pub const Ppu = struct {
     const Self = @This();
