@@ -1,6 +1,5 @@
 const std = @import("std");
 const Bit = @import("bitfield").Bit;
-const Bitfield = @import("bitfield").Bitfield;
 const DateTime = @import("datetime").datetime.Datetime;
 
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;

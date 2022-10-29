@@ -1,10 +1,6 @@
 const std = @import("std");
 const config = @import("../../config.zig");
 
-const Bit = @import("bitfield").Bit;
-const Bitfield = @import("bitfield").Bitfield;
-const DateTime = @import("datetime").datetime.Datetime;
-
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const Backup = @import("backup.zig").Backup;
 const Gpio = @import("gpio.zig").Gpio;

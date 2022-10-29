@@ -11,7 +11,6 @@ const FpsTracker = @import("util.zig").FpsTracker;
 
 const span = @import("util.zig").span;
 
-const pitch = @import("core/ppu.zig").framebuf_pitch;
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
@@ -269,11 +268,16 @@ const Audio = struct {
         want.callback = Self.callback;
         want.userdata = apu;
 
+        std.debug.assert(sample_format == SDL.AUDIO_F32);
+        log.info("Host Sample Rate: {}Hz, Host Format: SDL.AUDIO_F32", .{sample_rate});
+
         const device = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
         if (device == 0) panic();
 
-        if (!config.config().host.mute)
+        if (!config.config().host.mute) {
             SDL.SDL_PauseAudioDevice(device, 0); // Unpause Audio
+            log.info("Unpaused Device", .{});
+        }
 
         return .{ .device = device };
     }

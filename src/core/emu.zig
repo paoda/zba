@@ -2,16 +2,12 @@ const std = @import("std");
 const SDL = @import("sdl2");
 const config = @import("../config.zig");
 
-const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const FpsTracker = @import("../util.zig").FpsTracker;
-const FilePaths = @import("../util.zig").FilePaths;
 
 const Timer = std.time.Timer;
-const Thread = std.Thread;
 const Atomic = std.atomic.Atomic;
-const Allocator = std.mem.Allocator;
 
 // 228 Lines which consist of 308 dots (which are 4 cycles long)
 const cycles_per_frame: u64 = 228 * (308 * 4); //280896

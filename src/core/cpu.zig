@@ -1,11 +1,9 @@
 const std = @import("std");
-const util = @import("../util.zig");
 
 const Bus = @import("Bus.zig");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Scheduler = @import("scheduler.zig").Scheduler;
-const FilePaths = @import("../util.zig").FilePaths;
 const Logger = @import("../util.zig").Logger;
 
 const File = std.fs.File;

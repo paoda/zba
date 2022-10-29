@@ -1,6 +1,3 @@
-const std = @import("std");
-const util = @import("../../../util.zig");
-
 const shifter = @import("../barrel_shifter.zig");
 const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;

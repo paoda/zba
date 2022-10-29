@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const AudioDeviceId = @import("sdl2").SDL_AudioDeviceID;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Bios = @import("bus/Bios.zig");
 const Ewram = @import("bus/Ewram.zig");

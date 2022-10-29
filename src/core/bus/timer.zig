@@ -2,9 +2,7 @@ const std = @import("std");
 const util = @import("../../util.zig");
 
 const TimerControl = @import("io.zig").TimerControl;
-const Io = @import("io.zig").Io;
 const Scheduler = @import("../scheduler.zig").Scheduler;
-const Event = @import("../scheduler.zig").Event;
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
 pub const TimerTuple = std.meta.Tuple(&[_]type{ Timer(0), Timer(1), Timer(2), Timer(3) });

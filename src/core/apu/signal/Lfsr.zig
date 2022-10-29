@@ -1,9 +1,7 @@
+//! Linear Feedback Shift Register
 const io = @import("../../bus/io.zig");
 
-/// Linear Feedback Shift Register
 const Scheduler = @import("../../scheduler.zig").Scheduler;
-const FrameSequencer = @import("../../apu.zig").FrameSequencer;
-const Noise = @import("../Noise.zig");
 
 const Self = @This();
 pub const interval: u64 = (1 << 24) / (1 << 22);

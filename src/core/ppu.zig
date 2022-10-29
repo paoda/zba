@@ -1,7 +1,6 @@
 const std = @import("std");
 const io = @import("bus/io.zig");
 
-const EventKind = @import("scheduler.zig").EventKind;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 

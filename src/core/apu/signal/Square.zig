@@ -2,7 +2,6 @@ const std = @import("std");
 const io = @import("../../bus/io.zig");
 
 const Scheduler = @import("../../scheduler.zig").Scheduler;
-const FrameSequencer = @import("../../apu.zig").FrameSequencer;
 const ToneSweep = @import("../ToneSweep.zig");
 const Tone = @import("../Tone.zig");
 

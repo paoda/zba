@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const timer = @import("timer.zig");
 const dma = @import("dma.zig");
 const apu = @import("../apu.zig");
@@ -8,8 +7,6 @@ const util = @import("../../util.zig");
 const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
-const DmaController = @import("dma.zig").DmaController;
-const Scheduler = @import("../scheduler.zig").Scheduler;
 
 const setHi = util.setHi;
 const setLo = util.setLo;

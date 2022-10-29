@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 const CPSR = @import("../cpu.zig").PSR;
 

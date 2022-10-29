@@ -2,8 +2,6 @@ const std = @import("std");
 const io = @import("../../bus/io.zig");
 
 const Scheduler = @import("../../scheduler.zig").Scheduler;
-const FrameSequencer = @import("../../apu.zig").FrameSequencer;
-const Wave = @import("../Wave.zig");
 
 const buf_len = 0x20;
 pub const interval: u64 = (1 << 24) / (1 << 22);

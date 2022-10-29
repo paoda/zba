@@ -3,8 +3,6 @@ const SDL = @import("sdl2");
 const io = @import("bus/io.zig");
 const util = @import("../util.zig");
 
-const AudioDeviceId = SDL.SDL_AudioDeviceID;
-
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const ToneSweep = @import("apu/ToneSweep.zig");
@@ -457,8 +455,8 @@ const DmaSoundKind = enum {
 };
 
 pub const FrameSequencer = struct {
-    const interval = (1 << 24) / 512;
     const Self = @This();
+    pub const interval = (1 << 24) / 512;
 
     step: u3,
 
