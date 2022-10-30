@@ -473,11 +473,15 @@ pub const Apu = struct {
         if (!self.cnt.apu_enable.read()) return;
 
         if (@boolToInt(self.dma_cnt.chA_timer.read()) == tim_id) {
+            if (!self.chA.enabled) return;
+
             self.chA.updateSample();
             if (self.chA.len() <= 15) cpu.bus.dma[1].requestAudio(0x0400_00A0);
         }
 
         if (@boolToInt(self.dma_cnt.chB_timer.read()) == tim_id) {
+            if (!self.chB.enabled) return;
+
             self.chB.updateSample();
             if (self.chB.len() <= 15) cpu.bus.dma[2].requestAudio(0x0400_00A4);
         }
@@ -491,17 +495,27 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         fifo: SoundFifo,
         kind: DmaSoundKind,
         sample: i8,
+        enabled: bool,
 
         fn init() Self {
             return .{
                 .fifo = SoundFifo.init(),
                 .kind = kind,
                 .sample = 0,
+                .enabled = false,
             };
         }
 
         pub fn push(self: *Self, value: u32) void {
+            // FIXME: I tried to communicate that this is unlikely to the compiler
+            if (!self.enabled) self.enable();
+
             self.fifo.write(&intToBytes(u32, value)) catch |e| log.err("{} Error: {}", .{ kind, e });
+        }
+
+        fn enable(self: *Self) void {
+            @setCold(true);
+            self.enabled = true;
         }
 
         pub fn len(self: *const Self) usize {
