@@ -11,9 +11,9 @@ const Bitfield = @import("bitfield").Bitfield;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.PPU);
 
-const setHi = util.setHi;
-const setLo = util.setLo;
-const getHalf = util.shift;
+const getHalf = util.getHalf;
+const setHalf = util.setHalf;
+const setQuart = util.setQuart;
 const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 pub const width = 240;
@@ -88,10 +88,10 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
-    const byte = @truncate(u8, addr); // prefixed with 0x0400_00
+    const byte_addr = @truncate(u8, addr); // prefixed with 0x0400_00
 
     switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw = @truncate(u16, value),
             0x04 => {
                 ppu.dispstat.raw = @truncate(u16, value);
@@ -99,38 +99,45 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             },
             0x08 => ppu.setAdjCnts(0, value),
             0x0C => ppu.setAdjCnts(2, value),
+
             0x10 => ppu.setBgOffsets(0, value),
             0x14 => ppu.setBgOffsets(1, value),
             0x18 => ppu.setBgOffsets(2, value),
             0x1C => ppu.setBgOffsets(3, value),
+
             0x20 => ppu.aff_bg[0].writePaPb(value),
             0x24 => ppu.aff_bg[0].writePcPd(value),
             0x28 => ppu.aff_bg[0].setX(ppu.dispstat.vblank.read(), value),
             0x2C => ppu.aff_bg[0].setY(ppu.dispstat.vblank.read(), value),
+
             0x30 => ppu.aff_bg[1].writePaPb(value),
             0x34 => ppu.aff_bg[1].writePcPd(value),
             0x38 => ppu.aff_bg[1].setX(ppu.dispstat.vblank.read(), value),
             0x3C => ppu.aff_bg[1].setY(ppu.dispstat.vblank.read(), value),
+
             0x40 => ppu.win.setH(value),
             0x44 => ppu.win.setV(value),
             0x48 => ppu.win.setIo(value),
             0x4C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
+
             0x50 => {
                 ppu.bld.cnt.raw = @truncate(u16, value);
                 ppu.bld.alpha.raw = @truncate(u16, value >> 16);
             },
             0x54 => ppu.bld.y.raw = @truncate(u16, value),
-            0x58...0x5C => {}, // Unused
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u16 => switch (byte) {
+        u16 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw = value,
+            0x02 => {}, // Green Swap
             0x04 => ppu.dispstat.raw = value,
-            0x06 => {}, // vcount is read-only
+            0x06 => {}, // VCOUNT
+
             0x08 => ppu.bg[0].cnt.raw = value,
             0x0A => ppu.bg[1].cnt.raw = value,
             0x0C => ppu.bg[2].cnt.raw = value,
             0x0E => ppu.bg[3].cnt.raw = value,
+
             0x10 => ppu.bg[0].hofs.raw = value, // TODO: Don't write out every HOFS / VOFS?
             0x12 => ppu.bg[0].vofs.raw = value,
             0x14 => ppu.bg[1].hofs.raw = value,
@@ -139,22 +146,21 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x1A => ppu.bg[2].vofs.raw = value,
             0x1C => ppu.bg[3].hofs.raw = value,
             0x1E => ppu.bg[3].vofs.raw = value,
+
             0x20 => ppu.aff_bg[0].pa = @bitCast(i16, value),
             0x22 => ppu.aff_bg[0].pb = @bitCast(i16, value),
             0x24 => ppu.aff_bg[0].pc = @bitCast(i16, value),
             0x26 => ppu.aff_bg[0].pd = @bitCast(i16, value),
-            0x28 => ppu.aff_bg[0].x = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[0].x), value)),
-            0x2A => ppu.aff_bg[0].x = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[0].x), value)),
-            0x2C => ppu.aff_bg[0].y = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[0].y), value)),
-            0x2E => ppu.aff_bg[0].y = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[0].y), value)),
+            0x28, 0x2A => ppu.aff_bg[0].x = @bitCast(i32, setHalf(u32, @bitCast(u32, ppu.aff_bg[0].x), byte_addr, value)),
+            0x2C, 0x2E => ppu.aff_bg[0].y = @bitCast(i32, setHalf(u32, @bitCast(u32, ppu.aff_bg[0].y), byte_addr, value)),
+
             0x30 => ppu.aff_bg[1].pa = @bitCast(i16, value),
             0x32 => ppu.aff_bg[1].pb = @bitCast(i16, value),
             0x34 => ppu.aff_bg[1].pc = @bitCast(i16, value),
             0x36 => ppu.aff_bg[1].pd = @bitCast(i16, value),
-            0x38 => ppu.aff_bg[1].x = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[1].x), value)),
-            0x3A => ppu.aff_bg[1].x = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[1].x), value)),
-            0x3C => ppu.aff_bg[1].y = @bitCast(i32, setLo(u32, @bitCast(u32, ppu.aff_bg[1].y), value)),
-            0x3E => ppu.aff_bg[1].y = @bitCast(i32, setHi(u32, @bitCast(u32, ppu.aff_bg[1].y), value)),
+            0x38, 0x3A => ppu.aff_bg[1].x = @bitCast(i32, setHalf(u32, @bitCast(u32, ppu.aff_bg[1].x), byte_addr, value)),
+            0x3C, 0x3E => ppu.aff_bg[1].y = @bitCast(i32, setHalf(u32, @bitCast(u32, ppu.aff_bg[1].y), byte_addr, value)),
+
             0x40 => ppu.win.h[0].raw = value,
             0x42 => ppu.win.h[1].raw = value,
             0x44 => ppu.win.v[0].raw = value,
@@ -162,22 +168,65 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x48 => ppu.win.in.raw = value,
             0x4A => ppu.win.out.raw = value,
             0x4C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
+            0x4E => {},
+
             0x50 => ppu.bld.cnt.raw = value,
             0x52 => ppu.bld.alpha.raw = value,
             0x54 => ppu.bld.y.raw = value,
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u8 => switch (byte) {
-            0x04 => ppu.dispstat.raw = setLo(u16, ppu.dispstat.raw, value),
-            0x05 => ppu.dispstat.raw = setHi(u16, ppu.dispstat.raw, value),
-            0x08 => ppu.bg[0].cnt.raw = setLo(u16, ppu.bg[0].cnt.raw, value),
-            0x09 => ppu.bg[0].cnt.raw = setHi(u16, ppu.bg[0].cnt.raw, value),
-            0x0A => ppu.bg[1].cnt.raw = setLo(u16, ppu.bg[1].cnt.raw, value),
-            0x0B => ppu.bg[1].cnt.raw = setHi(u16, ppu.bg[1].cnt.raw, value),
-            0x48 => ppu.win.in.raw = setLo(u16, ppu.win.in.raw, value),
-            0x49 => ppu.win.in.raw = setHi(u16, ppu.win.in.raw, value),
-            0x4A => ppu.win.out.raw = setLo(u16, ppu.win.out.raw, value),
-            0x54 => ppu.bld.y.raw = setLo(u16, ppu.bld.y.raw, value),
+        u8 => switch (byte_addr) {
+            0x00, 0x01 => ppu.dispcnt.raw = setHalf(u16, ppu.dispcnt.raw, byte_addr, value),
+            0x02, 0x03 => {}, // Green Swap
+            0x04, 0x05 => ppu.dispstat.raw = setHalf(u16, ppu.dispstat.raw, byte_addr, value),
+            0x06, 0x07 => {}, // VCOUNT
+
+            // BGXCNT
+            0x08, 0x09 => ppu.bg[0].cnt.raw = setHalf(u16, ppu.bg[0].cnt.raw, byte_addr, value),
+            0x0A, 0x0B => ppu.bg[1].cnt.raw = setHalf(u16, ppu.bg[1].cnt.raw, byte_addr, value),
+            0x0C, 0x0D => ppu.bg[2].cnt.raw = setHalf(u16, ppu.bg[2].cnt.raw, byte_addr, value),
+            0x0E, 0x0F => ppu.bg[3].cnt.raw = setHalf(u16, ppu.bg[3].cnt.raw, byte_addr, value),
+
+            // BGX HOFS/VOFS
+            0x10, 0x11 => ppu.bg[0].hofs.raw = setHalf(u16, ppu.bg[0].hofs.raw, byte_addr, value),
+            0x12, 0x13 => ppu.bg[0].vofs.raw = setHalf(u16, ppu.bg[0].vofs.raw, byte_addr, value),
+            0x14, 0x15 => ppu.bg[1].hofs.raw = setHalf(u16, ppu.bg[1].hofs.raw, byte_addr, value),
+            0x16, 0x17 => ppu.bg[1].vofs.raw = setHalf(u16, ppu.bg[1].vofs.raw, byte_addr, value),
+            0x18, 0x19 => ppu.bg[2].hofs.raw = setHalf(u16, ppu.bg[2].hofs.raw, byte_addr, value),
+            0x1A, 0x1B => ppu.bg[2].vofs.raw = setHalf(u16, ppu.bg[2].vofs.raw, byte_addr, value),
+            0x1C, 0x1D => ppu.bg[3].hofs.raw = setHalf(u16, ppu.bg[3].hofs.raw, byte_addr, value),
+            0x1E, 0x1F => ppu.bg[3].vofs.raw = setHalf(u16, ppu.bg[3].vofs.raw, byte_addr, value),
+
+            // BG2 Rot/Scaling
+            0x20, 0x21 => ppu.aff_bg[0].pa = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[0].pa), byte_addr, value)),
+            0x22, 0x23 => ppu.aff_bg[0].pb = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[0].pb), byte_addr, value)),
+            0x24, 0x25 => ppu.aff_bg[0].pc = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[0].pc), byte_addr, value)),
+            0x26, 0x27 => ppu.aff_bg[0].pd = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[0].pd), byte_addr, value)),
+            0x28, 0x29, 0x2A, 0x2B => ppu.aff_bg[0].x = @bitCast(i32, setQuart(@bitCast(u32, ppu.aff_bg[0].x), byte_addr, value)),
+            0x2C, 0x2D, 0x2E, 0x2F => ppu.aff_bg[0].y = @bitCast(i32, setQuart(@bitCast(u32, ppu.aff_bg[0].y), byte_addr, value)),
+
+            // BG3 Rot/Scaling
+            0x30, 0x31 => ppu.aff_bg[1].pa = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[1].pa), byte_addr, value)),
+            0x32, 0x33 => ppu.aff_bg[1].pb = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[1].pb), byte_addr, value)),
+            0x34, 0x35 => ppu.aff_bg[1].pc = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[1].pc), byte_addr, value)),
+            0x36, 0x37 => ppu.aff_bg[1].pd = @bitCast(i16, setHalf(u16, @bitCast(u16, ppu.aff_bg[1].pd), byte_addr, value)),
+            0x38, 0x39, 0x3A, 0x3B => ppu.aff_bg[1].x = @bitCast(i32, setQuart(@bitCast(u32, ppu.aff_bg[1].x), byte_addr, value)),
+            0x3C, 0x3D, 0x3E, 0x3F => ppu.aff_bg[1].y = @bitCast(i32, setQuart(@bitCast(u32, ppu.aff_bg[1].y), byte_addr, value)),
+
+            // Window
+            0x40, 0x41 => ppu.win.h[0].raw = setHalf(u16, ppu.win.h[0].raw, byte_addr, value),
+            0x42, 0x43 => ppu.win.h[1].raw = setHalf(u16, ppu.win.h[1].raw, byte_addr, value),
+            0x44, 0x45 => ppu.win.v[0].raw = setHalf(u16, ppu.win.v[0].raw, byte_addr, value),
+            0x46, 0x47 => ppu.win.v[1].raw = setHalf(u16, ppu.win.v[1].raw, byte_addr, value),
+            0x48, 0x49 => ppu.win.in.raw = setHalf(u16, ppu.win.in.raw, byte_addr, value),
+            0x4A, 0x4B => ppu.win.out.raw = setHalf(u16, ppu.win.out.raw, byte_addr, value),
+            0x4C, 0x4D => log.debug("Wrote 0x{X:0>2} to MOSAIC", .{value}),
+            0x4E, 0x4F => {},
+
+            // Blending
+            0x50, 0x51 => ppu.bld.cnt.raw = setHalf(u16, ppu.bld.cnt.raw, byte_addr, value),
+            0x52, 0x53 => ppu.bld.alpha.raw = setHalf(u16, ppu.bld.alpha.raw, byte_addr, value),
+            0x54, 0x55 => ppu.bld.y.raw = setHalf(u16, ppu.bld.y.raw, byte_addr, value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         else => @compileError("PPU: Unsupported write width"),

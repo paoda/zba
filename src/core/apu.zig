@@ -12,7 +12,7 @@ const Noise = @import("apu/Noise.zig");
 
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
-const getHalf = util.shift;
+const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const intToBytes = util.intToBytes;
 

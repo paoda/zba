@@ -297,9 +297,8 @@ pub inline fn setQuart(left: u32, addr: u8, right: u8) u32 {
 
 /// Calculates the correct shift offset for an aligned/unaligned u8 read
 ///
-/// TODO: Rename this
-/// TODO: Support u16 reads of u32 values
-pub inline fn shift(byte: u8) u4 {
+/// TODO: Support u16 reads of u32 values?
+pub inline fn getHalf(byte: u8) u4 {
     return @truncate(u4, byte & 1) << 3;
 }
 

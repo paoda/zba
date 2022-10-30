@@ -8,7 +8,7 @@ const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 pub const TimerTuple = std.meta.Tuple(&[_]type{ Timer(0), Timer(1), Timer(2), Timer(3) });
 const log = std.log.scoped(.Timer);
 
-const getHalf = util.shift;
+const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 
 pub fn create(sched: *Scheduler) TimerTuple {

@@ -8,7 +8,7 @@ const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
 const log = std.log.scoped(.DmaTransfer);
 
-const getHalf = util.shift;
+const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const setQuart = util.setQuart;
 
