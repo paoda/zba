@@ -13,7 +13,7 @@ const log = std.log.scoped(.PPU);
 
 const setHi = util.setHi;
 const setLo = util.setLo;
-const shift = util.shift;
+const getHalf = util.shift;
 const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 pub const width = 240;
@@ -21,24 +21,25 @@ pub const height = 160;
 pub const framebuf_pitch = width * @sizeOf(u32);
 
 pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
-    const byte = @truncate(u8, addr);
+    const byte_addr = @truncate(u8, addr);
 
     return switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw, // Green Swap is in high half-word
             0x04 => @as(T, ppu.vcount.raw) << 16 | ppu.dispstat.raw,
             0x08 => @as(T, ppu.bg[1].bg1Cnt()) << 16 | ppu.bg[0].bg0Cnt(),
             0x0C => @as(T, ppu.bg[3].cnt.raw) << 16 | ppu.bg[2].cnt.raw,
-            0x10...0x1C => null, // BGXHOFS/VOFS
-            0x20...0x3C => null, // BG2/3 Rot Scaling Registers
-            0x40...0x44 => null, // WINXH/V Registers
-            0x48 => @as(T, ppu.win.out()) << 16 | ppu.win.in(),
+            0x10, 0x14, 0x18, 0x1C => null, // BGXHOFS/VOFS
+            0x20, 0x24, 0x28, 0x2C => null, // BG2 Rot/Scaling
+            0x30, 0x34, 0x38, 0x3C => null, // BG3 Rot/Scaling
+            0x40, 0x44 => null, // WINXH/V Registers
+            0x48 => @as(T, ppu.win.getOut()) << 16 | ppu.win.getIn(),
             0x4C => null, // MOSAIC, undefined in high byte
             0x50 => @as(T, ppu.bld.getAlpha()) << 16 | ppu.bld.getCnt(),
             0x54 => null, // BLDY, undefined in high half-wrd
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u16 => switch (byte) {
+        u16 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw,
             0x02 => null, // Green Swap
             0x04 => ppu.dispstat.raw,
@@ -47,35 +48,39 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             0x0A => ppu.bg[1].bg1Cnt(),
             0x0C => ppu.bg[2].cnt.raw,
             0x0E => ppu.bg[3].cnt.raw,
-            0x10...0x1E => null, // BGXHOFS/VOFS
-            0x20...0x3E => null, // BG2/3 Rot Scaling Registers
-            0x40...0x46 => null, // WINXH/V Registers
-            0x48 => ppu.win.in(),
-            0x4A => ppu.win.out(),
+            0x10, 0x12, 0x14, 0x16, 0x18, 0x1A, 0x1C, 0x1E => null, // BGXHOFS/VOFS
+            0x20, 0x22, 0x24, 0x26, 0x28, 0x2A, 0x2C, 0x2E => null, // BG2 Rot/Scaling
+            0x30, 0x32, 0x34, 0x36, 0x38, 0x3A, 0x3C, 0x3E => null, // BG3 Rot/Scaling
+            0x40, 0x42, 0x44, 0x46 => null, // WINXH/V Registers
+            0x48 => ppu.win.getIn(),
+            0x4A => ppu.win.getOut(),
             0x4C => null, // MOSAIC
+            0x4E => null,
             0x50 => ppu.bld.getCnt(),
             0x52 => ppu.bld.getAlpha(),
             0x54 => null, // BLDY
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => switch (byte) {
-            0x00, 0x01 => @truncate(T, ppu.dispcnt.raw >> shift(byte)),
-            0x02...0x03 => null,
-            0x04, 0x05 => @truncate(T, ppu.dispstat.raw >> shift(byte)),
-            0x06, 0x07 => @truncate(T, ppu.vcount.raw >> shift(byte)),
-            0x08, 0x09 => @truncate(T, ppu.bg[0].bg0Cnt() >> shift(byte)),
-            0x0A, 0x0B => @truncate(T, ppu.bg[1].bg1Cnt() >> shift(byte)),
-            0x0C, 0x0D => @truncate(T, ppu.bg[2].cnt.raw >> shift(byte)),
-            0x0E, 0x0F => @truncate(T, ppu.bg[3].cnt.raw >> shift(byte)),
+        u8 => switch (byte_addr) {
+            0x00, 0x01 => @truncate(T, ppu.dispcnt.raw >> getHalf(byte_addr)),
+            0x02, 0x03 => null,
+            0x04, 0x05 => @truncate(T, ppu.dispstat.raw >> getHalf(byte_addr)),
+            0x06, 0x07 => @truncate(T, ppu.vcount.raw >> getHalf(byte_addr)),
+            0x08, 0x09 => @truncate(T, ppu.bg[0].bg0Cnt() >> getHalf(byte_addr)),
+            0x0A, 0x0B => @truncate(T, ppu.bg[1].bg1Cnt() >> getHalf(byte_addr)),
+            0x0C, 0x0D => @truncate(T, ppu.bg[2].cnt.raw >> getHalf(byte_addr)),
+            0x0E, 0x0F => @truncate(T, ppu.bg[3].cnt.raw >> getHalf(byte_addr)),
             0x10...0x1F => null, // BGXHOFS/VOFS
-            0x20...0x3F => null, // BG2/3 Rot Scaling Registers
+            0x20...0x2F => null, // BG2 Rot/Scaling
+            0x30...0x3F => null, // BG3 Rot/Scaling
             0x40...0x47 => null, // WINXH/V Registers
-            0x48, 0x49 => @truncate(T, ppu.win.in() >> shift(byte)),
-            0x4A, 0x4B => @truncate(T, ppu.win.out() >> shift(byte)),
-            0x4C...0x4D => null, // MOSAIC
-            0x50, 0x51 => @truncate(T, ppu.bld.getCnt() >> shift(byte)),
-            0x52, 0x53 => @truncate(T, ppu.bld.getAlpha() >> shift(byte)),
-            0x54...0x55 => null, // BLDY
+            0x48, 0x49 => @truncate(T, ppu.win.getIn() >> getHalf(byte_addr)),
+            0x4A, 0x4B => @truncate(T, ppu.win.getOut() >> getHalf(byte_addr)),
+            0x4C, 0x4D => null, // MOSAIC
+            0x4E, 0x4F => null,
+            0x50, 0x51 => @truncate(T, ppu.bld.getCnt() >> getHalf(byte_addr)),
+            0x52, 0x53 => @truncate(T, ppu.bld.getAlpha() >> getHalf(byte_addr)),
+            0x54, 0x55 => null, // BLDY
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("PPU: Unsupported read width"),
@@ -154,8 +159,8 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x42 => ppu.win.h[1].raw = value,
             0x44 => ppu.win.v[0].raw = value,
             0x46 => ppu.win.v[1].raw = value,
-            0x48 => ppu.win._in.raw = value,
-            0x4A => ppu.win._out.raw = value,
+            0x48 => ppu.win.in.raw = value,
+            0x4A => ppu.win.out.raw = value,
             0x4C => log.debug("Wrote 0x{X:0>4} to MOSAIC", .{value}),
             0x50 => ppu.bld.cnt.raw = value,
             0x52 => ppu.bld.alpha.raw = value,
@@ -169,9 +174,9 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x09 => ppu.bg[0].cnt.raw = setHi(u16, ppu.bg[0].cnt.raw, value),
             0x0A => ppu.bg[1].cnt.raw = setLo(u16, ppu.bg[1].cnt.raw, value),
             0x0B => ppu.bg[1].cnt.raw = setHi(u16, ppu.bg[1].cnt.raw, value),
-            0x48 => ppu.win._in.raw = setLo(u16, ppu.win._in.raw, value),
-            0x49 => ppu.win._in.raw = setHi(u16, ppu.win._in.raw, value),
-            0x4A => ppu.win._out.raw = setLo(u16, ppu.win._out.raw, value),
+            0x48 => ppu.win.in.raw = setLo(u16, ppu.win.in.raw, value),
+            0x49 => ppu.win.in.raw = setHi(u16, ppu.win.in.raw, value),
+            0x4A => ppu.win.out.raw = setLo(u16, ppu.win.out.raw, value),
             0x54 => ppu.bld.y.raw = setLo(u16, ppu.bld.y.raw, value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
@@ -961,25 +966,25 @@ const Window = struct {
     h: [2]io.WinH,
     v: [2]io.WinV,
 
-    _out: io.WinOut,
-    _in: io.WinIn,
+    out: io.WinOut,
+    in: io.WinIn,
 
     fn init() Self {
         return .{
             .h = [_]io.WinH{.{ .raw = 0 }} ** 2,
             .v = [_]io.WinV{.{ .raw = 0 }} ** 2,
 
-            ._out = .{ .raw = 0 },
-            ._in = .{ .raw = 0 },
+            .out = .{ .raw = 0 },
+            .in = .{ .raw = 0 },
         };
     }
 
-    pub fn in(self: *const Self) u16 {
-        return self._in.raw & 0x3F3F;
+    pub fn getIn(self: *const Self) u16 {
+        return self.in.raw & 0x3F3F;
     }
 
-    pub fn out(self: *const Self) u16 {
-        return self._out.raw & 0x3F3F;
+    pub fn getOut(self: *const Self) u16 {
+        return self.out.raw & 0x3F3F;
     }
 
     pub fn setH(self: *Self, value: u32) void {
@@ -993,8 +998,8 @@ const Window = struct {
     }
 
     pub fn setIo(self: *Self, value: u32) void {
-        self._in.raw = @truncate(u16, value);
-        self._out.raw = @truncate(u16, value >> 16);
+        self.in.raw = @truncate(u16, value);
+        self.out.raw = @truncate(u16, value >> 16);
     }
 };
 

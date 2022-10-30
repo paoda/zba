@@ -217,7 +217,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         },
         u8 => switch (address) {
             // Display
-            0x0400_0000...0x0400_0054 => ppu.write(T, &bus.ppu, address, value),
+            0x0400_0000...0x0400_0055 => ppu.write(T, &bus.ppu, address, value),
 
             // Sound
             0x0400_0060...0x0400_00A7 => apu.write(T, &bus.apu, address, value),
