@@ -9,6 +9,9 @@ const Bit = @import("bitfield").Bit;
 const Bitfield = @import("bitfield").Bitfield;
 const Bus = @import("../Bus.zig");
 
+const getHalf = util.getHalf;
+const setHalf = util.setHalf;
+
 const log = std.log.scoped(.@"I/O");
 
 pub const Io = struct {
@@ -19,6 +22,7 @@ pub const Io = struct {
     ie: InterruptEnable,
     irq: InterruptRequest,
     postflg: PostFlag,
+    waitcnt: WaitControl,
     haltcnt: HaltControl,
     keyinput: KeyInput,
 
@@ -28,6 +32,7 @@ pub const Io = struct {
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
             .keyinput = .{ .raw = 0x03FF },
+            .waitcnt = .{ .raw = 0x0000_0000 },
             .postflg = .FirstBoot,
             .haltcnt = .Execute,
         };
@@ -64,8 +69,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0150 => util.io.read.todo(log, "Read {} from JOY_RECV", .{T}),
 
             // Interrupts
-            0x0400_0200 => @as(T, bus.io.irq.raw) << 16 | bus.io.ie.raw,
+            0x0400_0200 => @as(u32, bus.io.irq.raw) << 16 | bus.io.ie.raw,
+            0x0400_0204 => bus.io.waitcnt.raw,
             0x0400_0208 => @boolToInt(bus.io.ime),
+            0x0400_0300 => @enumToInt(bus.io.postflg),
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u16 => switch (address) {
@@ -93,8 +100,11 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             // Interrupts
             0x0400_0200 => bus.io.ie.raw,
             0x0400_0202 => bus.io.irq.raw,
-            0x0400_0204 => util.io.read.todo(log, "Read {} from WAITCNT", .{T}),
+            0x0400_0204 => bus.io.waitcnt.raw,
+            0x0400_0206 => null,
             0x0400_0208 => @boolToInt(bus.io.ime),
+            0x0400_020A => null,
+            0x0400_0300 => @enumToInt(bus.io.postflg),
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
@@ -120,7 +130,12 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0135 => util.io.read.todo(log, "Read {} from RCNT_H", .{T}),
 
             // Interrupts
-            0x0400_0200 => @truncate(T, bus.io.ie.raw),
+            0x0400_0200, 0x0400_0201 => @truncate(T, bus.io.ie.raw >> getHalf(@truncate(u8, address))),
+            0x0400_0202, 0x0400_0203 => @truncate(T, bus.io.irq.raw >> getHalf(@truncate(u8, address))),
+            0x0400_0204, 0x0400_0205 => @truncate(T, bus.io.waitcnt.raw >> getHalf(@truncate(u8, address))),
+            0x0400_0206, 0x0400_0207 => null,
+            0x0400_0208, 0x0400_0209 => @truncate(T, @as(u16, @boolToInt(bus.io.ime)) >> getHalf(@truncate(u8, address))),
+            0x0400_020A, 0x0400_020B => null,
             0x0400_0300 => @enumToInt(bus.io.postflg),
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
@@ -168,9 +183,12 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
-            0x0400_0204 => log.debug("Wrote 0x{X:0>8} to WAITCNT", .{value}),
+            0x0400_0204 => bus.io.waitcnt.raw = @truncate(u16, value),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            0x0400_020C...0x0400_021C => {}, // Unused
+            0x0400_0300 => {
+                bus.io.postflg = @intToEnum(PostFlag, value & 1);
+                bus.io.haltcnt = if (value >> 15 & 1 == 0) .Halt else @panic("TODO: Implement STOP");
+            },
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u16 => switch (address) {
@@ -210,9 +228,14 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Interrupts
             0x0400_0200 => bus.io.ie.raw = value,
             0x0400_0202 => bus.io.irq.raw &= ~value,
-            0x0400_0204 => log.debug("Wrote 0x{X:0>4} to WAITCNT", .{value}),
+            0x0400_0204 => bus.io.waitcnt.raw = value,
+            0x0400_0206 => {},
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            0x0400_0206, 0x0400_020A => {}, // Not Used
+            0x0400_020A => {},
+            0x0400_0300 => {
+                bus.io.postflg = @intToEnum(PostFlag, value & 1);
+                bus.io.haltcnt = if (value >> 15 & 1 == 0) .Halt else @panic("TODO: Implement STOP");
+            },
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, address }),
         },
         u8 => switch (address) {
@@ -237,9 +260,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT_L", .{value}),
 
             // Interrupts
+            0x0400_0200, 0x0400_0201 => bus.io.ie.raw = setHalf(u16, bus.io.ie.raw, @truncate(u8, address), value),
             0x0400_0202 => bus.io.irq.raw &= ~@as(u16, value),
+            0x0400_0203 => bus.io.irq.raw &= ~@as(u16, value) << 8, // TODO: Is this good?
+            0x0400_0204, 0x0400_0205 => bus.io.waitcnt.raw = setHalf(u16, @truncate(u16, bus.io.waitcnt.raw), @truncate(u8, address), value),
+            0x0400_0206, 0x0400_0207 => {},
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            0x0400_0300 => bus.io.postflg = std.meta.intToEnum(PostFlag, value & 1) catch unreachable,
+            0x0400_0209 => {},
+            0x0400_020A, 0x0400_020B => {},
+
+            0x0400_0300 => bus.io.postflg = @intToEnum(PostFlag, value & 1),
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
 
             0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),
@@ -574,5 +604,21 @@ pub const SoundControl = extern union {
 pub const SoundBias = extern union {
     level: Bitfield(u16, 1, 9),
     sampling_cycle: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+/// Read / Write
+pub const WaitControl = extern union {
+    sram_cnt: Bitfield(u16, 0, 2),
+    s0_first: Bitfield(u16, 2, 2),
+    s0_second: Bit(u16, 4),
+    s1_first: Bitfield(u16, 5, 2),
+    s1_second: Bit(u16, 7),
+    s2_first: Bitfield(u16, 8, 2),
+    s2_second: Bit(u16, 10),
+    phi_out: Bitfield(u16, 11, 2),
+
+    prefetch_enable: Bit(u16, 14),
+    pak_kind: Bit(u16, 15),
     raw: u16,
 };
