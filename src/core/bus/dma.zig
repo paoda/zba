@@ -19,10 +19,10 @@ pub fn create() DmaTuple {
 }
 
 pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
-    const byte = @truncate(u8, addr);
+    const byte_addr = @truncate(u8, addr);
 
     return switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0xB0, 0xB4 => null, // DMA0SAD, DMA0DAD,
             0xB8 => @as(T, dma.*[0].dmacntH()) << 16, // DMA0CNT_L is write-only
             0xBC, 0xC0 => null, // DMA1SAD, DMA1DAD
@@ -33,7 +33,7 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
             0xDC => @as(T, dma.*[3].dmacntH()) << 16, // DMA3CNT_L is write-only
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u16 => switch (byte) {
+        u16 => switch (byte_addr) {
             0xB0, 0xB2, 0xB4, 0xB6 => null, // DMA0SAD, DMA0DAD
             0xB8 => 0x0000, // DMA0CNT_L, suite.gba expects 0x0000 instead of 0xDEAD
             0xBA => dma.*[0].dmacntH(),
@@ -51,22 +51,22 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
             0xDE => dma.*[3].dmacntH(),
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => switch (byte) {
+        u8 => switch (byte_addr) {
             0xB0...0xB7 => null, // DMA0SAD, DMA0DAD
             0xB8, 0xB9 => 0x00, // DMA0CNT_L
-            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> getHalf(byte)),
+            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> getHalf(byte_addr)),
 
             0xBC...0xC3 => null, // DMA1SAD, DMA1DAD
             0xC4, 0xC5 => 0x00, // DMA1CNT_L
-            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> getHalf(byte)),
+            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> getHalf(byte_addr)),
 
             0xC8...0xCF => null, // DMA2SAD, DMA2DAD
             0xD0, 0xD1 => 0x00, // DMA2CNT_L
-            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> getHalf(byte)),
+            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> getHalf(byte_addr)),
 
             0xD4...0xDB => null, // DMA3SAD, DMA3DAD
             0xDC, 0xDD => 0x00, // DMA3CNT_L
-            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> getHalf(byte)),
+            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> getHalf(byte_addr)),
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("DMA: Unsupported read width"),
