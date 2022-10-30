@@ -222,6 +222,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Sound
             0x0400_0060...0x0400_00A7 => apu.write(T, &bus.apu, address, value),
 
+            // Dma Transfers
+            0x0400_00B0...0x0400_00DF => dma.write(T, &bus.dma, address, value),
+
             // Serial Communication 1
             0x0400_0120 => log.debug("Wrote 0x{X:0>2} to SIODATA32_L_L", .{value}),
             0x0400_0128 => log.debug("Wrote 0x{X:0>2} to SIOCNT_L", .{value}),

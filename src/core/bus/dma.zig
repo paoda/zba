@@ -8,9 +8,9 @@ const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
 const log = std.log.scoped(.DmaTransfer);
 
-const setHi = util.setHi;
-const setLo = util.setLo;
-const shift = util.shift;
+const getHalf = util.shift;
+const setHalf = util.setHalf;
+const setQuart = util.setQuart;
 
 const rotr = @import("../../util.zig").rotr;
 
@@ -54,19 +54,19 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
         u8 => switch (byte) {
             0xB0...0xB7 => null, // DMA0SAD, DMA0DAD
             0xB8, 0xB9 => 0x00, // DMA0CNT_L
-            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> shift(byte)),
+            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> getHalf(byte)),
 
             0xBC...0xC3 => null, // DMA1SAD, DMA1DAD
             0xC4, 0xC5 => 0x00, // DMA1CNT_L
-            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> shift(byte)),
+            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> getHalf(byte)),
 
             0xC8...0xCF => null, // DMA2SAD, DMA2DAD
             0xD0, 0xD1 => 0x00, // DMA2CNT_L
-            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> shift(byte)),
+            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> getHalf(byte)),
 
             0xD4...0xDB => null, // DMA3SAD, DMA3DAD
             0xDC, 0xDD => 0x00, // DMA3CNT_L
-            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> shift(byte)),
+            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> getHalf(byte)),
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("DMA: Unsupported read width"),
@@ -74,55 +74,71 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
-    const byte = @truncate(u8, addr);
+    const byte_addr = @truncate(u8, addr);
 
     switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0xB0 => dma.*[0].setDmasad(value),
             0xB4 => dma.*[0].setDmadad(value),
             0xB8 => dma.*[0].setDmacnt(value),
+
             0xBC => dma.*[1].setDmasad(value),
             0xC0 => dma.*[1].setDmadad(value),
             0xC4 => dma.*[1].setDmacnt(value),
+
             0xC8 => dma.*[2].setDmasad(value),
             0xCC => dma.*[2].setDmadad(value),
             0xD0 => dma.*[2].setDmacnt(value),
+
             0xD4 => dma.*[3].setDmasad(value),
             0xD8 => dma.*[3].setDmadad(value),
             0xDC => dma.*[3].setDmacnt(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u16 => switch (byte) {
-            0xB0 => dma.*[0].setDmasad(setLo(u32, dma.*[0].sad, value)),
-            0xB2 => dma.*[0].setDmasad(setHi(u32, dma.*[0].sad, value)),
-            0xB4 => dma.*[0].setDmadad(setLo(u32, dma.*[0].dad, value)),
-            0xB6 => dma.*[0].setDmadad(setHi(u32, dma.*[0].dad, value)),
+        u16 => switch (byte_addr) {
+            0xB0, 0xB2 => dma.*[0].setDmasad(setHalf(u32, dma.*[0].sad, byte_addr, value)),
+            0xB4, 0xB6 => dma.*[0].setDmadad(setHalf(u32, dma.*[0].dad, byte_addr, value)),
             0xB8 => dma.*[0].setDmacntL(value),
             0xBA => dma.*[0].setDmacntH(value),
 
-            0xBC => dma.*[1].setDmasad(setLo(u32, dma.*[1].sad, value)),
-            0xBE => dma.*[1].setDmasad(setHi(u32, dma.*[1].sad, value)),
-            0xC0 => dma.*[1].setDmadad(setLo(u32, dma.*[1].dad, value)),
-            0xC2 => dma.*[1].setDmadad(setHi(u32, dma.*[1].dad, value)),
+            0xBC, 0xBE => dma.*[1].setDmasad(setHalf(u32, dma.*[1].sad, byte_addr, value)),
+            0xC0, 0xC2 => dma.*[1].setDmadad(setHalf(u32, dma.*[1].dad, byte_addr, value)),
             0xC4 => dma.*[1].setDmacntL(value),
             0xC6 => dma.*[1].setDmacntH(value),
 
-            0xC8 => dma.*[2].setDmasad(setLo(u32, dma.*[2].sad, value)),
-            0xCA => dma.*[2].setDmasad(setHi(u32, dma.*[2].sad, value)),
-            0xCC => dma.*[2].setDmadad(setLo(u32, dma.*[2].dad, value)),
-            0xCE => dma.*[2].setDmadad(setHi(u32, dma.*[2].dad, value)),
+            0xC8, 0xCA => dma.*[2].setDmasad(setHalf(u32, dma.*[2].sad, byte_addr, value)),
+            0xCC, 0xCE => dma.*[2].setDmadad(setHalf(u32, dma.*[2].dad, byte_addr, value)),
             0xD0 => dma.*[2].setDmacntL(value),
             0xD2 => dma.*[2].setDmacntH(value),
 
-            0xD4 => dma.*[3].setDmasad(setLo(u32, dma.*[3].sad, value)),
-            0xD6 => dma.*[3].setDmasad(setHi(u32, dma.*[3].sad, value)),
-            0xD8 => dma.*[3].setDmadad(setLo(u32, dma.*[3].dad, value)),
-            0xDA => dma.*[3].setDmadad(setHi(u32, dma.*[3].dad, value)),
+            0xD4, 0xD6 => dma.*[3].setDmasad(setHalf(u32, dma.*[3].sad, byte_addr, value)),
+            0xD8, 0xDA => dma.*[3].setDmadad(setHalf(u32, dma.*[3].dad, byte_addr, value)),
             0xDC => dma.*[3].setDmacntL(value),
             0xDE => dma.*[3].setDmacntH(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u8 => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+        u8 => switch (byte_addr) {
+            0xB0, 0xB1, 0xB2, 0xB3 => dma.*[0].setDmasad(setQuart(dma.*[0].sad, byte_addr, value)),
+            0xB4, 0xB5, 0xB6, 0xB7 => dma.*[0].setDmadad(setQuart(dma.*[0].dad, byte_addr, value)),
+            0xB8, 0xB9 => dma.*[0].setDmacntL(setHalf(u16, dma.*[0].word_count, byte_addr, value)),
+            0xBA, 0xBB => dma.*[0].setDmacntH(setHalf(u16, dma.*[0].cnt.raw, byte_addr, value)),
+
+            0xBC, 0xBD, 0xBE, 0xBF => dma.*[1].setDmasad(setQuart(dma.*[1].sad, byte_addr, value)),
+            0xC0, 0xC1, 0xC2, 0xC3 => dma.*[1].setDmadad(setQuart(dma.*[1].dad, byte_addr, value)),
+            0xC4, 0xC5 => dma.*[1].setDmacntL(setHalf(u16, dma.*[1].word_count, byte_addr, value)),
+            0xC6, 0xC7 => dma.*[1].setDmacntH(setHalf(u16, dma.*[1].cnt.raw, byte_addr, value)),
+
+            0xC8, 0xC9, 0xCA, 0xCB => dma.*[2].setDmasad(setQuart(dma.*[2].sad, byte_addr, value)),
+            0xCC, 0xCD, 0xCE, 0xCF => dma.*[2].setDmadad(setQuart(dma.*[2].dad, byte_addr, value)),
+            0xD0, 0xD1 => dma.*[2].setDmacntL(setHalf(u16, dma.*[2].word_count, byte_addr, value)),
+            0xD2, 0xD3 => dma.*[2].setDmacntH(setHalf(u16, dma.*[2].cnt.raw, byte_addr, value)),
+
+            0xD4, 0xD5, 0xD6, 0xD7 => dma.*[3].setDmasad(setQuart(dma.*[3].sad, byte_addr, value)),
+            0xD8, 0xD9, 0xDA, 0xDB => dma.*[3].setDmadad(setQuart(dma.*[3].dad, byte_addr, value)),
+            0xDC, 0xDD => dma.*[3].setDmacntL(setHalf(u16, dma.*[3].word_count, byte_addr, value)),
+            0xDE, 0xDF => dma.*[3].setDmacntH(setHalf(u16, dma.*[3].cnt.raw, byte_addr, value)),
+            else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+        },
         else => @compileError("DMA: Unsupported write width"),
     }
 }

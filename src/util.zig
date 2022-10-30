@@ -283,11 +283,42 @@ pub const audio = struct {
     };
 };
 
+/// Sets a quarter (8) of the bits of the u32 `left` to the value of u8 `right`
+pub inline fn setQuart(left: u32, addr: u8, right: u8) u32 {
+    const offset = @truncate(u2, addr);
+
+    return switch (offset) {
+        0b00 => (left & 0xFFFF_FF00) | right,
+        0b01 => (left & 0xFFFF_00FF) | @as(u32, right) << 8,
+        0b10 => (left & 0xFF00_FFFF) | @as(u32, right) << 16,
+        0b11 => (left & 0x00FF_FFFF) | @as(u32, right) << 24,
+    };
+}
+
 /// Calculates the correct shift offset for an aligned/unaligned u8 read
 ///
 /// TODO: Rename this
+/// TODO: Support u16 reads of u32 values
 pub inline fn shift(byte: u8) u4 {
     return @truncate(u4, byte & 1) << 3;
+}
+
+// TODO: Maybe combine SetLo and SetHi, use addr alignment to deduplicate code
+
+pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T {
+    const offset = @truncate(u1, addr >> if (T == u32) 1 else 0);
+
+    return switch (T) {
+        u32 => switch (offset) {
+            0b0 => (left & 0xFFFF_0000) | right,
+            0b1 => (left & 0x0000_FFFF) | @as(u32, right) << 16,
+        },
+        u16 => switch (offset) {
+            0b0 => (left & 0xFF00) | right,
+            0b1 => (right & 0x00FF) | @as(u16, right) << 8,
+        },
+        else => @compileError("unsupported type"),
+    };
 }
 
 /// Sets the high bits of an integer to a value
