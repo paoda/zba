@@ -314,7 +314,7 @@ pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T 
         },
         u16 => switch (offset) {
             0b0 => (left & 0xFF00) | right,
-            0b1 => (right & 0x00FF) | @as(u16, right) << 8,
+            0b1 => (left & 0x00FF) | @as(u16, right) << 8,
         },
         else => @compileError("unsupported type"),
     };
