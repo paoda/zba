@@ -202,7 +202,10 @@ pub const Gui = struct {
                             SDL.SDLK_s => io.keyinput.shoulder_r.set(),
                             SDL.SDLK_RETURN => io.keyinput.start.set(),
                             SDL.SDLK_RSHIFT => io.keyinput.select.set(),
-                            SDL.SDLK_i => log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))}),
+                            SDL.SDLK_i => {
+                                comptime std.debug.assert(sample_format == SDL.AUDIO_F32);
+                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(f32))});
+                            },
                             SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
                             SDL.SDLK_k => {
                                 // Dump IWRAM to file
