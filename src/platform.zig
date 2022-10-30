@@ -14,8 +14,8 @@ const span = @import("util.zig").span;
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
-pub const sample_rate = 44100;
-pub const sample_format = SDL.AUDIO_F32;
+pub const sample_rate = 1 << 15;
+pub const sample_format = SDL.AUDIO_U16;
 
 const default_title: []const u8 = "ZBA";
 
@@ -203,8 +203,8 @@ pub const Gui = struct {
                             SDL.SDLK_RETURN => io.keyinput.start.set(),
                             SDL.SDLK_RSHIFT => io.keyinput.select.set(),
                             SDL.SDLK_i => {
-                                comptime std.debug.assert(sample_format == SDL.AUDIO_F32);
-                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(f32))});
+                                comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
+                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))});
                             },
                             SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
                             SDL.SDLK_k => {
@@ -271,8 +271,8 @@ const Audio = struct {
         want.callback = Self.callback;
         want.userdata = apu;
 
-        std.debug.assert(sample_format == SDL.AUDIO_F32);
-        log.info("Host Sample Rate: {}Hz, Host Format: SDL.AUDIO_F32", .{sample_rate});
+        std.debug.assert(sample_format == SDL.AUDIO_U16);
+        log.info("Host Sample Rate: {}Hz, Host Format: SDL.AUDIO_U16", .{sample_rate});
 
         const device = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
         if (device == 0) panic();
