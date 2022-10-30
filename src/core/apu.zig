@@ -12,9 +12,8 @@ const Noise = @import("apu/Noise.zig");
 
 const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
-const setHi = util.setHi;
-const setLo = util.setLo;
-const shift = util.shift;
+const getHalf = util.shift;
+const setHalf = util.setHalf;
 const intToBytes = util.intToBytes;
 
 const log = std.log.scoped(.APU);
@@ -23,10 +22,10 @@ pub const host_rate = @import("../platform.zig").sample_rate;
 pub const host_format = @import("../platform.zig").sample_format;
 
 pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
-    const byte = @truncate(u8, addr);
+    const byte_addr = @truncate(u8, addr);
 
     return switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0x60 => @as(T, apu.ch1.sound1CntH()) << 16 | apu.ch1.sound1CntL(),
             0x64 => apu.ch1.sound1CntX(),
             0x68 => apu.ch2.sound2CntL(),
@@ -39,12 +38,12 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
             0x84 => apu.soundCntX(),
             0x88 => apu.bias.raw, // SOUNDBIAS, high is unused
             0x8C => null,
-            0x90, 0x94, 0x8, 0x9C => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
+            0x90, 0x94, 0x98, 0x9C => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
             0xA0 => null, // FIFO_A
             0xA4 => null, // FIFO_B
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u16 => switch (byte) {
+        u16 => switch (byte_addr) {
             0x60 => apu.ch1.sound1CntL(),
             0x62 => apu.ch1.sound1CntH(),
             0x64 => apu.ch1.sound1CntX(),
@@ -73,28 +72,28 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
             0xA4, 0xA6 => null, // FIFO_B
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
-        u8 => switch (byte) {
-            0x60, 0x61 => @truncate(T, @as(u16, apu.ch1.sound1CntL()) >> shift(byte)),
-            0x62, 0x63 => @truncate(T, apu.ch1.sound1CntH() >> shift(byte)),
-            0x64, 0x65 => @truncate(T, apu.ch1.sound1CntX() >> shift(byte)),
+        u8 => switch (byte_addr) {
+            0x60, 0x61 => @truncate(T, @as(u16, apu.ch1.sound1CntL()) >> getHalf(byte_addr)),
+            0x62, 0x63 => @truncate(T, apu.ch1.sound1CntH() >> getHalf(byte_addr)),
+            0x64, 0x65 => @truncate(T, apu.ch1.sound1CntX() >> getHalf(byte_addr)),
             0x66, 0x67 => 0x00, // assuming behaviour is identical to that of 16-bit reads
-            0x68, 0x69 => @truncate(T, apu.ch2.sound2CntL() >> shift(byte)),
+            0x68, 0x69 => @truncate(T, apu.ch2.sound2CntL() >> getHalf(byte_addr)),
             0x6A, 0x6B => 0x00,
-            0x6C, 0x6D => @truncate(T, apu.ch2.sound2CntH() >> shift(byte)),
+            0x6C, 0x6D => @truncate(T, apu.ch2.sound2CntH() >> getHalf(byte_addr)),
             0x6E, 0x6F => 0x00,
-            0x70, 0x71 => @truncate(T, @as(u16, apu.ch3.sound3CntL()) >> shift(byte)), // SOUND3CNT_L
-            0x72, 0x73 => @truncate(T, apu.ch3.sound3CntH() >> shift(byte)),
-            0x74, 0x75 => @truncate(T, apu.ch3.sound3CntX() >> shift(byte)), // SOUND3CNT_L
+            0x70, 0x71 => @truncate(T, @as(u16, apu.ch3.sound3CntL()) >> getHalf(byte_addr)), // SOUND3CNT_L
+            0x72, 0x73 => @truncate(T, apu.ch3.sound3CntH() >> getHalf(byte_addr)),
+            0x74, 0x75 => @truncate(T, apu.ch3.sound3CntX() >> getHalf(byte_addr)), // SOUND3CNT_L
             0x76, 0x77 => 0x00,
-            0x78, 0x79 => @truncate(T, apu.ch4.sound4CntL() >> shift(byte)),
+            0x78, 0x79 => @truncate(T, apu.ch4.sound4CntL() >> getHalf(byte_addr)),
             0x7A, 0x7B => 0x00,
-            0x7C, 0x7D => @truncate(T, apu.ch4.sound4CntH() >> shift(byte)),
+            0x7C, 0x7D => @truncate(T, apu.ch4.sound4CntH() >> getHalf(byte_addr)),
             0x7E, 0x7F => 0x00,
-            0x80, 0x81 => @truncate(T, apu.soundCntL() >> shift(byte)), // SOUNDCNT_L
-            0x82, 0x83 => @truncate(T, apu.soundCntH() >> shift(byte)), // SOUNDCNT_H
-            0x84, 0x85 => @truncate(T, @as(u16, apu.soundCntX()) >> shift(byte)),
+            0x80, 0x81 => @truncate(T, apu.soundCntL() >> getHalf(byte_addr)), // SOUNDCNT_L
+            0x82, 0x83 => @truncate(T, apu.soundCntH() >> getHalf(byte_addr)), // SOUNDCNT_H
+            0x84, 0x85 => @truncate(T, @as(u16, apu.soundCntX()) >> getHalf(byte_addr)),
             0x86, 0x87 => 0x00,
-            0x88, 0x89 => @truncate(T, apu.bias.raw >> shift(byte)), // SOUNDBIAS
+            0x88, 0x89 => @truncate(T, apu.bias.raw >> getHalf(byte_addr)), // SOUNDBIAS
             0x8A, 0x8B => 0x00,
             0x8C...0x8F => null,
             0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
@@ -107,79 +106,107 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
-    const byte = @truncate(u8, addr);
+    const byte_addr = @truncate(u8, addr);
 
     switch (T) {
-        u32 => switch (byte) {
+        u32 => switch (byte_addr) {
             0x60 => apu.ch1.setSound1Cnt(value),
             0x64 => apu.ch1.setSound1CntX(&apu.fs, @truncate(u16, value)),
+
             0x68 => apu.ch2.setSound2CntL(@truncate(u16, value)),
             0x6C => apu.ch2.setSound2CntH(&apu.fs, @truncate(u16, value)),
+
             0x70 => apu.ch3.setSound3Cnt(value),
             0x74 => apu.ch3.setSound3CntX(&apu.fs, @truncate(u16, value)),
+
             0x78 => apu.ch4.setSound4CntL(@truncate(u16, value)),
             0x7C => apu.ch4.setSound4CntH(&apu.fs, @truncate(u16, value)),
 
             0x80 => apu.setSoundCnt(value),
-            // WAVE_RAM
-            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+            0x88 => apu.bias.raw = @truncate(u16, value),
+            0x8C => {},
+
+            0x90, 0x94, 0x98, 0x9C => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
             0xA0 => apu.chA.push(value), // FIFO_A
             0xA4 => apu.chB.push(value), // FIFO_B
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u16 => switch (byte) {
+        u16 => switch (byte_addr) {
             0x60 => apu.ch1.setSound1CntL(@truncate(u8, value)), // SOUND1CNT_L
             0x62 => apu.ch1.setSound1CntH(value),
             0x64 => apu.ch1.setSound1CntX(&apu.fs, value),
+            0x66 => {},
 
             0x68 => apu.ch2.setSound2CntL(value),
+            0x6A => {},
             0x6C => apu.ch2.setSound2CntH(&apu.fs, value),
+            0x6E => {},
 
             0x70 => apu.ch3.setSound3CntL(@truncate(u8, value)),
             0x72 => apu.ch3.setSound3CntH(value),
             0x74 => apu.ch3.setSound3CntX(&apu.fs, value),
+            0x76 => {},
 
             0x78 => apu.ch4.setSound4CntL(value),
+            0x7A => {},
             0x7C => apu.ch4.setSound4CntH(&apu.fs, value),
+            0x7E => {},
 
-            0x80 => apu.psg_cnt.raw = value, // SOUNDCNT_L
+            0x80 => apu.setSoundCntL(value),
             0x82 => apu.setSoundCntH(value),
             0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+            0x86 => {},
             0x88 => apu.bias.raw = value, // SOUNDBIAS
-            // WAVE_RAM
-            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            0x8A, 0x8C, 0x8E => {},
+
+            0x90, 0x92, 0x94, 0x96, 0x98, 0x9A, 0x9C, 0x9E => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            0xA0, 0xA2 => log.err("Tried to write 0x{X:0>4}{} to FIFO_A", .{ value, T }),
+            0xA4, 0xA6 => log.err("Tried to write 0x{X:0>4}{} to FIFO_B", .{ value, T }),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
-        u8 => switch (byte) {
+        u8 => switch (byte_addr) {
             0x60 => apu.ch1.setSound1CntL(value),
+            0x61 => {},
             0x62 => apu.ch1.setNr11(value),
             0x63 => apu.ch1.setNr12(value),
             0x64 => apu.ch1.setNr13(value),
             0x65 => apu.ch1.setNr14(&apu.fs, value),
+            0x66, 0x67 => {},
 
             0x68 => apu.ch2.setNr21(value),
             0x69 => apu.ch2.setNr22(value),
+            0x6A, 0x6B => {},
             0x6C => apu.ch2.setNr23(value),
             0x6D => apu.ch2.setNr24(&apu.fs, value),
+            0x6E, 0x6F => {},
 
             0x70 => apu.ch3.setSound3CntL(value), // NR30
+            0x71 => {},
             0x72 => apu.ch3.setNr31(value),
             0x73 => apu.ch3.vol.raw = value, // NR32
             0x74 => apu.ch3.setNr33(value),
             0x75 => apu.ch3.setNr34(&apu.fs, value),
+            0x76, 0x77 => {},
 
             0x78 => apu.ch4.setNr41(value),
             0x79 => apu.ch4.setNr42(value),
+            0x7A, 0x7B => {},
             0x7C => apu.ch4.poly.raw = value, // NR 43
             0x7D => apu.ch4.setNr44(&apu.fs, value),
+            0x7E, 0x7F => {},
 
-            0x80 => apu.setNr50(value),
-            0x81 => apu.setNr51(value),
-            0x82 => apu.setSoundCntH(setLo(u16, apu.dma_cnt.raw, value)),
-            0x83 => apu.setSoundCntH(setHi(u16, apu.dma_cnt.raw, value)),
-            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1), // NR52
-            0x89 => apu.setSoundBiasH(value),
+            0x80, 0x81 => apu.setSoundCntL(setHalf(u16, apu.psg_cnt.raw, byte_addr, value)),
+            0x82, 0x83 => apu.setSoundCntH(setHalf(u16, apu.dma_cnt.raw, byte_addr, value)),
+            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+            0x85 => {},
+            0x86, 0x87 => {},
+            0x88, 0x89 => apu.bias.raw = setHalf(u16, apu.bias.raw, byte_addr, value), // SOUNDBIAS
+            0x8A...0x8F => {},
+
             0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+            0xA0...0xA3 => log.err("Tried to write 0x{X:0>2}{} to FIFO_A", .{ value, T }),
+            0xA4...0xA7 => log.err("Tried to write 0x{X:0>2}{} to FIFO_B", .{ value, T }),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         else => @compileError("APU: Unsupported write width"),
@@ -256,13 +283,18 @@ pub const Apu = struct {
 
     /// SOUNDCNT
     fn setSoundCnt(self: *Self, value: u32) void {
-        self.psg_cnt.raw = @truncate(u16, value);
+        self.setSoundCntL(@truncate(u16, value));
         self.setSoundCntH(@truncate(u16, value >> 16));
     }
 
     /// SOUNDCNT_L
     pub fn soundCntL(self: *const Self) u16 {
         return self.psg_cnt.raw & 0xFF77;
+    }
+
+    /// SOUNDCNT_L
+    pub fn setSoundCntL(self: *Self, value: u16) void {
+        self.psg_cnt.raw = value;
     }
 
     /// SOUNDCNT_H
@@ -310,20 +342,6 @@ pub const Apu = struct {
         const ch4_enable: u8 = @boolToInt(self.ch4.enabled);
 
         return apu_enable << 7 | ch4_enable << 3 | ch3_enable << 2 | ch2_enable << 1 | ch1_enable;
-    }
-
-    /// NR50
-    pub fn setNr50(self: *Self, byte: u8) void {
-        self.psg_cnt.raw = (self.psg_cnt.raw & 0xFF00) | byte;
-    }
-
-    /// NR51
-    pub fn setNr51(self: *Self, byte: u8) void {
-        self.psg_cnt.raw = @as(u16, byte) << 8 | (self.psg_cnt.raw & 0xFF);
-    }
-
-    pub fn setSoundBiasH(self: *Self, byte: u8) void {
-        self.bias.raw = (@as(u16, byte) << 8) | (self.bias.raw & 0xFF);
     }
 
     pub fn sampleAudio(self: *Self, late: u64) void {
