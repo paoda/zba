@@ -190,19 +190,15 @@ fn Timer(comptime id: u2) type {
 
             // Perform Cascade Behaviour
             switch (id) {
-                0 => if (cpu.bus.tim[1].cnt.cascade.read()) {
-                    cpu.bus.tim[1]._counter +%= 1;
-                    if (cpu.bus.tim[1]._counter == 0) cpu.bus.tim[1].onTimerExpire(cpu, late);
+                inline 0, 1, 2 => |idx| {
+                    const next = idx + 1;
+
+                    if (cpu.bus.tim[next].cnt.cascade.read()) {
+                        cpu.bus.tim[next]._counter +%= 1;
+                        if (cpu.bus.tim[next]._counter == 0) cpu.bus.tim[next].onTimerExpire(cpu, late);
+                    }
                 },
-                1 => if (cpu.bus.tim[2].cnt.cascade.read()) {
-                    cpu.bus.tim[2]._counter +%= 1;
-                    if (cpu.bus.tim[2]._counter == 0) cpu.bus.tim[2].onTimerExpire(cpu, late);
-                },
-                2 => if (cpu.bus.tim[3].cnt.cascade.read()) {
-                    cpu.bus.tim[3]._counter +%= 1;
-                    if (cpu.bus.tim[3]._counter == 0) cpu.bus.tim[3].onTimerExpire(cpu, late);
-                },
-                3 => {}, // There is no Timer for TIM3 to "cascade" to,
+                3 => {}, // THere is no timer for TIM3 to cascade to
             }
 
             // Reschedule Timer if we're not cascading

@@ -455,29 +455,12 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn stepDmaTransfer(self: *Self) bool {
-        const dma0 = &self.bus.dma[0];
-        const dma1 = &self.bus.dma[1];
-        const dma2 = &self.bus.dma[2];
-        const dma3 = &self.bus.dma[3];
-
-        if (dma0.in_progress) {
-            dma0.step(self);
-            return true;
-        }
-
-        if (dma1.in_progress) {
-            dma1.step(self);
-            return true;
-        }
-
-        if (dma2.in_progress) {
-            dma2.step(self);
-            return true;
-        }
-
-        if (dma3.in_progress) {
-            dma3.step(self);
-            return true;
+        comptime var i: usize = 0;
+        inline while (i < 4) : (i += 1) {
+            if (self.bus.dma[i].in_progress) {
+                self.bus.dma[i].step(self);
+                return true;
+            }
         }
 
         return false;

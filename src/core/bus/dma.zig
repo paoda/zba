@@ -335,10 +335,10 @@ fn DmaController(comptime id: u2) type {
 }
 
 pub fn pollDmaOnBlank(bus: *Bus, comptime kind: DmaKind) void {
-    bus.dma[0].poll(kind);
-    bus.dma[1].poll(kind);
-    bus.dma[2].poll(kind);
-    bus.dma[3].poll(kind);
+    comptime var i: usize = 0;
+    inline while (i < 4) : (i += 1) {
+        bus.dma[i].poll(kind);
+    }
 }
 
 const Adjustment = enum(u2) {
