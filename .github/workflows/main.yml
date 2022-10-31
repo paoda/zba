@@ -1,0 +1,53 @@
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+      - name: prepare-linux
+        if: runner.os == 'Linux'
+        run: |
+            sudo apt-get update
+            sudo apt-get install libsdl2-dev
+      - name: prepare-windows
+        if: runner.os == 'Windows'
+        run: |
+            vcpkg integrate install
+            vcpkg install sdl2:x64-windows
+            git config --global core.autocrlf false
+      - name: prepare-macos
+        if: runner.os == 'macOS'
+        run: |
+            brew install sdl2
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: build 
+        run: zig build -Drelease-safe
+      - name: upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: zba-${{matrix.os}}
+          path: zig-out/bin
+  lint:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+      - run: zig fmt src/**/*.zig
+  
