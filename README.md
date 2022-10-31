@@ -16,6 +16,15 @@ features and the set of possible improvements would be in memory timing or in UI
 - [ ] Immediate Mode GUI
 - [ ] Refactoring for easy-ish perf boosts
 
+## Usage
+As it currently exists, ZBA is run from the terminal. In your console of choice, type `./zba --help` to see what you can do.
+
+I typically find myself typing `./zba -b ./bin/bios.bin ./bin/test/suite.gba` to see how badly my "cool new feature" broke everything else.
+
+Need a BIOS? Why not try using the open-source [Cult-Of-GBA BIOS](https://github.com/Cult-of-GBA/BIOS) written by [fleroviux](https://github.com/fleroviux) and [DenSinH](https://github.com/DenSinH)?
+
+Finally it's worth noting that ZBA uses a TOML config file it'll store in your OS's data directory. See `example.toml` to learn about the defaults and what exactly you can mess around with.
+
 ## Tests 
 - [x] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
     - [x] `arm.gba` and `thumb.gba`
@@ -50,7 +59,7 @@ features and the set of possible improvements would be in memory timing or in UI
 * [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
 
 ## Compiling
-Most recently built on Zig [0.10.0-dev.4474+b41b35f57](https://github.com/ziglang/zig/tree/b41b35f57)
+Most recently built on Zig [0.10.0-dev.4720+9b54c9dee](https://github.com/ziglang/zig/tree/9b54c9dee)
 
 ### Dependencies
 * [SDL.zig](https://github.com/MasterQ32/SDL.zig)
