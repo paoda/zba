@@ -96,15 +96,19 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
 
             // Serial Communication 2
             0x0400_0134 => util.io.read.todo(log, "Read {} from RCNT", .{T}),
+            0x0400_0136 => 0x0000,
+            0x0400_0142 => 0x0000,
+            0x0400_015A => 0x0000,
 
             // Interrupts
             0x0400_0200 => bus.io.ie.raw,
             0x0400_0202 => bus.io.irq.raw,
             0x0400_0204 => bus.io.waitcnt.raw,
-            0x0400_0206 => null,
+            0x0400_0206 => 0x0000,
             0x0400_0208 => @boolToInt(bus.io.ime),
-            0x0400_020A => null,
+            0x0400_020A => 0x0000,
             0x0400_0300 => @enumToInt(bus.io.postflg),
+            0x0400_0302 => 0x0000,
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         u8 => return switch (address) {
@@ -128,15 +132,20 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
 
             // Serial Communication 2
             0x0400_0135 => util.io.read.todo(log, "Read {} from RCNT_H", .{T}),
+            0x0400_0136, 0x0400_0137 => 0x00,
+            0x0400_0142, 0x0400_0143 => 0x00,
+            0x0400_015A, 0x0400_015B => 0x00,
 
             // Interrupts
             0x0400_0200, 0x0400_0201 => @truncate(T, bus.io.ie.raw >> getHalf(@truncate(u8, address))),
             0x0400_0202, 0x0400_0203 => @truncate(T, bus.io.irq.raw >> getHalf(@truncate(u8, address))),
             0x0400_0204, 0x0400_0205 => @truncate(T, bus.io.waitcnt.raw >> getHalf(@truncate(u8, address))),
-            0x0400_0206, 0x0400_0207 => null,
+            0x0400_0206, 0x0400_0207 => 0x00,
             0x0400_0208, 0x0400_0209 => @truncate(T, @as(u16, @boolToInt(bus.io.ime)) >> getHalf(@truncate(u8, address))),
-            0x0400_020A, 0x0400_020B => null,
+            0x0400_020A, 0x0400_020B => 0x00,
             0x0400_0300 => @enumToInt(bus.io.postflg),
+            0x0400_0301 => null,
+            0x0400_0302, 0x0400_0303 => 0x00,
             else => util.io.read.undef(T, log, "Tried to perform a {} read to 0x{X:0>8}", .{ T, address }),
         },
         else => @compileError("I/O: Unsupported read width"),
