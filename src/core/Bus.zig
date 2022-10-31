@@ -73,31 +73,31 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
-    const page = @truncate(u8, address >> 24);
-    const aligned_addr = forceAlign(T, address);
+pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const page = @truncate(u8, unaligned_address >> 24);
+    const address = forceAlign(T, unaligned_address);
 
     return switch (page) {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.dbgRead(T, self.cpu.r[15], aligned_addr);
+                break :blk self.bios.dbgRead(T, self.cpu.r[15], address);
 
             break :blk self.openBus(T, address);
         },
-        0x02 => self.ewram.read(T, aligned_addr),
-        0x03 => self.iwram.read(T, aligned_addr),
+        0x02 => self.ewram.read(T, address),
+        0x03 => self.iwram.read(T, address),
         0x04 => self.readIo(T, address),
 
         // Internal Display Memory
-        0x05 => self.ppu.palette.read(T, aligned_addr),
-        0x06 => self.ppu.vram.read(T, aligned_addr),
-        0x07 => self.ppu.oam.read(T, aligned_addr),
+        0x05 => self.ppu.palette.read(T, address),
+        0x06 => self.ppu.vram.read(T, address),
+        0x07 => self.ppu.oam.read(T, address),
 
         // External Memory (Game Pak)
-        0x08...0x0D => self.pak.dbgRead(T, aligned_addr),
+        0x08...0x0D => self.pak.dbgRead(T, address),
         0x0E...0x0F => blk: {
-            const value = self.pak.backup.read(address);
+            const value = self.pak.backup.read(unaligned_address);
 
             const multiplier = switch (T) {
                 u32 => 0x01010101,
@@ -112,10 +112,8 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
     };
 }
 
-/// TODO: Should open bus read addresses be force-aligned?
-fn readIo(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const maybe_value = io.read(self, T, forceAlign(T, unaligned_address));
-    return if (maybe_value) |value| value else self.openBus(T, unaligned_address);
+fn readIo(self: *const Self, comptime T: type, address: u32) T {
+    return io.read(self, T, address) orelse self.openBus(T, address);
 }
 
 fn openBus(self: *const Self, comptime T: type, address: u32) T {
@@ -172,9 +170,9 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
     return @truncate(T, word);
 }
 
-pub fn read(self: *Self, comptime T: type, address: u32) T {
-    const page = @truncate(u8, address >> 24);
-    const aligned_addr = forceAlign(T, address);
+pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
+    const page = @truncate(u8, unaligned_address >> 24);
+    const address = forceAlign(T, unaligned_address);
 
     self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
@@ -182,23 +180,23 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.read(T, self.cpu.r[15], aligned_addr);
+                break :blk self.bios.read(T, self.cpu.r[15], address);
 
             break :blk self.openBus(T, address);
         },
-        0x02 => self.ewram.read(T, aligned_addr),
-        0x03 => self.iwram.read(T, aligned_addr),
+        0x02 => self.ewram.read(T, address),
+        0x03 => self.iwram.read(T, address),
         0x04 => self.readIo(T, address),
 
         // Internal Display Memory
-        0x05 => self.ppu.palette.read(T, aligned_addr),
-        0x06 => self.ppu.vram.read(T, aligned_addr),
-        0x07 => self.ppu.oam.read(T, aligned_addr),
+        0x05 => self.ppu.palette.read(T, address),
+        0x06 => self.ppu.vram.read(T, address),
+        0x07 => self.ppu.oam.read(T, address),
 
         // External Memory (Game Pak)
-        0x08...0x0D => self.pak.read(T, aligned_addr),
+        0x08...0x0D => self.pak.read(T, address),
         0x0E...0x0F => blk: {
-            const value = self.pak.backup.read(address);
+            const value = self.pak.backup.read(unaligned_address);
 
             const multiplier = switch (T) {
                 u32 => 0x01010101,
@@ -213,44 +211,44 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
     };
 }
 
-pub fn write(self: *Self, comptime T: type, address: u32, value: T) void {
-    const page = @truncate(u8, address >> 24);
-    const aligned_addr = forceAlign(T, address);
+pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    const page = @truncate(u8, unaligned_address >> 24);
+    const address = forceAlign(T, unaligned_address);
 
     self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
     switch (page) {
         // General Internal Memory
-        0x00 => self.bios.write(T, aligned_addr, value),
-        0x02 => self.ewram.write(T, aligned_addr, value),
-        0x03 => self.iwram.write(T, aligned_addr, value),
-        0x04 => io.write(self, T, aligned_addr, value),
+        0x00 => self.bios.write(T, address, value),
+        0x02 => self.ewram.write(T, address, value),
+        0x03 => self.iwram.write(T, address, value),
+        0x04 => io.write(self, T, address, value),
 
         // Internal Display Memory
-        0x05 => self.ppu.palette.write(T, aligned_addr, value),
-        0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, aligned_addr, value),
-        0x07 => self.ppu.oam.write(T, aligned_addr, value),
+        0x05 => self.ppu.palette.write(T, address, value),
+        0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, address, value),
+        0x07 => self.ppu.oam.write(T, address, value),
 
         // External Memory (Game Pak)
-        0x08...0x0D => self.pak.write(T, self.dma[3].word_count, aligned_addr, value),
-        0x0E...0x0F => {
-            const rotate_by = switch (T) {
-                u32 => address & 3,
-                u16 => address & 1,
-                u8 => 0,
-                else => @compileError("Backup: Unsupported write width"),
-            };
-
-            self.pak.backup.write(address, @truncate(u8, rotr(T, value, 8 * rotate_by)));
-        },
+        0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),
+        0x0E...0x0F => self.pak.backup.write(unaligned_address, @truncate(u8, rotr(T, value, 8 * rotateBy(T, unaligned_address)))),
         else => {},
     }
 }
 
-fn forceAlign(comptime T: type, address: u32) u32 {
+inline fn rotateBy(comptime T: type, address: u32) u32 {
     return switch (T) {
-        u32 => address & 0xFFFF_FFFC,
-        u16 => address & 0xFFFF_FFFE,
+        u32 => address & 3,
+        u16 => address & 1,
+        u8 => 0,
+        else => @compileError("Backup: Unsupported write width"),
+    };
+}
+
+inline fn forceAlign(comptime T: type, address: u32) u32 {
+    return switch (T) {
+        u32 => address & ~@as(u32, 3),
+        u16 => address & ~@as(u32, 1),
         u8 => address,
         else => @compileError("Bus: Invalid read/write type"),
     };
