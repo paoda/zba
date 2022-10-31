@@ -259,7 +259,6 @@ fn DmaController(comptime id: u2) type {
             switch (sad_adj) {
                 .Increment => self.sad_latch +%= offset,
                 .Decrement => self.sad_latch -%= offset,
-                // FIXME: Is just ignoring this ok?
                 .IncrementReload => log.err("{} is a prohibited adjustment on SAD", .{sad_adj}),
                 .Fixed => {},
             }

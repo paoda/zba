@@ -33,7 +33,7 @@ pub fn reload(self: *Self, poly: io.PolyCounter) void {
 }
 
 /// Scheduler Event Handler for LFSR Timer Expire
-/// FIXME: This gets called a lot, clogging up the Scheduler
+/// FIXME: This gets called a lot, slowing down the scheduler
 pub fn onLfsrTimerExpire(self: *Self, poly: io.PolyCounter, late: u64) void {
     // Obscure: "Using a noise channel clock shift of 14 or 15
     // results in the LFSR receiving no clocks."

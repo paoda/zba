@@ -302,8 +302,6 @@ pub inline fn getHalf(byte: u8) u4 {
     return @truncate(u4, byte & 1) << 3;
 }
 
-// TODO: Maybe combine SetLo and SetHi, use addr alignment to deduplicate code
-
 pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T {
     const offset = @truncate(u1, addr >> if (T == u32) 1 else 0);
 
@@ -316,26 +314,6 @@ pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T 
             0b0 => (left & 0xFF00) | right,
             0b1 => (left & 0x00FF) | @as(u16, right) << 8,
         },
-        else => @compileError("unsupported type"),
-    };
-}
-
-/// Sets the high bits of an integer to a value
-pub inline fn setLo(comptime T: type, left: T, right: HalfInt(T)) T {
-    return switch (T) {
-        u32 => (left & 0xFFFF_0000) | right,
-        u16 => (left & 0xFF00) | right,
-        u8 => (left & 0xF0) | right,
-        else => @compileError("unsupported type"),
-    };
-}
-
-/// sets the low bits of an integer to a value
-pub inline fn setHi(comptime T: type, left: T, right: HalfInt(T)) T {
-    return switch (T) {
-        u32 => (left & 0x0000_FFFF) | @as(u32, right) << 16,
-        u16 => (left & 0x00FF) | @as(u16, right) << 8,
-        u8 => (left & 0x0F) | @as(u8, right) << 4,
         else => @compileError("unsupported type"),
     };
 }

@@ -151,8 +151,8 @@ pub const Backup = struct {
         const file_path = try self.savePath(allocator, path);
         defer allocator.free(file_path);
 
-        // FIXME: Don't rely on this lol
-        if (std.mem.eql(u8, file_path[file_path.len - 12 .. file_path.len], "untitled.sav")) {
+        const expected = "untitled.sav";
+        if (std.mem.eql(u8, file_path[file_path.len - expected.len .. file_path.len], expected)) {
             return log.err("ROM header lacks title, no save loaded", .{});
         }
 

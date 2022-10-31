@@ -407,7 +407,6 @@ pub const Apu = struct {
         const ext_left = (clamped_left << 5) | (clamped_left >> 6);
         const ext_right = (clamped_right << 5) | (clamped_right >> 6);
 
-        // FIXME: This rarely happens
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) self.replaceSDLResampler();
 
         _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ ext_left, ext_right }, 2 * @sizeOf(u16));
@@ -507,7 +506,6 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         }
 
         pub fn push(self: *Self, value: u32) void {
-            // FIXME: I tried to communicate that this is unlikely to the compiler
             if (!self.enabled) self.enable();
 
             self.fifo.write(&intToBytes(u32, value)) catch |e| log.err("{} Error: {}", .{ kind, e });

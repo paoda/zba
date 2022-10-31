@@ -57,7 +57,6 @@ pub fn blockDataTransfer(comptime P: bool, comptime U: bool, comptime S: bool, c
                     cpu.r[15] = bus.read(u32, und_addr);
                     cpu.pipe.reload(cpu);
                 } else {
-                    // FIXME: Should r15 on write be +12 ahead?
                     bus.write(u32, und_addr, cpu.r[15] + 4);
                 }
 

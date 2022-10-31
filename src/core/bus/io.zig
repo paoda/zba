@@ -213,7 +213,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Timers
             0x0400_0100...0x0400_010E => timer.write(T, &bus.tim, address, value),
-            0x0400_0114 => {}, // TODO: Gyakuten Saiban writes 0x8000 to 0x0400_0114
+            0x0400_0114 => {},
             0x0400_0110 => {}, // Not Used,
 
             // Serial Communication 1

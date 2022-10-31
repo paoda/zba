@@ -105,14 +105,13 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
 
         switch (T) {
             u32 => switch (address) {
-                // TODO: Do I even need to implement these?
+                // FIXME: Do I even need to implement these?
                 0x0800_00C4 => std.debug.panic("Handle 32-bit GPIO Data/Direction Reads", .{}),
                 0x0800_00C6 => std.debug.panic("Handle 32-bit GPIO Direction/Control Reads", .{}),
                 0x0800_00C8 => std.debug.panic("Handle 32-bit GPIO Control Reads", .{}),
                 else => {},
             },
             u16 => switch (address) {
-                // FIXME: What do 16-bit GPIO Reads look like?
                 0x0800_00C4 => return self.gpio.read(.Data),
                 0x0800_00C6 => return self.gpio.read(.Direction),
                 0x0800_00C8 => return self.gpio.read(.Control),

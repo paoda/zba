@@ -121,6 +121,12 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
 
     const word = blk: {
         // If Arm, get the most recently fetched instruction (PC + 8)
+        //
+        // FIXME: This is most likely a faulty assumption.
+        // I think what *actually* happens is that the Bus has a latch for the most
+        // recently fetched piece of data, which is then returned during Open Bus (also DMA open bus?)
+        // I can "get away" with this because it's very statistically likely that the most recently latched value is
+        // the most recently fetched instruction by the pipeline
         if (!self.cpu.cpsr.t.read()) break :blk self.cpu.pipe.stage[1].?;
 
         const page = @truncate(u8, r15 >> 24);

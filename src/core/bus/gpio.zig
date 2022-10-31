@@ -71,7 +71,7 @@ pub const Gpio = struct {
 
         self.* = .{
             .data = 0b0000,
-            .direction = 0b1111, // TODO: What is GPIO DIrection set to by default?
+            .direction = 0b1111, // TODO: What is GPIO Direction set to by default?
             .cnt = 0b0,
 
             .device = switch (kind) {
