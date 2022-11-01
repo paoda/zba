@@ -54,12 +54,15 @@ cpu: *Arm7tdmi,
 sched: *Scheduler,
 
 read_table: *const [table_len]?*const anyopaque,
-write_table: *const [table_len]?*anyopaque,
+write_tables: [2]*const [table_len]?*anyopaque,
 allocator: Allocator,
 
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
     const read_table = try allocator.create([table_len]?*const anyopaque);
-    const write_table = try allocator.create([table_len]?*anyopaque);
+    const write_tables = try allocator.alloc(?*anyopaque, 2 * table_len); // Copy of the write table just for u8 writes
+
+    const left_write: *[table_len]?*anyopaque = write_tables[0..table_len];
+    const right_write: *[table_len]?*anyopaque = write_tables[table_len .. 2 * table_len];
 
     self.* = .{
         .pak = try GamePak.init(allocator, cpu, paths.rom, paths.save),
@@ -75,14 +78,18 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
         .sched = sched,
 
         .read_table = read_table,
-        .write_table = write_table,
+        .write_tables = .{ left_write, right_write },
         .allocator = allocator,
     };
 
-    // read_table, write_table, and *Self are not restricted to the lifetime
+    // read_table, write_tables, and *Self are not restricted to the lifetime
     // of this init function so we can initialize our tables here
     fillReadTable(self, read_table);
-    fillWriteTable(self, write_table);
+
+    // Internal Display Memory behavious unusually on 8-bit reads
+    // so we have two different tables depending on whether there's an 8-bit read or not
+    fillWriteTable(u16, self, left_write); // T could also be u32 here
+    fillWriteTable(u8, self, right_write);
 }
 
 pub fn deinit(self: *Self) void {
@@ -92,7 +99,11 @@ pub fn deinit(self: *Self) void {
     self.bios.deinit();
     self.ppu.deinit();
     self.allocator.destroy(self.read_table);
-    self.allocator.destroy(self.write_table);
+
+    // This is so I can deallocate the original `allocator.alloc`. I have to re-make the type
+    // since I'm not keeping it around, This is very jank and bad though
+    // FIXME: please figure out another way
+    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.write_tables[0][0..])[0 .. 2 * table_len]);
     self.* = undefined;
 }
 
@@ -122,7 +133,10 @@ fn fillReadTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
     }
 }
 
-fn fillWriteTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
+fn fillWriteTable(comptime T: type, bus: *Self, table: *[table_len]?*const anyopaque) void {
+    comptime std.debug.assert(T == u32 or T == u16 or T == u8);
+    const vramMirror = @import("ppu.zig").Vram.mirror;
+
     for (table) |*ptr, i| {
         const addr = page_size * i;
 
@@ -135,9 +149,9 @@ fn fillWriteTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
 
             // Internal Display Memory
             // FIXME: Different table for different integer width writes?
-            0x0500_0000...0x05FF_FFFF => null, // unique behaviour on 8-bit reads
-            0x0600_0000...0x06FF_FFFF => null, // Has some behaviour depending on DISPCNT values
-            0x0700_0000...0x07FF_FFFF => &bus.ppu.oam.buf[addr & 0x3FF], // 8-bit values ignored
+            0x0500_0000...0x05FF_FFFF => if (T != u8) &bus.ppu.palette.buf[addr & 0x3FF] else null,
+            0x0600_0000...0x06FF_FFFF => if (T != u8) &bus.ppu.vram.buf[vramMirror(addr)] else null,
+            0x0700_0000...0x07FF_FFFF => if (T != u8) &bus.ppu.oam.buf[addr & 0x3FF] else null,
 
             // External Memory (Game Pak)
             0x0800_0000...0x0DFF_FFFF => null, // ROM
@@ -366,12 +380,8 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
     if (page > table_len) return;
 
-    if (self.write_table[page]) |some_ptr| {
+    if (self.write_tables[if (T == u8) 1 else 0][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
-
-        // 8-bit OAM reads do nothing
-        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
-
         const Ptr = [*]T;
         const alignment = @alignOf(std.meta.Child(Ptr));
         const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
@@ -380,6 +390,9 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
         // lower bits of the address as the GBA would
         ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
     } else {
+        // we can return early if this is an 8-bit OAM write
+        if (T == u8 and @truncate(u8, unaligned_address) == 0x07) return;
+
         self.slowWrite(T, unaligned_address, value);
     }
 }
