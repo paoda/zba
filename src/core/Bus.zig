@@ -88,8 +88,8 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
 
     // Internal Display Memory behavious unusually on 8-bit reads
     // so we have two different tables depending on whether there's an 8-bit read or not
-    fillWriteTable(u16, self, left_write); // T could also be u32 here
-    fillWriteTable(u8, self, right_write);
+    fillWriteTable(u8, self, left_write);
+    fillWriteTable(u32, self, right_write);
 }
 
 pub fn deinit(self: *Self) void {
@@ -147,7 +147,6 @@ fn fillWriteTable(comptime T: type, bus: *Self, table: *[table_len]?*const anyop
             0x0400_0000...0x0400_03FF => null, // I/O
 
             // Internal Display Memory
-            // FIXME: Different table for different integer width writes?
             0x0500_0000...0x05FF_FFFF => if (T != u8) &bus.ppu.palette.buf[addr & 0x3FF] else null,
             0x0600_0000...0x06FF_FFFF => if (T != u8) &bus.ppu.vram.buf[vramMirror(addr)] else null,
             0x0700_0000...0x07FF_FFFF => if (T != u8) &bus.ppu.oam.buf[addr & 0x3FF] else null,
@@ -243,6 +242,7 @@ fn readIo(self: *const Self, comptime T: type, address: u32) T {
 }
 
 fn openBus(self: *const Self, comptime T: type, address: u32) T {
+    @setCold(true);
     const r15 = self.cpu.r[15];
 
     const word = blk: {
@@ -308,10 +308,10 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
     const offset = unaligned_address & (page_size - 1);
 
     // whether or not we do this in slowmem or fastmem, we should advance the scheduler
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
+    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
 
     // We're doing some serious out-of-bounds open-bus reads
-    if (page > table_len) return self.slowRead(T, unaligned_address);
+    if (page > table_len) return self.openBus(T, unaligned_address);
 
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
@@ -374,12 +374,12 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     const offset = unaligned_address & (page_size - 1);
 
     // whether or not we do this in slowmem or fastmem, we should advance the scheduler
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
+    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
 
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
     if (page > table_len) return;
 
-    if (self.write_tables[if (T == u8) 1 else 0][page]) |some_ptr| {
+    if (self.write_tables[@boolToInt(T == u32)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
         const Ptr = [*]T;
         const alignment = @alignOf(std.meta.Child(Ptr));
@@ -390,7 +390,7 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
         ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
     } else {
         // we can return early if this is an 8-bit OAM write
-        if (T == u8 and @truncate(u8, unaligned_address) == 0x07) return;
+        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
 
         self.slowWrite(T, unaligned_address, value);
     }
