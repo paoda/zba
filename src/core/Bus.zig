@@ -58,11 +58,11 @@ write_tables: [2]*const [table_len]?*anyopaque,
 allocator: Allocator,
 
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
-    const read_table = try allocator.create([table_len]?*const anyopaque);
-    const write_tables = try allocator.alloc(?*anyopaque, 2 * table_len); // Copy of the write table just for u8 writes
+    const tables = try allocator.alloc(?*anyopaque, 3 * table_len); // Allocate all tables
 
-    const left_write: *[table_len]?*anyopaque = write_tables[0..table_len];
-    const right_write: *[table_len]?*anyopaque = write_tables[table_len .. 2 * table_len];
+    const read_table: *[table_len]?*const anyopaque = tables[0..table_len];
+    const left_write: *[table_len]?*anyopaque = tables[table_len .. 2 * table_len];
+    const right_write: *[table_len]?*anyopaque = tables[2 * table_len .. 3 * table_len];
 
     self.* = .{
         .pak = try GamePak.init(allocator, cpu, paths.rom, paths.save),
@@ -98,12 +98,11 @@ pub fn deinit(self: *Self) void {
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
-    self.allocator.destroy(self.read_table);
 
     // This is so I can deallocate the original `allocator.alloc`. I have to re-make the type
     // since I'm not keeping it around, This is very jank and bad though
     // FIXME: please figure out another way
-    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.write_tables[0][0..])[0 .. 2 * table_len]);
+    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.write_tables[0][0..])[0 .. 3 * table_len]);
     self.* = undefined;
 }
 
@@ -412,7 +411,7 @@ pub fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T
         // Internal Display Memory
         0x05 => self.ppu.palette.write(T, address, value),
         0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, address, value),
-        0x07 => unreachable, // completely handled by fastmem (TODO: Is it faster if I dont?)
+        0x07 => unreachable, // completely handled by fastmem
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),
