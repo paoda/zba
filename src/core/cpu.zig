@@ -608,25 +608,29 @@ pub const Arm7tdmi = struct {
     }
 };
 
-pub fn checkCond(cpsr: PSR, cond: u4) bool {
-    return switch (cond) {
-        0x0 => cpsr.z.read(), // EQ - Equal
-        0x1 => !cpsr.z.read(), // NE - Not equal
-        0x2 => cpsr.c.read(), // CS - Unsigned higher or same
-        0x3 => !cpsr.c.read(), // CC - Unsigned lower
-        0x4 => cpsr.n.read(), // MI - Negative
-        0x5 => !cpsr.n.read(), // PL - Positive or zero
-        0x6 => cpsr.v.read(), // VS - Overflow
-        0x7 => !cpsr.v.read(), // VC - No overflow
-        0x8 => cpsr.c.read() and !cpsr.z.read(), // HI - unsigned higher
-        0x9 => !cpsr.c.read() or cpsr.z.read(), // LS - unsigned lower or same
-        0xA => cpsr.n.read() == cpsr.v.read(), // GE - Greater or equal
-        0xB => cpsr.n.read() != cpsr.v.read(), // LT - Less than
-        0xC => !cpsr.z.read() and (cpsr.n.read() == cpsr.v.read()), // GT - Greater than
-        0xD => cpsr.z.read() or (cpsr.n.read() != cpsr.v.read()), // LE - Less than or equal
-        0xE => true, // AL - Always
-        0xF => false, // NV - Never (reserved in ARMv3 and up, but seems to have not changed?)
-    };
+const condition_lut = [_]u16{
+    0xF0F0, // EQ - Equal
+    0x0F0F, // NE - Not Equal
+    0xCCCC, // CS - Unsigned higher or same
+    0x3333, // CC - Unsigned lower
+    0xFF00, // MI - Negative
+    0x00FF, // PL - Positive or Zero
+    0xAAAA, // VS - Overflow
+    0x5555, // VC - No Overflow
+    0x0C0C, // HI - unsigned hierh
+    0xF3F3, // LS - unsigned lower or same
+    0xAA55, // GE - greater or equal
+    0x55AA, // LT - less than
+    0x0A05, // GT - greater than
+    0xF5FA, // LE - less than or equal
+    0xFFFF, // AL - always
+    0x0000, // NV - never
+};
+
+pub inline fn checkCond(cpsr: PSR, cond: u4) bool {
+    const flags = @truncate(u4, cpsr.raw >> 28);
+
+    return condition_lut[cond] & (@as(u16, 1) << flags) != 0;
 }
 
 const Pipeline = struct {
