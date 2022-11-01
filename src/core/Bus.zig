@@ -33,6 +33,11 @@ pub const fetch_timings: [2][0x10]u8 = [_][0x10]u8{
     [_]u8{ 1, 1, 6, 1, 1, 2, 2, 1, 4, 4, 4, 4, 4, 4, 8, 8 }, // 32-bit
 };
 
+// Fastmem Related
+const page_size = 1 * 0x400; // 1KiB
+const address_space_size = 0x1000_0000;
+const table_len = address_space_size / page_size;
+
 const Self = @This();
 
 pak: GamePak,
@@ -48,7 +53,14 @@ io: Io,
 cpu: *Arm7tdmi,
 sched: *Scheduler,
 
+read_table: *const [table_len]?*const anyopaque,
+write_table: *const [table_len]?*anyopaque,
+allocator: Allocator,
+
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
+    const read_table = try allocator.create([table_len]?*const anyopaque);
+    const write_table = try allocator.create([table_len]?*anyopaque);
+
     self.* = .{
         .pak = try GamePak.init(allocator, cpu, paths.rom, paths.save),
         .bios = try Bios.init(allocator, paths.bios),
@@ -61,7 +73,16 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
         .io = Io.init(),
         .cpu = cpu,
         .sched = sched,
+
+        .read_table = read_table,
+        .write_table = write_table,
+        .allocator = allocator,
     };
+
+    // read_table, write_table, and *Self are not restricted to the lifetime
+    // of this init function so we can initialize our tables here
+    fillReadTable(self, read_table);
+    fillWriteTable(self, write_table);
 }
 
 pub fn deinit(self: *Self) void {
@@ -70,9 +91,101 @@ pub fn deinit(self: *Self) void {
     self.pak.deinit();
     self.bios.deinit();
     self.ppu.deinit();
+    self.allocator.destroy(self.read_table);
+    self.allocator.destroy(self.write_table);
     self.* = undefined;
 }
 
+fn fillReadTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
+    const vramMirror = @import("ppu.zig").Vram.mirror;
+
+    for (table) |*ptr, i| {
+        const addr = page_size * i;
+
+        ptr.* = switch (addr) {
+            // General Internal Memory
+            0x0000_0000...0x0000_3FFF => null, // BIOS has it's own checks
+            0x0200_0000...0x02FF_FFFF => &bus.ewram.buf[addr & 0x3FFFF],
+            0x0300_0000...0x03FF_FFFF => &bus.iwram.buf[addr & 0x7FFF],
+            0x0400_0000...0x0400_03FF => null, // I/O
+
+            // Internal Display Memory
+            0x0500_0000...0x05FF_FFFF => &bus.ppu.palette.buf[addr & 0x3FF],
+            0x0600_0000...0x06FF_FFFF => &bus.ppu.vram.buf[vramMirror(addr)],
+            0x0700_0000...0x07FF_FFFF => &bus.ppu.oam.buf[addr & 0x3FF],
+
+            // External Memory (Game Pak)
+            0x0800_0000...0x0DFF_FFFF => fillTableExternalMemory(bus, addr),
+            0x0E00_0000...0x0FFF_FFFF => null, // SRAM
+            else => null,
+        };
+    }
+}
+
+fn fillWriteTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
+    for (table) |*ptr, i| {
+        const addr = page_size * i;
+
+        ptr.* = switch (addr) {
+            // General Internal Memory
+            0x0000_0000...0x0000_3FFF => null, // BIOS has it's own checks
+            0x0200_0000...0x02FF_FFFF => &bus.ewram.buf[addr & 0x3FFFF],
+            0x0300_0000...0x03FF_FFFF => &bus.iwram.buf[addr & 0x7FFF],
+            0x0400_0000...0x0400_03FF => null, // I/O
+
+            // Internal Display Memory
+            // FIXME: Different table for different integer width writes?
+            0x0500_0000...0x05FF_FFFF => null, // unique behaviour on 8-bit reads
+            0x0600_0000...0x06FF_FFFF => null, // Has some behaviour depending on DISPCNT values
+            0x0700_0000...0x07FF_FFFF => &bus.ppu.oam.buf[addr & 0x3FF], // 8-bit values ignored
+
+            // External Memory (Game Pak)
+            0x0800_0000...0x0DFF_FFFF => null, // ROM
+            0x0E00_0000...0x0FFF_FFFF => null, // SRAM
+            else => null,
+        };
+    }
+}
+
+fn fillTableExternalMemory(bus: *Self, addr: usize) ?*anyopaque {
+    // see `GamePak.zig` for more information about what conditions need to be true
+    // so that a simple pointer dereference isn't possible
+
+    const start_addr = addr;
+    const end_addr = addr + page_size;
+
+    const gpio_data = start_addr <= 0x0800_00C4 and 0x0800_00C4 < end_addr;
+    const gpio_direction = start_addr <= 0x0800_00C6 and 0x0800_00C6 < end_addr;
+    const gpio_control = start_addr <= 0x0800_00C8 and 0x0800_00C8 < end_addr;
+
+    if (bus.pak.gpio.device.kind != .None and (gpio_data or gpio_direction or gpio_control)) {
+        // We found a GPIO device, and this page a GPIO register. We want to handle this in slowmem
+        return null;
+    }
+
+    if (bus.pak.backup.kind == .Eeprom) {
+        if (bus.pak.buf.len > 0x100_000) {
+            // We are using a "large" EEPROM which means that if the below check is true
+            // this page has an address that's reserved for the EEPROM and therefore must
+            // be handled in slowmem
+            if (addr & 0x1FF_FFFF > 0x1FF_FEFF) return null;
+        } else {
+            // We are using a "small" EEPROM which means that if the below check is true
+            // (that is, we're in the 0xD address page) then we must handle at least one
+            // address in this page in slowmem
+            if (@truncate(u4, addr >> 24) == 0xD) return null;
+        }
+    }
+
+    // Finally, the GamePak has some unique behaviour for reads past the end of the ROM,
+    // so those will be handled by slowmem as well
+    const masked_addr = addr & 0x1FF_FFFF;
+    if (masked_addr >= bus.pak.buf.len) return null;
+
+    return &bus.pak.buf[masked_addr];
+}
+
+// TODO: Take advantage of fastmem here too?
 pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
     const page = @truncate(u8, unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
@@ -177,10 +290,35 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
 }
 
 pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const page = unaligned_address >> bits;
+    const offset = unaligned_address & (page_size - 1);
+
+    // whether or not we do this in slowmem or fastmem, we should advance the scheduler
+    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
+
+    // We're doing some serious out-of-bounds open-bus reads
+    if (page > table_len) return self.slowRead(T, unaligned_address);
+
+    if (self.read_table[page]) |some_ptr| {
+        // We have a pointer to a page, cast the pointer to it's underlying type
+        const Ptr = [*]const T;
+        const alignment = @alignOf(std.meta.Child(Ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+
+        // Note: We don't check array length, since we force align the
+        // lower bits of the address as the GBA would
+        return ptr[forceAlign(T, offset) / @sizeOf(T)];
+    }
+
+    return self.slowRead(T, unaligned_address);
+}
+
+fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
+    @setCold(true);
+
     const page = @truncate(u8, unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
-
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
     return switch (page) {
         // General Internal Memory
@@ -190,14 +328,14 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
 
             break :blk self.openBus(T, address);
         },
-        0x02 => self.ewram.read(T, address),
-        0x03 => self.iwram.read(T, address),
+        0x02 => unreachable, // completely handled by fastmeme
+        0x03 => unreachable, // completely handled by fastmeme
         0x04 => self.readIo(T, address),
 
         // Internal Display Memory
-        0x05 => self.ppu.palette.read(T, address),
-        0x06 => self.ppu.vram.read(T, address),
-        0x07 => self.ppu.oam.read(T, address),
+        0x05 => unreachable, // completely handled by fastmeme
+        0x06 => unreachable, // completely handled by fastmeme
+        0x07 => unreachable, // completely handled by fastmeme
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.read(T, address),
@@ -218,22 +356,50 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
 }
 
 pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const page = unaligned_address >> bits;
+    const offset = unaligned_address & (page_size - 1);
+
+    // whether or not we do this in slowmem or fastmem, we should advance the scheduler
+    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
+
+    // We're doing some serious out-of-bounds open-bus writes, they do nothing though
+    if (page > table_len) return;
+
+    if (self.write_table[page]) |some_ptr| {
+        // We have a pointer to a page, cast the pointer to it's underlying type
+
+        // 8-bit OAM reads do nothing
+        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
+
+        const Ptr = [*]T;
+        const alignment = @alignOf(std.meta.Child(Ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+
+        // Note: We don't check array length, since we force align the
+        // lower bits of the address as the GBA would
+        ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
+    } else {
+        self.slowWrite(T, unaligned_address, value);
+    }
+}
+
+pub fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    // @setCold(true);
     const page = @truncate(u8, unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
-
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, page)];
 
     switch (page) {
         // General Internal Memory
         0x00 => self.bios.write(T, address, value),
-        0x02 => self.ewram.write(T, address, value),
-        0x03 => self.iwram.write(T, address, value),
+        0x02 => unreachable, // completely handled by fastmem
+        0x03 => unreachable, // completely handled by fastmem
         0x04 => io.write(self, T, address, value),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.write(T, address, value),
         0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, address, value),
-        0x07 => self.ppu.oam.write(T, address, value),
+        0x07 => unreachable, // completely handled by fastmem (TODO: Is it faster if I dont?)
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),

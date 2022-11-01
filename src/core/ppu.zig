@@ -882,7 +882,7 @@ const Palette = struct {
     }
 };
 
-const Vram = struct {
+pub const Vram = struct {
     const vram_size = 0x18000;
     const Self = @This();
 
@@ -933,7 +933,7 @@ const Vram = struct {
         }
     }
 
-    fn mirror(address: usize) usize {
+    pub fn mirror(address: usize) usize {
         // Mirrored in steps of 128K (64K + 32K + 32K) (abcc)
         const addr = address & 0x1FFFF;
 
