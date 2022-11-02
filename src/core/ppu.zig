@@ -263,8 +263,7 @@ pub const Ppu = struct {
     scanline: Scanline,
 
     pub fn init(allocator: Allocator, sched: *Scheduler) !Self {
-        // Queue first Hblank
-        sched.push(.Draw, 240 * 4);
+        sched.push(.Draw, 240 * 4); // Add first PPU Event to Scheduler
 
         const sprites = try allocator.create([128]?Sprite);
         std.mem.set(?Sprite, sprites, null);
@@ -324,20 +323,16 @@ pub const Ppu = struct {
             // Only consider enabled Sprites
             if (attr0.is_affine.read() or !attr0.disabled.read()) {
                 const attr1 = @bitCast(Attr1, self.oam.read(u16, i + 2));
+                const sprite_height = spriteDimensions(attr0.shape.read(), attr1.size.read())[1];
 
                 // When fetching sprites we only care about ones that could be rendered
                 // on this scanline
-                const iy = @bitCast(i8, y);
-
-                const start = attr0.y.read();
-                const istart = @bitCast(i8, start);
-
-                const end = start +% spriteDimensions(attr0.shape.read(), attr1.size.read())[1];
-                const iend = @bitCast(i8, end);
+                var y_pos: i32 = attr0.y.read();
+                if (y_pos >= 160) y_pos -= 256; // fleroviux's solution to negative positions
 
                 // Sprites are expected to be able to wraparound, we perform the same check
                 // for unsigned and signed values so that we handle all valid sprite positions
-                if ((start <= y and y < end) or (istart <= iy and iy < iend)) {
+                if (y_pos <= y and y < (y_pos + sprite_height)) {
                     for (self.scanline_sprites) |*maybe_sprite| {
                         if (maybe_sprite.* == null) {
                             maybe_sprite.* = Sprite.init(attr0, attr1, @bitCast(Attr2, self.oam.read(u16, i + 4)));
@@ -364,8 +359,6 @@ pub const Ppu = struct {
     }
 
     fn drawAffineSprite(self: *Self, sprite: AffineSprite) void {
-        const iy = @bitCast(i8, self.vcount.scanline.read());
-
         const is_8bpp = sprite.is8bpp();
         const tile_id: u32 = sprite.tileId();
         const obj_mapping = self.dispcnt.obj_mapping.read();
@@ -374,25 +367,22 @@ pub const Ppu = struct {
 
         const char_base = 0x4000 * 4;
 
+        const y = self.vcount.scanline.read();
+
         var i: u9 = 0;
         while (i < sprite.width) : (i += 1) {
             const x = (sprite.x() +% i) % width;
-            const ix = @bitCast(i9, x);
-
             if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
-            const sprite_start = sprite.x();
-            const isprite_start = @bitCast(i9, sprite_start);
-            const sprite_end = sprite_start +% sprite.width;
-            const isprite_end = @bitCast(i9, sprite_end);
+            var x_pos: i32 = sprite.x();
+            if (x_pos >= 240) x_pos -= 512;
 
-            const condition = (sprite_start <= x and x < sprite_end) or (isprite_start <= ix and ix < isprite_end);
-            if (!condition) continue;
+            if (!(x_pos <= x and x < (x_pos + sprite.width))) continue;
 
             // Sprite is within bounds and therefore should be rendered
             // std.math.absInt is branchless
-            const tile_x = @bitCast(u9, std.math.absInt(ix - @bitCast(i9, sprite.x())) catch unreachable);
-            const tile_y = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
+            const tile_x = @bitCast(u32, @as(i32, std.math.absInt(@as(i32, x) - x_pos) catch unreachable));
+            const tile_y = @bitCast(u32, @as(i32, std.math.absInt(@bitCast(i8, y) -% @bitCast(i8, sprite.y())) catch unreachable));
 
             const row = @truncate(u3, tile_y);
             const col = @truncate(u3, tile_x);
@@ -414,8 +404,6 @@ pub const Ppu = struct {
     }
 
     fn drawSprite(self: *Self, sprite: Sprite) void {
-        const iy = @bitCast(i8, self.vcount.scanline.read());
-
         const is_8bpp = sprite.is8bpp();
         const tile_id: u32 = sprite.tileId();
         const obj_mapping = self.dispcnt.obj_mapping.read();
@@ -424,31 +412,27 @@ pub const Ppu = struct {
 
         const char_base = 0x4000 * 4;
 
+        const y = self.vcount.scanline.read();
+
         var i: u9 = 0;
         while (i < sprite.width) : (i += 1) {
             const x = (sprite.x() +% i) % width;
-            const ix = @bitCast(i9, x);
-
             if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
-            const sprite_start = sprite.x();
-            const isprite_start = @bitCast(i9, sprite_start);
-            const sprite_end = sprite_start +% sprite.width;
-            const isprite_end = @bitCast(i9, sprite_end);
+            var x_pos: i32 = sprite.x();
+            if (x_pos >= 240) x_pos -= 512;
 
-            const condition = (sprite_start <= x and x < sprite_end) or (isprite_start <= ix and ix < isprite_end);
-            if (!condition) continue;
+            if (!(x_pos <= x and x < (x_pos + sprite.width))) continue;
 
             // Sprite is within bounds and therefore should be rendered
-            // std.math.absInt is branchless
-            const x_diff = @bitCast(u9, std.math.absInt(ix - @bitCast(i9, sprite.x())) catch unreachable);
-            const y_diff = @bitCast(u8, std.math.absInt(iy -% @bitCast(i8, sprite.y())) catch unreachable);
+            const x_diff: i32 = std.math.absInt(@as(i32, x) - x_pos) catch unreachable;
+            const y_diff: i32 = std.math.absInt(@bitCast(i8, y) -% @bitCast(i8, sprite.y())) catch unreachable;
 
             // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
             // Background Tiles. By doing this we mirror the entire sprite instead of
             // just a specific tile (see how sprite.width and sprite.height are involved)
-            const tile_y = y_diff ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
-            const tile_x = x_diff ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
+            const tile_x = @intCast(u9, x_diff) ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
+            const tile_y = @intCast(u8, y_diff) ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
 
             const row = @truncate(u3, tile_y);
             const col = @truncate(u3, tile_x);
