@@ -9,7 +9,6 @@ const dma = @import("bus/dma.zig");
 const Oam = @import("ppu/Oam.zig");
 const Palette = @import("ppu/Palette.zig");
 const Vram = @import("ppu/Vram.zig");
-const EventKind = @import("scheduler.zig").EventKind;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const FrameBuffer = @import("../util.zig").FrameBuffer;
@@ -20,7 +19,6 @@ const log = std.log.scoped(.PPU);
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const setQuart = util.setQuart;
-const pollDmaOnBlank = @import("bus/dma.zig").pollDmaOnBlank;
 
 pub const width = 240;
 pub const height = 160;

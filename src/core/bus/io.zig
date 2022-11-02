@@ -453,8 +453,6 @@ const u8WriteKind = enum { Hi, Lo };
 
 /// Write-only
 pub const WinH = extern union {
-    const Self = @This();
-
     x2: Bitfield(u16, 0, 8),
     x1: Bitfield(u16, 8, 8),
     raw: u16,
@@ -467,13 +465,6 @@ pub const WinV = extern union {
     y2: Bitfield(u16, 0, 8),
     y1: Bitfield(u16, 8, 8),
     raw: u16,
-
-    pub fn set(self: *Self, comptime K: u8WriteKind, value: u8) void {
-        self.raw = switch (K) {
-            .Hi => (@as(u16, value) << 8) | self.raw & 0xFF,
-            .Lo => (self.raw & 0xFF00) | value,
-        };
-    }
 };
 
 pub const WinIn = extern union {
