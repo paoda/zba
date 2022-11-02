@@ -88,8 +88,8 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
 
     // Internal Display Memory behavious unusually on 8-bit reads
     // so we have two different tables depending on whether there's an 8-bit read or not
-    fillWriteTable(u8, self, left_write);
-    fillWriteTable(u32, self, right_write);
+    fillWriteTable(u32, self, left_write);
+    fillWriteTable(u8, self, right_write);
 }
 
 pub fn deinit(self: *Self) void {
@@ -379,7 +379,7 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
     if (page > table_len) return;
 
-    if (self.write_tables[@boolToInt(T == u32)][page]) |some_ptr| {
+    if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
         const Ptr = [*]T;
         const alignment = @alignOf(std.meta.Child(Ptr));
