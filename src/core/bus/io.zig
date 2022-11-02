@@ -317,14 +317,23 @@ pub const DisplayControl = extern union {
 
 /// Read / Write
 pub const DisplayStatus = extern union {
+    /// read-only
     vblank: Bit(u16, 0),
+    /// read-only
     hblank: Bit(u16, 1),
+    // read-only
     coincidence: Bit(u16, 2),
     vblank_irq: Bit(u16, 3),
     hblank_irq: Bit(u16, 4),
     vcount_irq: Bit(u16, 5),
     vcount_trigger: Bitfield(u16, 8, 8),
     raw: u16,
+
+    pub fn set(self: *DisplayStatus, value: u16) void {
+        const mask: u16 = 0x00C7; // set bits are read-only
+
+        self.raw = (self.raw & mask) | (value & ~mask);
+    }
 };
 
 /// Read Only

@@ -94,7 +94,7 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
         u32 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw = @truncate(u16, value),
             0x04 => {
-                ppu.dispstat.raw = @truncate(u16, value);
+                ppu.dispstat.set(@truncate(u16, value));
                 ppu.vcount.raw = @truncate(u16, value >> 16);
             },
             0x08 => ppu.setAdjCnts(0, value),
@@ -130,7 +130,7 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
         u16 => switch (byte_addr) {
             0x00 => ppu.dispcnt.raw = value,
             0x02 => {}, // Green Swap
-            0x04 => ppu.dispstat.raw = value,
+            0x04 => ppu.dispstat.set(value),
             0x06 => {}, // VCOUNT
 
             0x08 => ppu.bg[0].cnt.raw = value,
@@ -178,7 +178,7 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
         u8 => switch (byte_addr) {
             0x00, 0x01 => ppu.dispcnt.raw = setHalf(u16, ppu.dispcnt.raw, byte_addr, value),
             0x02, 0x03 => {}, // Green Swap
-            0x04, 0x05 => ppu.dispstat.raw = setHalf(u16, ppu.dispstat.raw, byte_addr, value),
+            0x04, 0x05 => ppu.dispstat.set(setHalf(u16, ppu.dispstat.raw, byte_addr, value)),
             0x06, 0x07 => {}, // VCOUNT
 
             // BGXCNT
