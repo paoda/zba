@@ -32,7 +32,7 @@ pub const Io = struct {
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
             .keyinput = .{ .raw = 0x03FF },
-            .waitcnt = .{ .raw = 0x0000_0000 },
+            .waitcnt = .{ .raw = 0x0000_0000 }, // Bit 15 == 0 for GBA
             .postflg = .FirstBoot,
             .haltcnt = .Execute,
         };
@@ -192,7 +192,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
-            0x0400_0204 => bus.io.waitcnt.raw = @truncate(u16, value),
+            0x0400_0204 => bus.io.waitcnt.set(@truncate(u16, value)),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0300 => {
                 bus.io.postflg = @intToEnum(PostFlag, value & 1);
@@ -237,7 +237,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Interrupts
             0x0400_0200 => bus.io.ie.raw = value,
             0x0400_0202 => bus.io.irq.raw &= ~value,
-            0x0400_0204 => bus.io.waitcnt.raw = value,
+            0x0400_0204 => bus.io.waitcnt.set(value),
             0x0400_0206 => {},
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_020A => {},
@@ -272,7 +272,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0200, 0x0400_0201 => bus.io.ie.raw = setHalf(u16, bus.io.ie.raw, @truncate(u8, address), value),
             0x0400_0202 => bus.io.irq.raw &= ~@as(u16, value),
             0x0400_0203 => bus.io.irq.raw &= ~@as(u16, value) << 8, // TODO: Is this good?
-            0x0400_0204, 0x0400_0205 => bus.io.waitcnt.raw = setHalf(u16, @truncate(u16, bus.io.waitcnt.raw), @truncate(u8, address), value),
+            0x0400_0204, 0x0400_0205 => bus.io.waitcnt.set(setHalf(u16, @truncate(u16, bus.io.waitcnt.raw), @truncate(u8, address), value)),
             0x0400_0206, 0x0400_0207 => {},
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0209 => {},
@@ -331,7 +331,6 @@ pub const DisplayStatus = extern union {
 
     pub fn set(self: *DisplayStatus, value: u16) void {
         const mask: u16 = 0x00C7; // set bits are read-only
-
         self.raw = (self.raw & mask) | (value & ~mask);
     }
 };
@@ -639,4 +638,9 @@ pub const WaitControl = extern union {
     prefetch_enable: Bit(u16, 14),
     pak_kind: Bit(u16, 15),
     raw: u16,
+
+    pub fn set(self: *WaitControl, value: u16) void {
+        const mask: u16 = 0x8000; // set bits are read-only
+        self.raw = (self.raw & mask) | (value & ~mask);
+    }
 };
