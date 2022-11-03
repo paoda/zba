@@ -573,7 +573,7 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x0 => {
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -588,7 +588,7 @@ pub const Ppu = struct {
                 self.drawTextMode(framebuf_base);
             },
             0x1 => {
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -602,7 +602,7 @@ pub const Ppu = struct {
                 self.drawTextMode(framebuf_base);
             },
             0x2 => {
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -666,12 +666,15 @@ pub const Ppu = struct {
         // Copy Drawn Scanline to Frame Buffer
         // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
 
+        // FIXME: @ptrCast between slices changing the length isn't implemented yet
+        const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
+
         for (self.scanline.top()) |maybe_px, i| {
             const maybe_top = maybe_px;
             const maybe_btm = self.scanline.btm()[i];
 
             const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-            std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+            framebuf[framebuf_base + i] = rgba888(bgr555);
         }
 
         // Reset Current Scanline Pixel Buffer and list of fetched sprites
