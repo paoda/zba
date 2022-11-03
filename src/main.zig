@@ -26,33 +26,44 @@ const params = clap.parseParamsComptime(
     \\
 );
 
-pub fn main() anyerror!void {
+pub fn main() void {
     // Main Allocator for ZBA
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(!gpa.deinit());
 
     const allocator = gpa.allocator();
 
-    // Determine the Data Directory (stores saves, config file, etc.)
+    // Determine the Data Directory (stores saves)
     const data_path = blk: {
         const result = known_folders.getPath(allocator, .data);
-        const option = result catch |e| exitln("interrupted while attempting to find a data directory: {}", .{e});
-        const path = option orelse exitln("no valid data directory could be found", .{});
-        ensureDirectoriesExist(path) catch |e| exitln("failed to create directories under \"{s}\": {}", .{ path, e });
+        const option = result catch |e| exitln("interrupted while determining the data folder: {}", .{e});
+        const path = option orelse exitln("no valid data folder found", .{});
+        ensureDataDirsExist(path) catch |e| exitln("failed to create folders under \"{s}\": {}", .{ path, e });
 
         break :blk path;
     };
     defer allocator.free(data_path);
+
+    // Determine the Config Directory
+    const config_path = blk: {
+        const result = known_folders.getPath(allocator, .roaming_configuration);
+        const option = result catch |e| exitln("interreupted while determining the config folder: {}", .{e});
+        const path = option orelse exitln("no valid config folder found", .{});
+        ensureConfigDirExists(path) catch |e| exitln("failed to create required folder \"{s}\": {}", .{ path, e });
+
+        break :blk path;
+    };
+    defer allocator.free(config_path);
 
     // Parse CLI
     const result = clap.parse(clap.Help, &params, clap.parsers.default, .{}) catch |e| exitln("failed to parse cli: {}", .{e});
     defer result.deinit();
 
     // TODO: Move config file to XDG Config directory?
-    const config_path = configFilePath(allocator, data_path) catch |e| exitln("failed to determine the config file path for ZBA: {}", .{e});
-    defer allocator.free(config_path);
+    const cfg_file_path = configFilePath(allocator, config_path) catch |e| exitln("failed to ready config file for access: {}", .{e});
+    defer allocator.free(cfg_file_path);
 
-    config.load(allocator, config_path) catch |e| exitln("failed to read config file: {}", .{e});
+    config.load(allocator, cfg_file_path) catch |e| exitln("failed to load config file: {}", .{e});
 
     const paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
     defer if (paths.save) |path| allocator.free(path);
@@ -99,8 +110,8 @@ pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *con
     };
 }
 
-fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
-    const path = try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "config.toml" });
+fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
+    const path = try std.fs.path.join(allocator, &[_][]const u8{ config_path, "zba", "config.toml" });
     errdefer allocator.free(path);
 
     // We try to create the file exclusively, meaning that we err out if the file already exists.
@@ -109,7 +120,7 @@ fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
     std.fs.accessAbsolute(path, .{}) catch |e| {
         if (e != error.FileNotFound) return e;
 
-        const config_file = try std.fs.createFileAbsolute(path, .{});
+        const config_file = std.fs.createFileAbsolute(path, .{}) catch |err| exitln("failed to create \"{s}\": {}", .{ path, err });
         defer config_file.close();
 
         try config_file.writeAll(@embedFile("../example.toml"));
@@ -118,15 +129,19 @@ fn configFilePath(allocator: Allocator, data_path: []const u8) ![]const u8 {
     return path;
 }
 
-fn ensureDirectoriesExist(data_path: []const u8) !void {
+fn ensureDataDirsExist(data_path: []const u8) !void {
     var dir = try std.fs.openDirAbsolute(data_path, .{});
     defer dir.close();
 
-    // We want to make sure: %APPDATA%/zba and %APPDATA%/zba/save exist
-    // (~/.local/share/zba/save for linux, ??? for macOS)
-
     // Will recursively create directories
     try dir.makePath("zba" ++ std.fs.path.sep_str ++ "save");
+}
+
+fn ensureConfigDirExists(config_path: []const u8) !void {
+    var dir = try std.fs.openDirAbsolute(config_path, .{});
+    defer dir.close();
+
+    try dir.makePath("zba");
 }
 
 fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {

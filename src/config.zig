@@ -49,11 +49,11 @@ pub fn config() *const Config {
 }
 
 /// Reads a config file and then loads it into the global state
-pub fn load(allocator: Allocator, config_path: []const u8) !void {
-    var config_file = try std.fs.cwd().openFile(config_path, .{});
+pub fn load(allocator: Allocator, file_path: []const u8) !void {
+    var config_file = try std.fs.cwd().openFile(file_path, .{});
     defer config_file.close();
 
-    log.info("loaded from {s}", .{config_path});
+    log.info("loaded from {s}", .{file_path});
 
     const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
     defer allocator.free(contents);
