@@ -42,6 +42,6 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn backdrop(self: *const Self) u16 {
-    return self.read(u16, 0);
+pub inline fn backdrop(self: *const Self) u16 {
+    return std.mem.readIntNative(u16, self.buf[0..2]);
 }

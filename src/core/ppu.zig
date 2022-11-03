@@ -615,24 +615,29 @@ pub const Ppu = struct {
                 self.drawTextMode(framebuf_base);
             },
             0x3 => {
-                const vram_base = width * @sizeOf(u16) * @as(usize, scanline);
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
+                const vram_base = width * @as(usize, scanline);
+                const framebuf_base = width * @as(usize, scanline);
 
-                var i: usize = 0;
-                while (i < width) : (i += 1) {
-                    const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                // FIXME: @ptrCast between slices changing the length isn't implemented yet
+                const vram_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.vram.buf));
+                const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
+
+                for (vram_buf[vram_base .. vram_base + width]) |bgr555, i| {
+                    framebuf[framebuf_base + i] = rgba888(bgr555);
                 }
             },
             0x4 => {
                 const sel = self.dispcnt.frame_select.read();
-                const vram_base = width * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
 
-                // Render Current Scanline
-                for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
-                    const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                const vram_base = width * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
+                const framebuf_base = width * @as(usize, scanline);
+
+                // FIXME: @ptrCast between slices changing the length isn't implemented yet
+                const pal_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.palette.buf));
+                const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
+
+                for (self.vram.buf[vram_base .. vram_base + width]) |pal_id, i| {
+                    framebuf[framebuf_base + i] = rgba888(pal_buf[pal_id]);
                 }
             },
             0x5 => {
@@ -640,16 +645,17 @@ pub const Ppu = struct {
                 const m5_height = 128;
 
                 const sel = self.dispcnt.frame_select.read();
-                const vram_base = m5_width * @sizeOf(u16) * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
-                const framebuf_base = framebuf_pitch * @as(usize, scanline);
+                const vram_base = m5_width * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
+                const framebuf_base = width * @as(usize, scanline);
+
+                // FIXME: @ptrCast between slices changing the length isn't implemented yet
+                const vram_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.vram.buf));
+                const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
-                    // If we're outside of the bounds of mode 5, draw the background colour
-                    const bgr555 =
-                        if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.backdrop();
-
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                    const bgr555 = if (scanline < m5_height and i < m5_width) vram_buf[vram_base + i] else self.palette.backdrop();
+                    framebuf[framebuf_base + i] = rgba888(bgr555);
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
