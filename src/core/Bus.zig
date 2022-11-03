@@ -102,7 +102,7 @@ pub fn deinit(self: *Self) void {
     // This is so I can deallocate the original `allocator.alloc`. I have to re-make the type
     // since I'm not keeping it around, This is very jank and bad though
     // FIXME: please figure out another way
-    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.write_tables[0][0..])[0 .. 3 * table_len]);
+    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.read_table[0..])[0 .. 3 * table_len]);
     self.* = undefined;
 }
 
