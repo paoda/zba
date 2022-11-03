@@ -962,22 +962,33 @@ const Window = struct {
     }
 
     fn inRange(self: *const Self, comptime id: u1, x: u9, y: u8) bool {
-        const h = self.h[id];
-        const v = self.v[id];
+        const winh = self.h[id];
+        const winv = self.v[id];
 
-        const y1 = v.y1.read();
-        const y2 = if (y1 > v.y2.read()) 160 else std.math.min(160, v.y2.read());
-
-        if (y1 <= y and y < y2) {
-            // Within Y bounds
-            const x1 = h.x1.read();
-            const x2 = if (x1 > h.x2.read()) 240 else std.math.min(240, h.x2.read());
+        if (isYInRange(winv, y)) {
+            const x1 = winh.x1.read();
+            const x2 = winh.x2.read();
 
             // Within X Bounds
-            return x1 <= x and x < x2;
+            return if (x1 < x2) blk: {
+                break :blk x >= x1 and x < x2;
+            } else blk: {
+                break :blk x >= x1 or x < x2;
+            };
         }
 
         return false;
+    }
+
+    inline fn isYInRange(winv: io.WinV, y: u9) bool {
+        const y1 = winv.y1.read();
+        const y2 = winv.y2.read();
+
+        if (y1 < y2) {
+            return y >= y1 and y < y2;
+        } else {
+            return y >= y1 or y < y2;
+        }
     }
 
     pub fn setH(self: *Self, value: u32) void {
