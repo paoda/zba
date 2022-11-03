@@ -573,7 +573,7 @@ pub const Ppu = struct {
 
         switch (bg_mode) {
             0x0 => {
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -585,23 +585,10 @@ pub const Ppu = struct {
                     if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawBackground(3);
                 }
 
-                // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline.top()) |maybe_px, i| {
-                    const maybe_top = maybe_px;
-                    const maybe_btm = self.scanline.btm()[i];
-
-                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
-                }
-
-                // Reset Current Scanline Pixel Buffer and list of fetched sprites
-                // in prep for next scanline
-                self.scanline.reset();
-                std.mem.set(?Sprite, self.scanline_sprites, null);
+                self.drawTextMode(framebuf_base);
             },
             0x1 => {
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -612,23 +599,10 @@ pub const Ppu = struct {
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
                 }
 
-                // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline.top()) |maybe_px, i| {
-                    const maybe_top = maybe_px;
-                    const maybe_btm = self.scanline.btm()[i];
-
-                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
-                }
-
-                // Reset Current Scanline Pixel Buffer and list of fetched sprites
-                // in prep for next scanline
-                self.scanline.reset();
-                std.mem.set(?Sprite, self.scanline_sprites, null);
+                self.drawTextMode(framebuf_base);
             },
             0x2 => {
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
                 var layer: usize = 0;
@@ -638,40 +612,27 @@ pub const Ppu = struct {
                     if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawAffineBackground(3);
                 }
 
-                // Copy Drawn Scanline to Frame Buffer
-                // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
-                for (self.scanline.top()) |maybe_px, i| {
-                    const maybe_top = maybe_px;
-                    const maybe_btm = self.scanline.btm()[i];
-
-                    const bgr555 = self.getBgr555(maybe_top, maybe_btm);
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
-                }
-
-                // Reset Current Scanline Pixel Buffer and list of fetched sprites
-                // in prep for next scanline
-                self.scanline.reset();
-                std.mem.set(?Sprite, self.scanline_sprites, null);
+                self.drawTextMode(framebuf_base);
             },
             0x3 => {
                 const vram_base = width * @sizeOf(u16) * @as(usize, scanline);
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
 
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
                     const bgr555 = self.vram.read(u16, vram_base + i * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             0x4 => {
                 const sel = self.dispcnt.frame_select.read();
                 const vram_base = width * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
 
                 // Render Current Scanline
                 for (self.vram.buf[vram_base .. vram_base + width]) |byte, i| {
                     const bgr555 = self.palette.read(u16, @as(u16, byte) * @sizeOf(u16));
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             0x5 => {
@@ -680,7 +641,7 @@ pub const Ppu = struct {
 
                 const sel = self.dispcnt.frame_select.read();
                 const vram_base = m5_width * @sizeOf(u16) * @as(usize, scanline) + if (sel) 0xA000 else @as(usize, 0);
-                const fb_base = framebuf_pitch * @as(usize, scanline);
+                const framebuf_base = framebuf_pitch * @as(usize, scanline);
 
                 var i: usize = 0;
                 while (i < width) : (i += 1) {
@@ -688,11 +649,29 @@ pub const Ppu = struct {
                     const bgr555 =
                         if (scanline < m5_height and i < m5_width) self.vram.read(u16, vram_base + i * @sizeOf(u16)) else self.palette.backdrop();
 
-                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[fb_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+                    std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
                 }
             },
             else => std.debug.panic("[PPU] TODO: Implement BG Mode {}", .{bg_mode}),
         }
+    }
+
+    fn drawTextMode(self: *Self, framebuf_base: usize) void {
+        // Copy Drawn Scanline to Frame Buffer
+        // If there are any nulls present in self.scanline.top() it means that no background drew a pixel there, so draw backdrop
+
+        for (self.scanline.top()) |maybe_px, i| {
+            const maybe_top = maybe_px;
+            const maybe_btm = self.scanline.btm()[i];
+
+            const bgr555 = self.getBgr555(maybe_top, maybe_btm);
+            std.mem.writeIntNative(u32, self.framebuf.get(.Emulator)[framebuf_base + i * @sizeOf(u32) ..][0..@sizeOf(u32)], rgba888(bgr555));
+        }
+
+        // Reset Current Scanline Pixel Buffer and list of fetched sprites
+        // in prep for next scanline
+        self.scanline.reset();
+        std.mem.set(?Sprite, self.scanline_sprites, null);
     }
 
     fn getBgr555(self: *Self, maybe_top: ?u16, maybe_btm: ?u16) u16 {
