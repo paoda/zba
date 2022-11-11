@@ -66,57 +66,6 @@ pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
     return result;
 }
 
-/// The Title from the GBA Cartridge is an Uppercase ASCII string which is
-/// null-padded to 12 bytes
-///
-/// This function returns a slice of the ASCII string without the null terminator(s)
-/// (essentially, a proper Zig/Rust/Any modern language String)
-pub fn span(title: *const [12]u8) []const u8 {
-    const end = std.mem.indexOfScalar(u8, title, '\x00');
-    return title[0 .. end orelse title.len];
-}
-
-test "span" {
-    var example: *const [12]u8 = "POKEMON_EMER";
-    try std.testing.expectEqualSlices(u8, "POKEMON_EMER", span(example));
-
-    example = "POKEMON_EME\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMON_EME", span(example));
-
-    example = "POKEMON_EM\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMON_EM", span(example));
-
-    example = "POKEMON_E\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMON_E", span(example));
-
-    example = "POKEMON_\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMON_", span(example));
-
-    example = "POKEMON\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMON", span(example));
-
-    example = "POKEMO\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEMO", span(example));
-
-    example = "POKEM\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKEM", span(example));
-
-    example = "POKE\x00\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POKE", span(example));
-
-    example = "POK\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "POK", span(example));
-
-    example = "PO\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "PO", span(example));
-
-    example = "P\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "P", span(example));
-
-    example = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-    try std.testing.expectEqualSlices(u8, "", span(example));
-}
-
 /// Creates a copy of a title with all Filesystem-invalid characters replaced
 ///
 /// e.g. POKEPIN R/S to POKEPIN R_S

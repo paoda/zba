@@ -6,7 +6,6 @@ const Eeprom = @import("backup/eeprom.zig").Eeprom;
 const Flash = @import("backup/Flash.zig");
 
 const escape = @import("../../util.zig").escape;
-const span = @import("../../util.zig").span;
 
 const Needle = struct { str: []const u8, kind: Backup.Kind };
 const backup_kinds = [6]Needle{
@@ -195,7 +194,7 @@ pub const Backup = struct {
     }
 
     fn saveName(self: *const Self, allocator: Allocator) ![]const u8 {
-        const title_str = span(&escape(self.title));
+        const title_str = std.mem.sliceTo(&escape(self.title), 0);
         const name = if (title_str.len != 0) title_str else "untitled";
 
         return try std.mem.concat(allocator, u8, &[_][]const u8{ name, ".sav" });

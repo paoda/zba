@@ -9,8 +9,6 @@ const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
 
-const span = @import("util.zig").span;
-
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
@@ -73,7 +71,7 @@ pub const Gui = struct {
 
         return Self{
             .window = window,
-            .title = span(title),
+            .title = std.mem.sliceTo(title, 0),
             .ctx = ctx,
             .program_id = program_id,
             .audio = Audio.init(apu),
