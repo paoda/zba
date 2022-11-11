@@ -63,7 +63,7 @@ Finally it's worth noting that ZBA uses a TOML config file it'll store in your O
 
 ## Compiling
 
-Most recently built on Zig [v0.10.0](https://github.com/ziglang/zig/tree/0.10.0)
+Most recently built on Zig [v0.11.0-dev.144+892fb0fc8](https://github.com/ziglang/zig/tree/892fb0fc8)
 
 ### Dependencies
 
