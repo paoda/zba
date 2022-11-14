@@ -311,7 +311,7 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
     self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
 
     // We're doing some serious out-of-bounds open-bus reads
-    if (page > table_len) return self.openBus(T, unaligned_address);
+    if (page >= table_len) return self.openBus(T, unaligned_address);
 
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
@@ -377,7 +377,7 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
 
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
-    if (page > table_len) return;
+    if (page >= table_len) return;
 
     if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
