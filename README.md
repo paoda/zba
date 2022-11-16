@@ -28,31 +28,45 @@ Finally it's worth noting that ZBA uses a TOML config file it'll store in your O
 
 ## Tests
 
-- [x] [jsmolka's GBA Test Collection](https://github.com/jsmolka/gba-tests)
-  - [x] `arm.gba` and `thumb.gba`
-  - [x] `flash64.gba`, `flash128.gba`, `none.gba`, and `sram.gba`
-  - [x] `hello.gba`, `shades.gba`, and `stripes.gba`
-  - [x] `memory.gba`
-  - [x] `bios.gba`
-  - [x] `nes.gba`
-- [ ] [DenSinH's GBA ROMs](https://github.com/DenSinH/GBARoms)
-  - [x] `eeprom-test` and `flash-test`
-  - [x] `midikey2freq`
-  - [ ] `swi-tests-random`
-- [ ] [destoer's GBA Tests](https://github.com/destoer/gba_tests)
-  - [x] `cond_invalid.gba`
-  - [x] `dma_priority.gba`
-  - [x] `hello_world.gba`
-  - [x] `if_ack.gba`
-  - [ ] `line_timing.gba`
-  - [ ] `lyc_midline.gba`
-  - [ ] `window_midframe.gba`
-- [x] [ladystarbreeze's GBA Test Collection](https://github.com/ladystarbreeze/GBA-Test-Collection)
-  - [x] `retAddr.gba`
-  - [x] `helloWorld.gba`
-  - [x] `helloAudio.gba`
-- [x] [`armwrestler-gba-fixed.gba`](https://github.com/destoer/armwrestler-gba-fixed)
-- [x] [FuzzARM](https://github.com/DenSinH/FuzzARM)
+GBA Tests | [jsmolka](https://github.com/jsmolka/)
+--- | ---
+`arm.gba`,  `thumb.gba` | PASS
+`memory.gba`, `bios.gba` | PASS
+`flash64.gba`, `flash128.gba` | PASS
+`sram.gba` | PASS
+`none.gba` | PASS
+`hello.gba`, `shades.gba`, `stripes.gba` | PASS
+`nes.gba` | PASS
+
+GBARoms | [DenSinH](https://github.com/DenSinH/)
+--- | ---
+`eeprom-test`, `flash-test` | PASS
+`midikey2freq` | PASS
+`swi-tests-random` | FAIL
+
+gba_tests | [destoer](https://github.com/destoer/)
+--- | ---
+`cond_invalid.gba` | PASS
+`dma_priority.gba` | PASS
+`hello_world.gba` | PASS
+`if_ack.gba` | PASS
+`line_timing.gba` | FAIL
+`lyc_midline.gba` | FAIL
+`window_midframe.gba` | FAIL
+
+GBA Test Collection | [ladystarbreeze](https://github.com/ladystarbreeze)
+--- | ---
+`retAddr.gba` | PASS
+`helloWorld.gba` | PASS
+`helloAudio.gba` | PASS
+
+FuzzARM | [DenSinH](https://github.com/DenSinH/)
+--- | ---
+`main.gba` | PASS
+
+arm7wrestler GBA Fixed | [destoer](https://github.com/destoer)
+--- | ---
+`armwrestler-gba-fixed.gba` | PASS
 
 ## Resources
 
@@ -67,15 +81,14 @@ Most recently built on Zig [v0.11.0-dev.144+892fb0fc8](https://github.com/ziglan
 
 ### Dependencies
 
-- [SDL.zig](https://github.com/MasterQ32/SDL.zig)
-  - [SDL2](https://www.libsdl.org/download-2.0.php)
-- [zig-clap](https://github.com/Hejsil/zig-clap)
-- [known-folders](https://github.com/ziglibs/known-folders)
-- [zig-toml](https://github.com/aeronavery/zig-toml)
-- [zig-datetime](https://github.com/frmdstryr/zig-datetime)
-- [`bitfields.zig`](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
-
-`bitfields.zig` from [FlorenceOS](https://github.com/FlorenceOS) is included under `lib/util/bitfield.zig`.
+Dependency | Source
+SDL.zig | <https://github.com/MasterQ32/SDL.zig>
+zig-clap | <https://github.com/Hejsil/zig-clap>
+known-folders | <https://github.com/ziglibs/known-folders>
+zig-toml | <https://github.com/aeronavery/zig-toml>
+zig-datetime | <https://github.com/frmdstryr/zig-datetime>
+`bitfields.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
+`gl.zig` | <https://github.com/MasterQ32/zig-opengl>
 
 Use `git submodule update --init` from the project root to pull the git submodules `SDL.zig`, `zig-clap`, `known-folders`, `zig-toml` and `zig-datetime`
 
