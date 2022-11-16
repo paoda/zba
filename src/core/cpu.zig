@@ -7,6 +7,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Logger = @import("../util.zig").Logger;
 
 const File = std.fs.File;
+const log = std.log.scoped(.Arm7Tdmi);
 
 // ARM Instructions
 pub const arm = struct {
@@ -234,8 +235,6 @@ pub const thumb = struct {
     }
 };
 
-const log = std.log.scoped(.Arm7Tdmi);
-
 pub const Arm7tdmi = struct {
     const Self = @This();
 
@@ -246,17 +245,63 @@ pub const Arm7tdmi = struct {
     cpsr: PSR,
     spsr: PSR,
 
-    /// Storage  for R8_fiq -> R12_fiq and their normal counterparts
-    /// e.g [r[0 + 8], fiq_r[0 + 8], r[1 + 8], fiq_r[1 + 8]...]
-    banked_fiq: [2 * 5]u32,
-
-    /// Storage for r13_<mode>, r14_<mode>
-    /// e.g. [r13, r14, r13_svc, r14_svc]
-    banked_r: [2 * 6]u32,
-
-    banked_spsr: [5]PSR,
+    bank: Bank,
 
     logger: ?Logger,
+
+    /// Bank of Registers from other CPU Modes
+    const Bank = struct {
+        /// Storage for r13_<mode>, r14_<mode>
+        /// e.g. [r13, r14, r13_svc, r14_svc]
+        r: [2 * 6]u32,
+
+        /// Storage  for R8_fiq -> R12_fiq and their normal counterparts
+        /// e.g [r[0 + 8], fiq_r[0 + 8], r[1 + 8], fiq_r[1 + 8]...]
+        fiq: [2 * 5]u32,
+
+        spsr: [5]PSR,
+
+        const Kind = enum(u1) {
+            R13 = 0,
+            R14,
+        };
+
+        pub fn create() Bank {
+            return .{
+                .r = [_]u32{0x00} ** 12,
+                .fiq = [_]u32{0x00} ** 10,
+                .spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
+            };
+        }
+
+        inline fn regIdx(mode: Mode, kind: Kind) usize {
+            const idx: usize = switch (mode) {
+                .User, .System => 0,
+                .Supervisor => 1,
+                .Abort => 2,
+                .Undefined => 3,
+                .Irq => 4,
+                .Fiq => 5,
+            };
+
+            return (idx * 2) + if (kind == .R14) @as(usize, 1) else 0;
+        }
+
+        inline fn spsrIdx(mode: Mode) usize {
+            return switch (mode) {
+                .Supervisor => 0,
+                .Abort => 1,
+                .Undefined => 2,
+                .Irq => 3,
+                .Fiq => 4,
+                else => std.debug.panic("[CPU/Mode] {} does not have a SPSR Register", .{mode}),
+            };
+        }
+
+        inline fn fiqIdx(i: usize, mode: Mode) usize {
+            return (i * 2) + if (mode == .Fiq) @as(usize, 1) else 0;
+        }
+    };
 
     pub fn init(sched: *Scheduler, bus: *Bus, log_file: ?std.fs.File) Self {
         return Self{
@@ -266,39 +311,9 @@ pub const Arm7tdmi = struct {
             .bus = bus,
             .cpsr = .{ .raw = 0x0000_001F },
             .spsr = .{ .raw = 0x0000_0000 },
-            .banked_fiq = [_]u32{0x00} ** 10,
-            .banked_r = [_]u32{0x00} ** 12,
-            .banked_spsr = [_]PSR{.{ .raw = 0x0000_0000 }} ** 5,
+            .bank = Bank.create(),
             .logger = if (log_file) |file| Logger.init(file) else null,
         };
-    }
-
-    inline fn bankedIdx(mode: Mode, kind: BankedKind) usize {
-        const idx: usize = switch (mode) {
-            .User, .System => 0,
-            .Supervisor => 1,
-            .Abort => 2,
-            .Undefined => 3,
-            .Irq => 4,
-            .Fiq => 5,
-        };
-
-        return (idx * 2) + if (kind == .R14) @as(usize, 1) else 0;
-    }
-
-    inline fn bankedSpsrIndex(mode: Mode) usize {
-        return switch (mode) {
-            .Supervisor => 0,
-            .Abort => 1,
-            .Undefined => 2,
-            .Irq => 3,
-            .Fiq => 4,
-            else => std.debug.panic("[CPU/Mode] {} does not have a SPSR Register", .{mode}),
-        };
-    }
-
-    inline fn bankedFiqIdx(i: usize, mode: Mode) usize {
-        return (i * 2) + if (mode == .Fiq) @as(usize, 1) else 0;
     }
 
     pub inline fn hasSPSR(self: *const Self) bool {
@@ -336,14 +351,14 @@ pub const Arm7tdmi = struct {
         switch (idx) {
             8...12 => {
                 if (current == .Fiq) {
-                    self.banked_fiq[bankedFiqIdx(idx - 8, .User)] = value;
+                    self.bank.fiq[Bank.fiqIdx(idx - 8, .User)] = value;
                 } else self.r[idx] = value;
             },
             13, 14 => switch (current) {
                 .User, .System => self.r[idx] = value,
                 else => {
-                    const kind = std.meta.intToEnum(BankedKind, idx - 13) catch unreachable;
-                    self.banked_r[bankedIdx(.User, kind)] = value;
+                    const kind = std.meta.intToEnum(Bank.Kind, idx - 13) catch unreachable;
+                    self.bank.r[Bank.regIdx(.User, kind)] = value;
                 },
             },
             else => self.r[idx] = value, // R0 -> R7  and R15
@@ -354,12 +369,12 @@ pub const Arm7tdmi = struct {
         const current = getModeChecked(self, self.cpsr.mode.read());
 
         return switch (idx) {
-            8...12 => if (current == .Fiq) self.banked_fiq[bankedFiqIdx(idx - 8, .User)] else self.r[idx],
+            8...12 => if (current == .Fiq) self.bank.fiq[Bank.fiqIdx(idx - 8, .User)] else self.r[idx],
             13, 14 => switch (current) {
                 .User, .System => self.r[idx],
                 else => blk: {
-                    const kind = std.meta.intToEnum(BankedKind, idx - 13) catch unreachable;
-                    break :blk self.banked_r[bankedIdx(.User, kind)];
+                    const kind = std.meta.intToEnum(Bank.Kind, idx - 13) catch unreachable;
+                    break :blk self.bank.r[Bank.regIdx(.User, kind)];
                 },
             },
             else => self.r[idx], // R0 -> R7  and R15
@@ -372,38 +387,38 @@ pub const Arm7tdmi = struct {
         // Bank R8 -> r12
         var i: usize = 0;
         while (i < 5) : (i += 1) {
-            self.banked_fiq[bankedFiqIdx(i, now)] = self.r[8 + i];
+            self.bank.fiq[Bank.fiqIdx(i, now)] = self.r[8 + i];
         }
 
         // Bank r13, r14, SPSR
         switch (now) {
             .User, .System => {
-                self.banked_r[bankedIdx(now, .R13)] = self.r[13];
-                self.banked_r[bankedIdx(now, .R14)] = self.r[14];
+                self.bank.r[Bank.regIdx(now, .R13)] = self.r[13];
+                self.bank.r[Bank.regIdx(now, .R14)] = self.r[14];
             },
             else => {
-                self.banked_r[bankedIdx(now, .R13)] = self.r[13];
-                self.banked_r[bankedIdx(now, .R14)] = self.r[14];
-                self.banked_spsr[bankedSpsrIndex(now)] = self.spsr;
+                self.bank.r[Bank.regIdx(now, .R13)] = self.r[13];
+                self.bank.r[Bank.regIdx(now, .R14)] = self.r[14];
+                self.bank.spsr[Bank.spsrIdx(now)] = self.spsr;
             },
         }
 
         // Grab R8 -> R12
         i = 0;
         while (i < 5) : (i += 1) {
-            self.r[8 + i] = self.banked_fiq[bankedFiqIdx(i, next)];
+            self.r[8 + i] = self.bank.fiq[Bank.fiqIdx(i, next)];
         }
 
         // Grab r13, r14, SPSR
         switch (next) {
             .User, .System => {
-                self.r[13] = self.banked_r[bankedIdx(next, .R13)];
-                self.r[14] = self.banked_r[bankedIdx(next, .R14)];
+                self.r[13] = self.bank.r[Bank.regIdx(next, .R13)];
+                self.r[14] = self.bank.r[Bank.regIdx(next, .R14)];
             },
             else => {
-                self.r[13] = self.banked_r[bankedIdx(next, .R13)];
-                self.r[14] = self.banked_r[bankedIdx(next, .R14)];
-                self.spsr = self.banked_spsr[bankedSpsrIndex(next)];
+                self.r[13] = self.bank.r[Bank.regIdx(next, .R13)];
+                self.r[14] = self.bank.r[Bank.regIdx(next, .R14)];
+                self.spsr = self.bank.spsr[Bank.spsrIdx(next)];
             },
         }
 
@@ -424,8 +439,8 @@ pub const Arm7tdmi = struct {
         self.r[13] = 0x0300_7F00;
         self.r[15] = 0x0800_0000;
 
-        self.banked_r[bankedIdx(.Irq, .R13)] = 0x0300_7FA0;
-        self.banked_r[bankedIdx(.Supervisor, .R13)] = 0x0300_7FE0;
+        self.bank.r[Bank.regIdx(.Irq, .R13)] = 0x0300_7FA0;
+        self.bank.r[Bank.regIdx(.Supervisor, .R13)] = 0x0300_7FE0;
 
         // self.cpsr.raw = 0x6000001F;
         self.cpsr.raw = 0x0000_001F;
@@ -515,10 +530,10 @@ pub const Arm7tdmi = struct {
             std.debug.print("R{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\tR{}: 0x{X:0>8}\n", .{ i, self.r[i], i_1, self.r[i_1], i_2, self.r[i_2], i_3, self.r[i_3] });
         }
         std.debug.print("cpsr: 0x{X:0>8} ", .{self.cpsr.raw});
-        prettyPrintPsr(&self.cpsr);
+        self.cpsr.toString();
 
         std.debug.print("spsr: 0x{X:0>8} ", .{self.spsr.raw});
-        prettyPrintPsr(&self.spsr);
+        self.spsr.toString();
 
         std.debug.print("pipeline: {??X:0>8}\n", .{self.pipe.stage});
 
@@ -535,76 +550,6 @@ pub const Arm7tdmi = struct {
         std.debug.print("tick: {}\n\n", .{self.sched.tick});
 
         std.debug.panic(format, args);
-    }
-
-    fn prettyPrintPsr(psr: *const PSR) void {
-        std.debug.print("[", .{});
-
-        if (psr.n.read()) std.debug.print("N", .{}) else std.debug.print("-", .{});
-        if (psr.z.read()) std.debug.print("Z", .{}) else std.debug.print("-", .{});
-        if (psr.c.read()) std.debug.print("C", .{}) else std.debug.print("-", .{});
-        if (psr.v.read()) std.debug.print("V", .{}) else std.debug.print("-", .{});
-        if (psr.i.read()) std.debug.print("I", .{}) else std.debug.print("-", .{});
-        if (psr.f.read()) std.debug.print("F", .{}) else std.debug.print("-", .{});
-        if (psr.t.read()) std.debug.print("T", .{}) else std.debug.print("-", .{});
-        std.debug.print("|", .{});
-        if (getMode(psr.mode.read())) |mode| std.debug.print("{s}", .{modeString(mode)}) else std.debug.print("---", .{});
-
-        std.debug.print("]\n", .{});
-    }
-
-    fn modeString(mode: Mode) []const u8 {
-        return switch (mode) {
-            .User => "usr",
-            .Fiq => "fiq",
-            .Irq => "irq",
-            .Supervisor => "svc",
-            .Abort => "abt",
-            .Undefined => "und",
-            .System => "sys",
-        };
-    }
-
-    fn mgbaLog(self: *const Self, file: *const File, opcode: u32) !void {
-        const thumb_fmt = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>4}:\n";
-        const arm_fmt = "{X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} {X:0>8} cpsr: {X:0>8} | {X:0>8}:\n";
-        var buf: [0x100]u8 = [_]u8{0x00} ** 0x100; // this is larger than it needs to be
-
-        const r0 = self.r[0];
-        const r1 = self.r[1];
-        const r2 = self.r[2];
-        const r3 = self.r[3];
-        const r4 = self.r[4];
-        const r5 = self.r[5];
-        const r6 = self.r[6];
-        const r7 = self.r[7];
-        const r8 = self.r[8];
-        const r9 = self.r[9];
-        const r10 = self.r[10];
-        const r11 = self.r[11];
-        const r12 = self.r[12];
-        const r13 = self.r[13];
-        const r14 = self.r[14];
-        const r15 = self.r[15] -| if (self.cpsr.t.read()) 2 else @as(u32, 4);
-
-        const c_psr = self.cpsr.raw;
-
-        var log_str: []u8 = undefined;
-        if (self.cpsr.t.read()) {
-            if (opcode >> 11 == 0x1E) {
-                // Instruction 1 of a BL Opcode, print in ARM mode
-                const other_half = self.bus.debugRead(u16, self.r[15] - 2);
-                const bl_opcode = @as(u32, opcode) << 16 | other_half;
-
-                log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, bl_opcode });
-            } else {
-                log_str = try std.fmt.bufPrint(&buf, thumb_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, opcode });
-            }
-        } else {
-            log_str = try std.fmt.bufPrint(&buf, arm_fmt, .{ r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, c_psr, opcode });
-        }
-
-        _ = try file.writeAll(log_str);
     }
 };
 
@@ -684,6 +629,22 @@ pub const PSR = extern union {
     z: Bit(u32, 30),
     n: Bit(u32, 31),
     raw: u32,
+
+    fn toString(self: PSR) void {
+        std.debug.print("[", .{});
+
+        if (self.n.read()) std.debug.print("N", .{}) else std.debug.print("-", .{});
+        if (self.z.read()) std.debug.print("Z", .{}) else std.debug.print("-", .{});
+        if (self.c.read()) std.debug.print("C", .{}) else std.debug.print("-", .{});
+        if (self.v.read()) std.debug.print("V", .{}) else std.debug.print("-", .{});
+        if (self.i.read()) std.debug.print("I", .{}) else std.debug.print("-", .{});
+        if (self.f.read()) std.debug.print("F", .{}) else std.debug.print("-", .{});
+        if (self.t.read()) std.debug.print("T", .{}) else std.debug.print("-", .{});
+        std.debug.print("|", .{});
+        if (getMode(self.mode.read())) |m| std.debug.print("{s}", .{m.toString()}) else std.debug.print("---", .{});
+
+        std.debug.print("]\n", .{});
+    }
 };
 
 const Mode = enum(u5) {
@@ -694,11 +655,18 @@ const Mode = enum(u5) {
     Abort = 0b10111,
     Undefined = 0b11011,
     System = 0b11111,
-};
 
-const BankedKind = enum(u1) {
-    R13 = 0,
-    R14,
+    fn toString(self: Mode) []const u8 {
+        return switch (self) {
+            .User => "usr",
+            .Fiq => "fiq",
+            .Irq => "irq",
+            .Supervisor => "svc",
+            .Abort => "abt",
+            .Undefined => "und",
+            .System => "sys",
+        };
+    }
 };
 
 fn getMode(bits: u5) ?Mode {
