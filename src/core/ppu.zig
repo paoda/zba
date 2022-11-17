@@ -398,7 +398,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                copyToSpriteBuffer(self.bld.cnt, &self.scanline, x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, x, bgr555);
             }
         }
     }
@@ -448,7 +448,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                copyToSpriteBuffer(self.bld.cnt, &self.scanline, x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, x, bgr555);
             }
         }
     }
@@ -493,10 +493,7 @@ pub const Ppu = struct {
             const tile_addr = char_base + (tile_id * 0x40) + (row * 0x8) + col;
             const pal_id: u16 = self.vram.buf[tile_addr];
 
-            if (pal_id != 0) {
-                const bgr555 = self.palette.read(u16, pal_id * 2);
-                self.copyToBackgroundBuffer(n, win_bounds, i, bgr555);
-            }
+            if (pal_id != 0) self.drawBackgroundPixel(n, i, self.palette.read(u16, pal_id * 2));
         }
 
         // Update BGxX and BGxY
@@ -551,10 +548,7 @@ pub const Ppu = struct {
             // and then we can index the palette
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(entry.pal_bank.read(), col, tile) else tile;
 
-            if (pal_id != 0) {
-                const bgr555 = self.palette.read(u16, pal_id * 2);
-                self.copyToBackgroundBuffer(n, win_bounds, i, bgr555);
-            }
+            if (pal_id != 0) self.drawBackgroundPixel(n, i, self.palette.read(u16, pal_id * 2));
         }
     }
 
@@ -669,8 +663,7 @@ pub const Ppu = struct {
         // FIXME: @ptrCast between slices changing the length isn't implemented yet
         const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
-        for (self.scanline.top()) |maybe_px, i| {
-            const maybe_top = maybe_px;
+        for (self.scanline.top()) |maybe_top, i| {
             const maybe_btm = self.scanline.btm()[i];
 
             const bgr555 = self.getBgr555(maybe_top, maybe_btm);
@@ -683,12 +676,25 @@ pub const Ppu = struct {
         std.mem.set(?Sprite, self.scanline_sprites, null);
     }
 
-    fn getBgr555(self: *Self, maybe_top: ?u16, maybe_btm: ?u16) u16 {
-        if (maybe_btm) |btm| {
-            return switch (self.bld.cnt.mode.read()) {
-                0b00 => if (maybe_top) |top| top else btm,
-                0b01 => if (maybe_top) |top| alphaBlend(btm, top, self.bld.alpha) else btm,
-                0b10 => blk: {
+    fn getBgr555(self: *Self, maybe_top: Scanline.Pixel, maybe_btm: Scanline.Pixel) u16 {
+        return switch (self.bld.cnt.mode.read()) {
+            0b00 => switch (maybe_top) {
+                .set => |top| top,
+                else => self.palette.backdrop(),
+            },
+            0b01 => switch (maybe_top) {
+                .set => |top| switch (maybe_btm) {
+                    .set => |btm| alphaBlend(top, btm, self.bld.alpha), // ALPHA_BLEND
+                    else => top,
+                },
+                else => switch (maybe_btm) {
+                    .set => |btm| btm,
+                    else => self.palette.backdrop(),
+                },
+            },
+            0b10 => switch (maybe_btm) {
+                .set => |btm| blk: {
+                    // BLD_WHITE
                     const evy: u16 = self.bld.y.evy.read();
 
                     const r = btm & 0x1F;
@@ -701,51 +707,87 @@ pub const Ppu = struct {
 
                     break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
                 },
-                0b11 => blk: {
+                else => switch (maybe_top) {
+                    .set => |top| top,
+                    else => self.palette.backdrop(),
+                },
+            },
+            0b11 => switch (maybe_btm) {
+                .set => |btm| blk: {
+                    // BLD_BLACK
                     const evy: u16 = self.bld.y.evy.read();
 
-                    const btm_r = btm & 0x1F;
-                    const btm_g = (btm >> 5) & 0x1F;
-                    const btm_b = (btm >> 10) & 0x1F;
+                    const r = btm & 0x1F;
+                    const g = (btm >> 5) & 0x1F;
+                    const b = (btm >> 10) & 0x1F;
 
-                    const bld_r = btm_r - ((btm_r * evy) >> 4);
-                    const bld_g = btm_g - ((btm_g * evy) >> 4);
-                    const bld_b = btm_b - ((btm_b * evy) >> 4);
+                    const bld_r = r - ((r * evy) >> 4);
+                    const bld_g = g - ((g * evy) >> 4);
+                    const bld_b = b - ((b * evy) >> 4);
 
                     break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
                 },
-            };
-        }
-
-        if (maybe_top) |top| return top;
-        return self.palette.backdrop();
+                else => switch (maybe_top) {
+                    .set => |top| top,
+                    else => self.palette.backdrop(),
+                },
+            },
+        };
     }
 
-    fn copyToBackgroundBuffer(self: *Self, comptime n: u2, bounds: ?WindowBounds, i: usize, bgr555: u16) void {
-        if (self.bld.cnt.mode.read() != 0b00) {
-            // Standard Alpha Blending
-            const a_layers = self.bld.cnt.layer_a.read();
-            const is_blend_enabled = (a_layers >> n) & 1 == 1;
+    fn drawBackgroundPixel(self: *Self, comptime layer: u2, i: usize, bgr555: u16) void {
+        // When writing to the scanline buffer, we want to be aware of a top and bottom layer. Some preconditions were
+        // already determined by shouldDrawBackground, so we should be aware of what we can assume to be true or false
 
-            // If Alpha Blending is enabled and we've found an eligible layer for
-            // Pixel A, store the pixel in the bottom pixel buffer
+        switch (self.bld.cnt.mode.read()) {
+            0b00 => {}, // pass through
+            0b01 => {
+                // We are to alpha blend here so we should pay attention to which layer ths pixel should be written to
+                // FIXME: We redo work here that we've already figured out. Is this worth refactorning?
 
-            const win_part = if (bounds) |win| blk: {
-                // Window Enabled
-                break :blk switch (win) {
-                    .win0 => self.win.in.w0_bld.read(),
-                    .win1 => self.win.in.w1_bld.read(),
-                    .out => self.win.out.out_bld.read(),
-                };
-            } else true;
+                // If the current layer is makred as Layer A, write to top buffer
+                const top_layer = self.bld.cnt.layer_a.read();
+                const is_top_layer = (top_layer >> layer) & 1 == 1;
 
-            if (win_part and is_blend_enabled) {
-                self.scanline.btm()[i] = bgr555;
-                return;
-            }
+                if (is_top_layer) {
+                    self.scanline.top()[i] = Scanline.Pixel.from(bgr555);
+                    return;
+                }
+
+                // If the current layer is marked as Layer B, we want to continue if there's an available space on that buffer
+                const btm_layer = self.bld.cnt.layer_b.read();
+                const is_btm_layer = (btm_layer >> layer) & 1 == 1;
+
+                if (is_btm_layer) {
+                    self.scanline.btm()[i] = Scanline.Pixel.from(bgr555);
+                    return;
+                }
+
+                // The code we're about to fall-through to assumes that alpha blending takes place. In order to withold all invariants
+                // we need to discard anything that might be in the bottom buffer.
+                self.scanline.btm()[i] = .hidden;
+            },
+            0b10, 0b11 => {
+                // BLD_WHITE, BLD_BLACK
+                // Weare to blend with White or black here. By convention we store regular ol' pixels in the top layer, which means that if we want to
+                // treat some pixels (in this case the ones relegated to blending) we need to keep them separate as we can't apply the blending to the top layer.
+
+                // While in these modes, (and since this is a scanline renderer), the bottom layer will be completely unused. While it's a bit unintuitive, since we'll
+                // be moving layer A pixels there, we will repurpose the bottom layer as the "to blend", layer
+
+                // If the current layer is makred as Layer A, write to top buffer
+                const top_layer = self.bld.cnt.layer_a.read();
+                const is_top_layer = (top_layer >> layer) & 1 == 1;
+
+                if (is_top_layer) {
+                    self.scanline.btm()[i] = Scanline.Pixel.from(bgr555); // this is intentional
+                    return;
+                }
+            },
         }
 
-        self.scanline.top()[i] = bgr555;
+        // If we aren't blending here at all, just add the pixel to the top layer
+        self.scanline.top()[i] = Scanline.Pixel.from(bgr555);
     }
 
     const WindowBounds = enum { win0, win1, out };
@@ -763,48 +805,76 @@ pub const Ppu = struct {
         return .out;
     }
 
-    fn shouldDrawBackground(self: *Self, comptime n: u2, bounds: ?WindowBounds, i: usize) bool {
-        // If a pixel has been drawn on the top layer, it's because:
-        // 1. The pixel is to be blended with a pixel on the bottom layer
-        // 2. The pixel is not to be blended at all
-        // Also, if we find a pixel on the top layer we don't need to bother with this I think?
-        if (self.scanline.top()[i] != null) return false;
+    fn shouldDrawBackground(self: *Self, comptime layer: u2, bounds: ?WindowBounds, i: usize) bool {
+        switch (self.bld.cnt.mode.read()) {
+            0b00 => if (self.scanline.top()[i] == .set) return false, // pass through
+            0b01 => blk: {
+                // BLD_ALPHA
 
-        if (bounds) |win| {
-            switch (win) {
-                .win0 => if ((self.win.in.w0_bg.read() >> n) & 1 == 0) return false,
-                .win1 => if ((self.win.in.w1_bg.read() >> n) & 1 == 0) return false,
-                .out => if ((self.win.out.out_bg.read() >> n) & 1 == 0) return false,
+                // If the current layer is marked as Layer B, we want to continue if there's an available space on that buffer
+                const btm_layer = self.bld.cnt.layer_b.read();
+                const is_btm_layer = (btm_layer >> layer) & 1 == 1;
+
+                if (is_btm_layer) {
+                    if (self.scanline.btm()[i] == .set) return false;
+
+                    // In some previous iteration we have determined that an opaque pixel was drawn at this position
+                    // therefore there's no reason to draw anything here
+                    if (self.scanline.btm()[i] == .hidden) return false;
+
+                    // We have a pixel and we know it to be a part of hte bottom layer.
+                    // when getBgr555 sees that thre's a pixel in the top and bottom layer it chooses to blend the two
+                    // Meaning that if we want to prevent Alpha Blending from happening (like for example if a window is preventing it)
+                    // we need to make that happen now.
+
+                    // We can do this by not drawing the bottom pixel, since with alpha blending disabled it wouldn't be visible anyways
+
+                    // if (bounds) |win| {
+                    //     switch (win) {
+                    //         .win0 => if (!self.win.in.w0_bld.read()) return false,
+                    //         .win1 => if (!self.win.in.w1_bld.read()) return false,
+                    //         .out => if (!self.win.out.out_bld.read()) return false,
+                    //     }
+                    // }
+
+                    break :blk;
+                }
+
+                if (self.scanline.top()[i] == .set) return false;
+            },
+            0b10, 0b11 => {
+                // BLD_WHITE and BLD_BLACK
+
+                // we want to treat the bottom layer the same as the top (despite it being repurposed)
+                // so we should apply the same logic to the bottom layer
+
+                if (self.scanline.top()[i] == .set) return false;
+                if (self.scanline.btm()[i] == .set) return false;
+            },
+        }
+
+        // At this point we will have exited early if we determined that we'd be overwriting a pixel
+        // with a higher priority. We can now move own to determining whether the pixel is visible or not
+
+        // The first thing that may or may not affect visibility is windowing. We should check to see if ths pixel is in bounds
+        // of of the background Window if it is enabled
+        // TODO: Do Window Bounds checking here instead of outside this function?
+
+        if (bounds) |window| {
+            // If this parameter is non-null, we know that:
+            // 1. Win0, Win1 or WinObj are enabled
+            // 2. This specific pixel exists within the range of a window
+
+            // Here, we check to see if the Window for this background is enabled. If not, we won't render the pixel
+            // FIXME: We perform needless computations on Window Bounds by checking for enable here after we've already computed this information
+            switch (window) {
+                .win0 => if ((self.win.in.w0_bg.read() >> layer) & 1 == 0) return false,
+                .win1 => if ((self.win.in.w1_bg.read() >> layer) & 1 == 0) return false,
+                .out => if ((self.win.out.out_bg.read() >> layer) & 1 == 0) return false,
             }
         }
 
-        if (self.scanline.btm()[i] != null) {
-            // The pixel found in the bottom layer is:
-            // 1. From a higher priority background
-            // 2. From a background that is marked for blending (Pixel A)
-
-            // If Alpha Blending isn't enabled, then we've already found a higher prio
-            // pixel, we can return early
-            if (self.bld.cnt.mode.read() != 0b01) return false;
-
-            const b_layers = self.bld.cnt.layer_b.read();
-
-            const win_part = if (bounds) |win| blk: {
-                // Window Enabled
-                break :blk switch (win) {
-                    .win0 => self.win.in.w0_bld.read(),
-                    .win1 => self.win.in.w1_bld.read(),
-                    .out => self.win.out.out_bld.read(),
-                };
-            } else true;
-
-            // If the Background is not marked for blending, we've already found
-            // a higher priority pixel, move on.
-
-            const is_blend_enabled = win_part and ((b_layers >> n) & 1 == 1);
-            if (!is_blend_enabled) return false;
-        }
-
+        // Otherwise, return true
         return true;
     }
 
@@ -1287,56 +1357,106 @@ fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
 }
 
 fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
-    if (scanline.top()[x] != null) return false;
+    if (scanline.top()[x] == .set) return false;
 
-    if (scanline.btm()[x] != null) {
-        if (bldcnt.mode.read() != 0b01) return false;
+    switch (bldcnt.mode.read()) {
+        0b00 => if (scanline.top()[x] == .set) return false, // pass through
+        0b01 => {
+            // BLD_ALPHA
 
-        const b_layers = bldcnt.layer_b.read();
-        const is_blend_enabled = (b_layers >> 4) & 1 == 1;
-        if (!is_blend_enabled) return false;
+            // We want to check if we're concerned aout the bottom layer first 
+            // because if so, the top layer already having a pixel is OK
+            const btm_layers = bldcnt.layer_b.read();
+            const is_btm_layer = (btm_layers >> 4) & 1 == 1;
+
+            if (is_btm_layer and scanline.btm()[x] == .set) return false;
+
+            if (scanline.top()[x] == .set) return false;
+        },
+        0b10, 0b11 => {
+            if (scanline.top()[x] == .set) return false;
+            if (scanline.btm()[x] == .set) return false;
+        },
     }
 
     return true;
 }
 
-fn copyToSpriteBuffer(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
-    if (bldcnt.mode.read() != 0b00) {
-        // Alpha Blending
-        const a_layers = bldcnt.layer_a.read();
-        const is_blend_enabled = (a_layers >> 4) & 1 == 1;
+fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
+    switch (bldcnt.mode.read()) {
+        0b00 => {}, // pass through
+        0b01 => {
+            // BLD_ALPHA
+            const top_layers = bldcnt.layer_a.read();
+            const is_top_layer = (top_layers >> 4) & 1 == 1;
 
-        if (is_blend_enabled) {
-            scanline.btm()[x] = bgr555;
-            return;
-        }
+            if (is_top_layer) {
+                scanline.top()[x] = Scanline.Pixel.from(bgr555);
+                return;
+            }
+
+            const btm_layers = bldcnt.layer_b.read();
+            const is_btm_layer = (btm_layers >> 4) & 1 == 1;
+
+            if (is_btm_layer) {
+                scanline.btm()[x] = Scanline.Pixel.from(bgr555);
+                return;
+            }
+
+            // We're rendering a normal pixel that isn't alpha blended
+            // we can mark the pixel on the bottom layer as hidden
+            scanline.btm()[x] = .hidden;
+        },
+
+        0b10, 0b11 => {
+            // This is explained in drawBackgroundPixel, we're reusing the bottom layer to draw layer A pixels we will want to
+            // later blend with WHITE or BLACK
+
+            const top_layers = bldcnt.layer_a.read();
+            const is_top_layer = (top_layers >> 4) & 1 == 1;
+
+            if (is_top_layer) {
+                scanline.btm()[x] = Scanline.Pixel.from(bgr555); // This is intentional
+                return;
+            }
+        },
     }
 
-    scanline.top()[x] = bgr555;
+    scanline.top()[x] = Scanline.Pixel.from(bgr555);
 }
 
 const Scanline = struct {
     const Self = @This();
 
-    layers: [2][]?u16,
-    buf: []?u16,
+    const Pixel = union(enum) {
+        set: u16,
+        unset: void,
+        hidden: void,
+
+        fn from(bgr555: u16) Pixel {
+            return .{ .set = bgr555 };
+        }
+    };
+
+    layers: [2][]Pixel,
+    buf: []Pixel,
 
     allocator: Allocator,
 
     fn init(allocator: Allocator) !Self {
-        const buf = try allocator.alloc(?u16, width * 2); // Top & Bottom Scanline
-        std.mem.set(?u16, buf, null);
+        const buf = try allocator.alloc(Pixel, width * 2); // Top & Bottom Scanline
+        std.mem.set(Pixel, buf, .unset);
 
         return .{
             // Top & Bototm Layers
-            .layers = [_][]?u16{ buf[0..][0..width], buf[width..][0..width] },
+            .layers = [_][]Pixel{ buf[0..][0..width], buf[width..][0..width] },
             .buf = buf,
             .allocator = allocator,
         };
     }
 
     fn reset(self: *Self) void {
-        std.mem.set(?u16, self.buf, null);
+        std.mem.set(Pixel, self.buf, .unset);
     }
 
     fn deinit(self: *Self) void {
@@ -1344,11 +1464,11 @@ const Scanline = struct {
         self.* = undefined;
     }
 
-    fn top(self: *Self) []?u16 {
+    fn top(self: *Self) []Pixel {
         return self.layers[0];
     }
 
-    fn btm(self: *Self) []?u16 {
+    fn btm(self: *Self) []Pixel {
         return self.layers[1];
     }
 };
