@@ -256,11 +256,16 @@ fn DmaController(comptime id: u2) type {
                 cpu.bus.write(u16, dad_addr, @truncate(u16, rotr(u32, self.data_latch, 8 * (dad_addr & 3))));
             }
 
-            switch (sad_adj) {
-                .Increment => self.sad_latch +%= offset,
-                .Decrement => self.sad_latch -%= offset,
-                .IncrementReload => log.err("{} is a prohibited adjustment on SAD", .{sad_adj}),
-                .Fixed => {},
+            switch (@truncate(u8, sad_addr >> 24)) {
+                // according to fleroviux, DMAs with a source address in ROM misbehave
+                // the resultant behaviour is that the source address will increment despite what DMAXCNT says
+                0x08...0x0D => self.sad_latch +%= offset, // obscure behaviour
+                else => switch (sad_adj) {
+                    .Increment => self.sad_latch +%= offset,
+                    .Decrement => self.sad_latch -%= offset,
+                    .IncrementReload => log.err("{} is a prohibited adjustment on SAD", .{sad_adj}),
+                    .Fixed => {},
+                },
             }
 
             switch (dad_adj) {
