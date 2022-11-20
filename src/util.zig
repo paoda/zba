@@ -145,7 +145,7 @@ pub const Logger = struct {
         if (cpu.cpsr.t.read()) {
             if (opcode >> 11 == 0x1E) {
                 // Instruction 1 of a BL Opcode, print in ARM mode
-                const low = cpu.bus.dbgRead(u16, cpu.r[15]);
+                const low = cpu.bus.dbgRead(u16, cpu.r[15] - 2);
                 const bl_opcode = @as(u32, opcode) << 16 | low;
 
                 self.print(arm_fmt, Self.fmtArgs(cpu, bl_opcode)) catch @panic("failed to write to log file");
