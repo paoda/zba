@@ -150,20 +150,35 @@ fn Timer(comptime id: u2) type {
         pub fn setTimcntH(self: *Self, halfword: u16) void {
             const new = TimerControl{ .raw = halfword };
 
-            // If Timer happens to be enabled, It will either be resheduled or disabled
-            self.sched.removeScheduledEvent(.{ .TimerOverflow = id });
+            if (self.cnt.enabled.read()) {
+                // timer was already enabled
 
-            if (self.cnt.enabled.read() and (new.cascade.read() or !new.enabled.read())) {
-                // Either through the cascade bit or the enable bit, the timer has effectively been disabled
-                // The Counter should hold whatever value it should have been at when it was disabled
-                self._counter +%= @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
+                // If enabled falling edge or cascade falling edge, timer is paused
+                if (!new.enabled.read() or (!self.cnt.cascade.read() and new.cascade.read())) {
+                    self.sched.removeScheduledEvent(.{ .TimerOverflow = id });
+
+                    // Counter should hold the value it stopped at meaning we have to calculate it now
+                    self._counter +%= @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
+                }
+
+                // the timer has always been enabled, but the cascade bit which was blocking the timer has been unset
+                if (new.enabled.read() and (self.cnt.cascade.read() and !new.cascade.read())) {
+                    // we want to reschedule the timer event, however we won't reload the counter.
+                    // the invariant here is that self._counter holds the already calculated paused value
+
+                    self.rescheduleTimerExpire(0);
+                }
+            } else {
+                // the timer was previously disabeld
+
+                if (new.enabled.read()) {
+                    // timer should start counting (with a reloaded counter value)
+                    self._counter = self._reload;
+
+                    // if cascade happens to be set, the timer doesn't actually do anything though
+                    if (!new.cascade.read()) self.rescheduleTimerExpire(0);
+                }
             }
-
-            // The counter is only reloaded on the rising edge of the enable bit
-            if (!self.cnt.enabled.read() and new.enabled.read()) self._counter = self._reload;
-
-            // If Timer is enabled and we're not cascading, we need to schedule an overflow event
-            if (new.enabled.read() and !new.cascade.read()) self.rescheduleTimerExpire(0);
 
             self.cnt.raw = halfword;
         }
@@ -202,7 +217,8 @@ fn Timer(comptime id: u2) type {
             }
 
             // Reschedule Timer if we're not cascading
-            if (!self.cnt.cascade.read()) {
+            // TIM0 cascade value is N/A
+            if (id == 0 or !self.cnt.cascade.read()) {
                 self._counter = self._reload;
                 self.rescheduleTimerExpire(late);
             }
