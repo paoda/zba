@@ -40,18 +40,61 @@ pub const Backup = struct {
         None,
     };
 
-    pub fn read(self: *const Self, address: u32) u8 {
+    pub fn read(self: *const Self, address: usize) u8 {
+        const addr = address & 0xFFFF;
+
         switch (self.kind) {
-            .Flash, .Flash1M => return self.flash.read(self.buf, address),
-            .Sram => return self.buf[address & 0x7FFF], // 32K SRAM chip is mirrored
+            .Flash => {
+                switch (addr) {
+                    0x0000 => if (self.flash.id_mode) return 0x32, // Panasonic manufacturer ID
+                    0x0001 => if (self.flash.id_mode) return 0x1B, // Panasonic device ID
+                    else => {},
+                }
+
+                return self.flash.read(self.buf, addr);
+            },
+            .Flash1M => {
+                switch (addr) {
+                    0x0000 => if (self.flash.id_mode) return 0x62, // Sanyo manufacturer ID
+                    0x0001 => if (self.flash.id_mode) return 0x13, // Sanyo device ID
+                    else => {},
+                }
+
+                return self.flash.read(self.buf, addr);
+            },
+            .Sram => return self.buf[addr & 0x7FFF], // 32K SRAM chip is mirrored
             .None, .Eeprom => return 0xFF,
         }
     }
 
-    pub fn write(self: *Self, address: u32, value: u8) void {
+    pub fn write(self: *Self, address: usize, byte: u8) void {
+        const addr = address & 0xFFFF;
+
         switch (self.kind) {
-            .Flash, .Flash1M => self.flash.write(self.buf, address, value),
-            .Sram => self.buf[address & 0x7FFF] = value,
+            .Flash, .Flash1M => {
+                if (self.flash.prep_write) return self.flash.write(self.buf, addr, byte);
+                if (self.flash.shouldEraseSector(addr, byte)) return self.flash.erase(self.buf, addr);
+
+                switch (addr) {
+                    0x0000 => if (self.kind == .Flash1M and self.flash.set_bank) {
+                        self.flash.bank = @truncate(u1, byte);
+                    },
+                    0x5555 => {
+                        if (self.flash.state == .Command) {
+                            self.flash.handleCommand(self.buf, byte);
+                        } else if (byte == 0xAA and self.flash.state == .Ready) {
+                            self.flash.state = .Set;
+                        } else if (byte == 0xF0) {
+                            self.flash.state = .Ready;
+                        }
+                    },
+                    0x2AAA => if (byte == 0x55 and self.flash.state == .Set) {
+                        self.flash.state = .Command;
+                    },
+                    else => {},
+                }
+            },
+            .Sram => self.buf[addr & 0x7FFF] = byte,
             .None, .Eeprom => {},
         }
     }
@@ -75,7 +118,7 @@ pub const Backup = struct {
             .kind = kind,
             .title = title,
             .save_path = path,
-            .flash = try Flash.create(if (kind == .Flash1M) .Flash1M else .Flash),
+            .flash = Flash.create(),
             .eeprom = Eeprom.create(allocator),
         };
 
