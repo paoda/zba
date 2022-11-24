@@ -82,6 +82,7 @@ Most recently built on Zig [v0.11.0-dev.144+892fb0fc8](https://github.com/ziglan
 ### Dependencies
 
 Dependency | Source
+--- | ---
 SDL.zig | <https://github.com/MasterQ32/SDL.zig>
 zig-clap | <https://github.com/Hejsil/zig-clap>
 known-folders | <https://github.com/ziglibs/known-folders>
