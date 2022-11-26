@@ -43,9 +43,12 @@ pub fn init(sched: *Scheduler) Self {
 }
 
 pub fn reset(self: *Self) void {
-    self.duty.raw = 0;
-    self.envelope.raw = 0;
-    self.freq.raw = 0;
+    self.duty.raw = 0; // NR21
+    self.envelope.raw = 0; // NR22
+    self.freq.raw = 0; // NR32, NR24
+
+    self.len_dev.reset();
+    self.env_dev.reset();
 
     self.sample = 0;
     self.enabled = false;

@@ -20,6 +20,11 @@ pub fn init(sched: *Scheduler) Self {
     };
 }
 
+pub fn reset(self: *Self) void {
+    self.timer = 0;
+    self.pos = 0;
+}
+
 /// Scheduler Event Handler for Square Synth Timer Expire
 pub fn onSquareTimerExpire(self: *Self, comptime T: type, nrx34: io.Frequency, late: u64) void {
     comptime std.debug.assert(T == ToneSweep or T == Tone);

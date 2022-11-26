@@ -108,106 +108,121 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
 pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
     const byte_addr = @truncate(u8, addr);
 
+    if (byte_addr <= 0x81 and !apu.cnt.apu_enable.read()) return;
+
     switch (T) {
-        u32 => switch (byte_addr) {
-            0x60 => apu.ch1.setSound1Cnt(value),
-            0x64 => apu.ch1.setSound1CntX(&apu.fs, @truncate(u16, value)),
+        u32 => {
+            // 0x80 and 0x81 handled in setSoundCnt
+            if (byte_addr < 0x80 and !apu.cnt.apu_enable.read()) return;
 
-            0x68 => apu.ch2.setSound2CntL(@truncate(u16, value)),
-            0x6C => apu.ch2.setSound2CntH(&apu.fs, @truncate(u16, value)),
+            switch (byte_addr) {
+                0x60 => apu.ch1.setSound1Cnt(value),
+                0x64 => apu.ch1.setSound1CntX(&apu.fs, @truncate(u16, value)),
 
-            0x70 => apu.ch3.setSound3Cnt(value),
-            0x74 => apu.ch3.setSound3CntX(&apu.fs, @truncate(u16, value)),
+                0x68 => apu.ch2.setSound2CntL(@truncate(u16, value)),
+                0x6C => apu.ch2.setSound2CntH(&apu.fs, @truncate(u16, value)),
 
-            0x78 => apu.ch4.setSound4CntL(@truncate(u16, value)),
-            0x7C => apu.ch4.setSound4CntH(&apu.fs, @truncate(u16, value)),
+                0x70 => apu.ch3.setSound3Cnt(value),
+                0x74 => apu.ch3.setSound3CntX(&apu.fs, @truncate(u16, value)),
 
-            0x80 => apu.setSoundCnt(value),
-            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
-            0x88 => apu.bias.raw = @truncate(u16, value),
-            0x8C => {},
+                0x78 => apu.ch4.setSound4CntL(@truncate(u16, value)),
+                0x7C => apu.ch4.setSound4CntH(&apu.fs, @truncate(u16, value)),
 
-            0x90, 0x94, 0x98, 0x9C => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            0xA0 => apu.chA.push(value), // FIFO_A
-            0xA4 => apu.chB.push(value), // FIFO_B
-            else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
+                0x80 => apu.setSoundCnt(value),
+                0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+                0x88 => apu.bias.raw = @truncate(u16, value),
+                0x8C => {},
+
+                0x90, 0x94, 0x98, 0x9C => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+                0xA0 => apu.chA.push(value), // FIFO_A
+                0xA4 => apu.chB.push(value), // FIFO_B
+                else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
+            }
         },
-        u16 => switch (byte_addr) {
-            0x60 => apu.ch1.setSound1CntL(@truncate(u8, value)), // SOUND1CNT_L
-            0x62 => apu.ch1.setSound1CntH(value),
-            0x64 => apu.ch1.setSound1CntX(&apu.fs, value),
-            0x66 => {},
+        u16 => {
+            if (byte_addr <= 0x81 and !apu.cnt.apu_enable.read()) return;
 
-            0x68 => apu.ch2.setSound2CntL(value),
-            0x6A => {},
-            0x6C => apu.ch2.setSound2CntH(&apu.fs, value),
-            0x6E => {},
+            switch (byte_addr) {
+                0x60 => apu.ch1.setSound1CntL(@truncate(u8, value)), // SOUND1CNT_L
+                0x62 => apu.ch1.setSound1CntH(value),
+                0x64 => apu.ch1.setSound1CntX(&apu.fs, value),
+                0x66 => {},
 
-            0x70 => apu.ch3.setSound3CntL(@truncate(u8, value)),
-            0x72 => apu.ch3.setSound3CntH(value),
-            0x74 => apu.ch3.setSound3CntX(&apu.fs, value),
-            0x76 => {},
+                0x68 => apu.ch2.setSound2CntL(value),
+                0x6A => {},
+                0x6C => apu.ch2.setSound2CntH(&apu.fs, value),
+                0x6E => {},
 
-            0x78 => apu.ch4.setSound4CntL(value),
-            0x7A => {},
-            0x7C => apu.ch4.setSound4CntH(&apu.fs, value),
-            0x7E => {},
+                0x70 => apu.ch3.setSound3CntL(@truncate(u8, value)),
+                0x72 => apu.ch3.setSound3CntH(value),
+                0x74 => apu.ch3.setSound3CntX(&apu.fs, value),
+                0x76 => {},
 
-            0x80 => apu.setSoundCntL(value),
-            0x82 => apu.setSoundCntH(value),
-            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
-            0x86 => {},
-            0x88 => apu.bias.raw = value, // SOUNDBIAS
-            0x8A, 0x8C, 0x8E => {},
+                0x78 => apu.ch4.setSound4CntL(value),
+                0x7A => {},
+                0x7C => apu.ch4.setSound4CntH(&apu.fs, value),
+                0x7E => {},
 
-            0x90, 0x92, 0x94, 0x96, 0x98, 0x9A, 0x9C, 0x9E => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            0xA0, 0xA2 => log.err("Tried to write 0x{X:0>4}{} to FIFO_A", .{ value, T }),
-            0xA4, 0xA6 => log.err("Tried to write 0x{X:0>4}{} to FIFO_B", .{ value, T }),
-            else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
+                0x80 => apu.setSoundCntL(value),
+                0x82 => apu.setSoundCntH(value),
+                0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+                0x86 => {},
+                0x88 => apu.bias.raw = value, // SOUNDBIAS
+                0x8A, 0x8C, 0x8E => {},
+
+                0x90, 0x92, 0x94, 0x96, 0x98, 0x9A, 0x9C, 0x9E => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+                0xA0, 0xA2 => log.err("Tried to write 0x{X:0>4}{} to FIFO_A", .{ value, T }),
+                0xA4, 0xA6 => log.err("Tried to write 0x{X:0>4}{} to FIFO_B", .{ value, T }),
+                else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, addr }),
+            }
         },
-        u8 => switch (byte_addr) {
-            0x60 => apu.ch1.setSound1CntL(value),
-            0x61 => {},
-            0x62 => apu.ch1.setNr11(value),
-            0x63 => apu.ch1.setNr12(value),
-            0x64 => apu.ch1.setNr13(value),
-            0x65 => apu.ch1.setNr14(&apu.fs, value),
-            0x66, 0x67 => {},
+        u8 => {
+            if (byte_addr <= 0x81 and !apu.cnt.apu_enable.read()) return;
 
-            0x68 => apu.ch2.setNr21(value),
-            0x69 => apu.ch2.setNr22(value),
-            0x6A, 0x6B => {},
-            0x6C => apu.ch2.setNr23(value),
-            0x6D => apu.ch2.setNr24(&apu.fs, value),
-            0x6E, 0x6F => {},
+            switch (byte_addr) {
+                0x60 => apu.ch1.setSound1CntL(value),
+                0x61 => {},
+                0x62 => apu.ch1.setNr11(value),
+                0x63 => apu.ch1.setNr12(value),
+                0x64 => apu.ch1.setNr13(value),
+                0x65 => apu.ch1.setNr14(&apu.fs, value),
+                0x66, 0x67 => {},
 
-            0x70 => apu.ch3.setSound3CntL(value), // NR30
-            0x71 => {},
-            0x72 => apu.ch3.setNr31(value),
-            0x73 => apu.ch3.vol.raw = value, // NR32
-            0x74 => apu.ch3.setNr33(value),
-            0x75 => apu.ch3.setNr34(&apu.fs, value),
-            0x76, 0x77 => {},
+                0x68 => apu.ch2.setNr21(value),
+                0x69 => apu.ch2.setNr22(value),
+                0x6A, 0x6B => {},
+                0x6C => apu.ch2.setNr23(value),
+                0x6D => apu.ch2.setNr24(&apu.fs, value),
+                0x6E, 0x6F => {},
 
-            0x78 => apu.ch4.setNr41(value),
-            0x79 => apu.ch4.setNr42(value),
-            0x7A, 0x7B => {},
-            0x7C => apu.ch4.poly.raw = value, // NR 43
-            0x7D => apu.ch4.setNr44(&apu.fs, value),
-            0x7E, 0x7F => {},
+                0x70 => apu.ch3.setSound3CntL(value), // NR30
+                0x71 => {},
+                0x72 => apu.ch3.setNr31(value),
+                0x73 => apu.ch3.vol.raw = value, // NR32
+                0x74 => apu.ch3.setNr33(value),
+                0x75 => apu.ch3.setNr34(&apu.fs, value),
+                0x76, 0x77 => {},
 
-            0x80, 0x81 => apu.setSoundCntL(setHalf(u16, apu.psg_cnt.raw, byte_addr, value)),
-            0x82, 0x83 => apu.setSoundCntH(setHalf(u16, apu.dma_cnt.raw, byte_addr, value)),
-            0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
-            0x85 => {},
-            0x86, 0x87 => {},
-            0x88, 0x89 => apu.bias.raw = setHalf(u16, apu.bias.raw, byte_addr, value), // SOUNDBIAS
-            0x8A...0x8F => {},
+                0x78 => apu.ch4.setNr41(value),
+                0x79 => apu.ch4.setNr42(value),
+                0x7A, 0x7B => {},
+                0x7C => apu.ch4.poly.raw = value, // NR 43
+                0x7D => apu.ch4.setNr44(&apu.fs, value),
+                0x7E, 0x7F => {},
 
-            0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
-            0xA0...0xA3 => log.err("Tried to write 0x{X:0>2}{} to FIFO_A", .{ value, T }),
-            0xA4...0xA7 => log.err("Tried to write 0x{X:0>2}{} to FIFO_B", .{ value, T }),
-            else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+                0x80, 0x81 => apu.setSoundCntL(setHalf(u16, apu.psg_cnt.raw, byte_addr, value)),
+                0x82, 0x83 => apu.setSoundCntH(setHalf(u16, apu.dma_cnt.raw, byte_addr, value)),
+                0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
+                0x85 => {},
+                0x86, 0x87 => {},
+                0x88, 0x89 => apu.bias.raw = setHalf(u16, apu.bias.raw, byte_addr, value), // SOUNDBIAS
+                0x8A...0x8F => {},
+
+                0x90...0x9F => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
+                0xA0...0xA3 => log.err("Tried to write 0x{X:0>2}{} to FIFO_A", .{ value, T }),
+                0xA4...0xA7 => log.err("Tried to write 0x{X:0>2}{} to FIFO_B", .{ value, T }),
+                else => util.io.write.undef(log, "Tried to write 0x{X:0>2}{} to 0x{X:0>8}", .{ value, T, addr }),
+            }
         },
         else => @compileError("APU: Unsupported write width"),
     }
@@ -275,15 +290,20 @@ pub const Apu = struct {
     }
 
     fn reset(self: *Self) void {
+        // All PSG Registers between 0x0400_0060..0x0400_0081 are zeroed
+        // 0x0400_0082 and 0x0400_0088 retain their values
         self.ch1.reset();
         self.ch2.reset();
         self.ch3.reset();
         self.ch4.reset();
+
+        // GBATEK says 4000060h..4000081h I take this to mean inclusive
+        self.psg_cnt.raw = 0x0000;
     }
 
     /// SOUNDCNT
     fn setSoundCnt(self: *Self, value: u32) void {
-        self.setSoundCntL(@truncate(u16, value));
+        if (self.cnt.apu_enable.read()) self.setSoundCntL(@truncate(u16, value));
         self.setSoundCntH(@truncate(u16, value >> 16));
     }
 
@@ -322,11 +342,14 @@ pub const Apu = struct {
             self.fs.step = 0; // Reset Frame Sequencer
 
             // Reset Square Wave Offsets
-            self.ch1.square.pos = 0;
-            self.ch2.square.pos = 0;
+            self.ch1.square.reset();
+            self.ch2.square.reset();
 
-            // Reset Wave Device Offsets
-            self.ch3.wave_dev.offset = 0;
+            // Reset Wave
+            self.ch3.wave_dev.reset();
+
+            // Rest Noise
+            self.ch4.lfsr.reset();
         } else {
             self.reset();
         }
@@ -395,8 +418,8 @@ pub const Apu = struct {
         right += if (self.dma_cnt.chB_right.read()) chB_sample else 0;
 
         // Add SOUNDBIAS
-        // FIXME: Is SOUNDBIAS 9-bit or 10-bit?
-        const bias = @as(i16, self.bias.level.read()) << 1;
+        // FIXME: SOUNDBIAS is 10-bit but The waveform is centered around 0 if I treat it as 11-bit
+        const bias = @as(i16, self.bias.level.read()) << 2;
         left += bias;
         right += bias;
 

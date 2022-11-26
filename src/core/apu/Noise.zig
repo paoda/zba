@@ -49,10 +49,13 @@ pub fn init(sched: *Scheduler) Self {
 }
 
 pub fn reset(self: *Self) void {
-    self.len = 0;
-    self.envelope.raw = 0;
-    self.poly.raw = 0;
-    self.cnt.raw = 0;
+    self.len = 0; // NR41
+    self.envelope.raw = 0; // NR42
+    self.poly.raw = 0; // NR43
+    self.cnt.raw = 0; // NR44
+
+    self.len_dev.reset();
+    self.env_dev.reset();
 
     self.sample = 0;
     self.enabled = false;

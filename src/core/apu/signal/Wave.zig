@@ -38,6 +38,13 @@ pub fn init(sched: *Scheduler) Self {
     };
 }
 
+pub fn reset(self: *Self) void {
+    self.timer = 0;
+    self.offset = 0;
+
+    // sample buffer isn't reset because it's outside of the range of what NR52{7}'s effects
+}
+
 /// Reload internal Wave Timer
 pub fn reload(self: *Self, value: u11) void {
     self.sched.removeScheduledEvent(.{ .ApuChannel = 2 });

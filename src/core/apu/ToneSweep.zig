@@ -50,12 +50,14 @@ pub fn init(sched: *Scheduler) Self {
 }
 
 pub fn reset(self: *Self) void {
-    self.sweep.raw = 0;
-    self.sweep_dev.calc_performed = false;
+    self.sweep.raw = 0; // NR10
+    self.duty.raw = 0; // NR11
+    self.envelope.raw = 0; // NR12
+    self.freq.raw = 0; // NR13, NR14
 
-    self.duty.raw = 0;
-    self.envelope.raw = 0;
-    self.freq.raw = 0;
+    self.len_dev.reset();
+    self.sweep_dev.reset();
+    self.env_dev.reset();
 
     self.sample = 0;
     self.enabled = false;

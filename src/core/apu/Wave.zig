@@ -42,10 +42,13 @@ pub fn init(sched: *Scheduler) Self {
 }
 
 pub fn reset(self: *Self) void {
-    self.select.raw = 0;
-    self.length = 0;
-    self.vol.raw = 0;
-    self.freq.raw = 0;
+    self.select.raw = 0; // NR30
+    self.length = 0; // NR31
+    self.vol.raw = 0; // NR32
+    self.freq.raw = 0; // NR33, NR34
+
+    self.len_dev.reset();
+    self.wave_dev.reset();
 
     self.sample = 0;
     self.enabled = false;

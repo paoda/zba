@@ -19,6 +19,11 @@ pub fn create(sched: *Scheduler) Self {
     };
 }
 
+pub fn reset(self: *Self) void {
+    self.shift = 0;
+    self.timer = 0;
+}
+
 pub fn sample(self: *const Self) i8 {
     return if ((~self.shift & 1) == 1) 1 else -1;
 }

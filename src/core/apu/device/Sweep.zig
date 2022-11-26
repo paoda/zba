@@ -18,6 +18,13 @@ pub fn create() Self {
     };
 }
 
+pub fn reset(self: *Self) void {
+    self.timer = 0;
+    self.enabled = false;
+    self.shadow = 0;
+    self.calc_performed = false;
+}
+
 pub fn tick(self: *Self, ch1: *ToneSweep) void {
     if (self.timer != 0) self.timer -= 1;
 

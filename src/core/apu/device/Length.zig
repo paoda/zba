@@ -6,6 +6,10 @@ pub fn create() Self {
     return .{ .timer = 0 };
 }
 
+pub fn reset(self: *Self) void {
+    self.timer = 0;
+}
+
 pub fn tick(self: *Self, enabled: bool, ch_enable: *bool) void {
     if (enabled) {
         if (self.timer == 0) return;
