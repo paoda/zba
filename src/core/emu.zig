@@ -5,6 +5,7 @@ const config = @import("../config.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const FpsTracker = @import("../util.zig").FpsTracker;
+const RingBuffer = @import("../util.zig").RingBuffer;
 
 const Timer = std.time.Timer;
 const Atomic = std.atomic.Atomic;
@@ -58,7 +59,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
 
             while (!quit.load(.Monotonic)) {
                 runFrame(scheduler, cpu);
-                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+                audioSync(audio_sync, &cpu.bus.apu.sample_queue);
 
                 if (kind == .UnlimitedFPS) tracker.?.tick();
             }
@@ -77,7 +78,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
                 // the amount of time needed for audio to catch up rather than
                 // our expected wake-up time
 
-                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+                audioSync(audio_sync, &cpu.bus.apu.sample_queue);
                 if (!audio_sync) spinLoop(&timer, wake_time);
                 wake_time = new_wake_time;
 
@@ -104,22 +105,13 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn audioSync(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
+fn audioSync(audio_sync: bool, sample_queue: *RingBuffer(u16)) void {
     comptime std.debug.assert(@import("../platform.zig").sample_format == SDL.AUDIO_U16);
-    const sample_size = 2 * @sizeOf(u16);
-    const max_buf_size: c_int = 0x400;
+    // const sample_size = 2 * @sizeOf(u16);
+    // const max_buf_size: c_int = 0x400;
 
-    // Determine whether the APU is busy right at this moment
-    var still_full: bool = SDL.SDL_AudioStreamAvailable(stream) > sample_size * if (is_buffer_full.*) max_buf_size >> 1 else max_buf_size;
-    defer is_buffer_full.* = still_full; // Update APU Busy status right before exiting scope
-
-    // If Busy is false, there's no need to sync here
-    if (!still_full) return;
-
-    while (true) {
-        still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
-        if (!audio_sync or !still_full) break;
-    }
+    _ = audio_sync;
+    _ = sample_queue;
 }
 
 fn videoSync(timer: *Timer, wake_time: u64) u64 {

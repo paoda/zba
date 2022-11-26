@@ -12,7 +12,7 @@ const FpsTracker = @import("util.zig").FpsTracker;
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
-pub const sample_rate = 1 << 15;
+pub const sample_rate = 1 << 16;
 pub const sample_format = SDL.AUDIO_U16;
 
 const default_title = "ZBA";
@@ -216,7 +216,7 @@ pub const Gui = struct {
                             SDL.SDLK_RSHIFT => keyinput.select.set(),
                             SDL.SDLK_i => {
                                 comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
-                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))});
+                                log.err("Sample Count: {}", .{cpu.bus.apu.sample_queue.len() / 2});
                             },
                             // SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
                             SDL.SDLK_k => {},
@@ -299,7 +299,15 @@ const Audio = struct {
         const T = *Apu;
         const apu = @ptrCast(T, @alignCast(@alignOf(T), userdata));
 
-        _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+        comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
+        const sample_buf = @ptrCast([*]u16, @alignCast(@alignOf(u16), stream))[0 .. @intCast(u32, len) / @sizeOf(u16)];
+
+        var previous: u16 = 0x8000;
+        for (sample_buf) |*sample| {
+            if (apu.sample_queue.pop()) |value| previous = value;
+
+            sample.* = previous;
+        }
     }
 };
 

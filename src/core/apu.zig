@@ -15,11 +15,9 @@ const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const intToBytes = util.intToBytes;
+const RingBuffer = util.RingBuffer;
 
 const log = std.log.scoped(.APU);
-
-pub const host_rate = @import("../platform.zig").sample_rate;
-pub const host_format = @import("../platform.zig").sample_format;
 
 pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
     const byte_addr = @truncate(u8, addr);
@@ -246,17 +244,20 @@ pub const Apu = struct {
 
     sampling_cycle: u2,
 
-    stream: *SDL.SDL_AudioStream,
+    sample_queue: RingBuffer(u16),
     sched: *Scheduler,
 
     fs: FrameSequencer,
     capacitor: f32,
 
-    is_buffer_full: bool,
-
     pub const Tick = enum { Length, Envelope, Sweep };
 
     pub fn init(sched: *Scheduler) Self {
+        const NUM_CHANNELS: usize = 2;
+
+        const allocator = std.heap.c_allocator;
+        const sample_buf = allocator.alloc(u16, 0x800 * NUM_CHANNELS) catch @panic("failed to allocate sample buffer");
+
         const apu: Self = .{
             .ch1 = ToneSweep.init(sched),
             .ch2 = Tone.init(sched),
@@ -271,12 +272,11 @@ pub const Apu = struct {
             .bias = .{ .raw = 0x0200 },
 
             .sampling_cycle = 0b00,
-            .stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, 1 << 15, host_format, 2, host_rate).?,
+            .sample_queue = RingBuffer(u16).init(sample_buf),
             .sched = sched,
 
             .capacitor = 0,
             .fs = FrameSequencer.init(),
-            .is_buffer_full = false,
         };
 
         sched.push(.SampleAudio, apu.interval());
@@ -370,11 +370,6 @@ pub const Apu = struct {
     pub fn sampleAudio(self: *Self, late: u64) void {
         self.sched.push(.SampleAudio, self.interval() -| late);
 
-        // Whether the APU is busy or not is determined  by the main loop in emu.zig
-        // This should only ever be true (because this side of the emu is single threaded)
-        // When audio sync is disaabled
-        if (self.is_buffer_full) return;
-
         var left: i16 = 0;
         var right: i16 = 0;
 
@@ -430,23 +425,7 @@ pub const Apu = struct {
         const ext_left = (clamped_left << 5) | (clamped_left >> 6);
         const ext_right = (clamped_right << 5) | (clamped_right >> 6);
 
-        if (self.sampling_cycle != self.bias.sampling_cycle.read()) self.replaceSDLResampler();
-
-        _ = SDL.SDL_AudioStreamPut(self.stream, &[2]u16{ ext_left, ext_right }, 2 * @sizeOf(u16));
-    }
-
-    fn replaceSDLResampler(self: *Self) void {
-        @setCold(true);
-        const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
-        log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
-
-        // Sampling Cycle (Sample Rate) changed, Craete a new SDL Audio Resampler
-        // FIXME: Replace SDL's Audio Resampler with either a custom or more reliable one
-        const old_stream = self.stream;
-        defer SDL.SDL_FreeAudioStream(old_stream);
-
-        self.sampling_cycle = self.bias.sampling_cycle.read();
-        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(c_int, sample_rate), host_format, 2, host_rate).?;
+        self.sample_queue.push(ext_left, ext_right) catch {};
     }
 
     fn interval(self: *const Self) u64 {

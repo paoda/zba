@@ -300,26 +300,15 @@ pub fn RingBuffer(comptime T: type) type {
             return .{ .read = 0, .write = 0, .buf = buf, .mutex = .{} };
         }
 
-        pub fn pushPair(self: *Self, left: T, right: T) Error!void {
+        pub fn push(self: *Self, left: T, right: T) Error!void {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            // TODO: Make this less convoluted
-            if (self.len() + 1 >= self.buf.len) return error.buffer_full;
-            defer self.write += 2;
-
-            self.buf[self.write & (self.buf.len - 1)] = left;
-            self.buf[(self.write + 1) & (self.buf.len - 1)] = right;
-        }
-
-        pub fn push(self: *Self, value: T) Error!void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
-
-            if (self.isFull()) return error.buffer_full;
-            defer self.write += 1;
-
-            self.buf[self.write & (self.buf.len - 1)] = value;
+            try self._push(left);
+            self._push(right) catch |e| {
+                self.write -= 1; // undo the previous write;
+                return e;
+            };
         }
 
         pub fn pop(self: *Self) ?T {
@@ -329,7 +318,18 @@ pub fn RingBuffer(comptime T: type) type {
             if (self.isEmpty()) return null;
             defer self.read += 1;
 
-            return self.buf[self.read & (self.buf.len - 1)];
+            return self.buf[self.mask(self.read)];
+        }
+
+        pub fn len(self: *const Self) Index {
+            return self.write - self.read;
+        }
+
+        fn _push(self: *Self, value: T) Error!void {
+            if (self.isFull()) return error.buffer_full;
+            defer self.write += 1;
+
+            self.buf[self.mask(self.write)] = value;
         }
 
         fn isFull(self: *const Self) bool {
@@ -340,8 +340,8 @@ pub fn RingBuffer(comptime T: type) type {
             return self.read == self.write;
         }
 
-        pub fn len(self: *const Self) Index {
-            return self.write - self.read;
+        fn mask(self: *const Self, idx: Index) Index {
+            return idx & (self.buf.len - 1);
         }
     };
 }
