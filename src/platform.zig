@@ -108,7 +108,7 @@ pub const Gui = struct {
     }
 
     // Returns the VAO ID since it's used in run()
-    fn generateBuffers() [3]c_uint {
+    fn generateBuffers() struct { c_uint, c_uint, c_uint } {
         var vao_id: c_uint = undefined;
         var vbo_id: c_uint = undefined;
         var ebo_id: c_uint = undefined;
@@ -158,13 +158,20 @@ pub const Gui = struct {
         var quit = std.atomic.Atomic(bool).init(false);
         var tracker = FpsTracker.init();
 
+        var buffer_ids = Self.generateBuffers();
+        defer {
+            gl.deleteBuffers(1, &buffer_ids[2]); // EBO
+            gl.deleteBuffers(1, &buffer_ids[1]); // VBO
+            gl.deleteVertexArrays(1, &buffer_ids[0]); // VAO
+        }
+
+        const vao_id = buffer_ids[0];
+        _ = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+
         const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
         defer thread.join();
 
         var title_buf: [0x100]u8 = [_]u8{0} ** 0x100;
-
-        const vao_id = Self.generateBuffers()[0];
-        _ = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
 
         emu_loop: while (true) {
             var event: SDL.SDL_Event = undefined;
