@@ -180,54 +180,50 @@ pub const Gui = struct {
                 switch (event.type) {
                     SDL.SDL_QUIT => break :emu_loop,
                     SDL.SDL_KEYDOWN => {
-                        const io = &cpu.bus.io;
                         const key_code = event.key.keysym.sym;
+                        var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
 
                         switch (key_code) {
-                            SDL.SDLK_UP => io.keyinput.up.unset(),
-                            SDL.SDLK_DOWN => io.keyinput.down.unset(),
-                            SDL.SDLK_LEFT => io.keyinput.left.unset(),
-                            SDL.SDLK_RIGHT => io.keyinput.right.unset(),
-                            SDL.SDLK_x => io.keyinput.a.unset(),
-                            SDL.SDLK_z => io.keyinput.b.unset(),
-                            SDL.SDLK_a => io.keyinput.shoulder_l.unset(),
-                            SDL.SDLK_s => io.keyinput.shoulder_r.unset(),
-                            SDL.SDLK_RETURN => io.keyinput.start.unset(),
-                            SDL.SDLK_RSHIFT => io.keyinput.select.unset(),
+                            SDL.SDLK_UP => keyinput.up.unset(),
+                            SDL.SDLK_DOWN => keyinput.down.unset(),
+                            SDL.SDLK_LEFT => keyinput.left.unset(),
+                            SDL.SDLK_RIGHT => keyinput.right.unset(),
+                            SDL.SDLK_x => keyinput.a.unset(),
+                            SDL.SDLK_z => keyinput.b.unset(),
+                            SDL.SDLK_a => keyinput.shoulder_l.unset(),
+                            SDL.SDLK_s => keyinput.shoulder_r.unset(),
+                            SDL.SDLK_RETURN => keyinput.start.unset(),
+                            SDL.SDLK_RSHIFT => keyinput.select.unset(),
                             else => {},
                         }
+
+                        cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_KEYUP => {
-                        const io = &cpu.bus.io;
                         const key_code = event.key.keysym.sym;
+                        var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
 
                         switch (key_code) {
-                            SDL.SDLK_UP => io.keyinput.up.set(),
-                            SDL.SDLK_DOWN => io.keyinput.down.set(),
-                            SDL.SDLK_LEFT => io.keyinput.left.set(),
-                            SDL.SDLK_RIGHT => io.keyinput.right.set(),
-                            SDL.SDLK_x => io.keyinput.a.set(),
-                            SDL.SDLK_z => io.keyinput.b.set(),
-                            SDL.SDLK_a => io.keyinput.shoulder_l.set(),
-                            SDL.SDLK_s => io.keyinput.shoulder_r.set(),
-                            SDL.SDLK_RETURN => io.keyinput.start.set(),
-                            SDL.SDLK_RSHIFT => io.keyinput.select.set(),
+                            SDL.SDLK_UP => keyinput.up.set(),
+                            SDL.SDLK_DOWN => keyinput.down.set(),
+                            SDL.SDLK_LEFT => keyinput.left.set(),
+                            SDL.SDLK_RIGHT => keyinput.right.set(),
+                            SDL.SDLK_x => keyinput.a.set(),
+                            SDL.SDLK_z => keyinput.b.set(),
+                            SDL.SDLK_a => keyinput.shoulder_l.set(),
+                            SDL.SDLK_s => keyinput.shoulder_r.set(),
+                            SDL.SDLK_RETURN => keyinput.start.set(),
+                            SDL.SDLK_RSHIFT => keyinput.select.set(),
                             SDL.SDLK_i => {
                                 comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
                                 log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))});
                             },
-                            SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
-                            SDL.SDLK_k => {
-                                // Dump IWRAM to file
-                                log.info("PC: 0x{X:0>8}", .{cpu.r[15]});
-                                log.info("LR: 0x{X:0>8}", .{cpu.r[14]});
-                                // const iwram_file = try std.fs.cwd().createFile("iwram.bin", .{});
-                                // defer iwram_file.close();
-
-                                // try iwram_file.writeAll(cpu.bus.iwram.buf);
-                            },
+                            // SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
+                            SDL.SDLK_k => {},
                             else => {},
                         }
+
+                        cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
                     },
                     else => {},
                 }

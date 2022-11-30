@@ -24,14 +24,14 @@ pub const Io = struct {
     postflg: PostFlag,
     waitcnt: WaitControl,
     haltcnt: HaltControl,
-    keyinput: KeyInput,
+    keyinput: AtomicKeyInput,
 
     pub fn init() Self {
         return .{
             .ime = false,
             .ie = .{ .raw = 0x0000 },
             .irq = .{ .raw = 0x0000 },
-            .keyinput = .{ .raw = 0x03FF },
+            .keyinput = AtomicKeyInput.init(.{ .raw = 0x03FF }),
             .waitcnt = .{ .raw = 0x0000_0000 }, // Bit 15 == 0 for GBA
             .postflg = .FirstBoot,
             .haltcnt = .Execute,
@@ -92,7 +92,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT", .{T}),
 
             // Keypad Input
-            0x0400_0130 => bus.io.keyinput.raw,
+            0x0400_0130 => bus.io.keyinput.load(.Monotonic).raw,
 
             // Serial Communication 2
             0x0400_0134 => util.io.read.todo(log, "Read {} from RCNT", .{T}),
@@ -374,6 +374,31 @@ const KeyInput = extern union {
     shoulder_r: Bit(u16, 8),
     shoulder_l: Bit(u16, 9),
     raw: u16,
+};
+
+const AtomicKeyInput = struct {
+    const Self = @This();
+    const Ordering = std.atomic.Ordering;
+
+    inner: KeyInput,
+
+    pub fn init(value: KeyInput) Self {
+        return .{ .inner = value };
+    }
+
+    pub inline fn load(self: *const Self, comptime ordering: Ordering) KeyInput {
+        return .{ .raw = switch (ordering) {
+            .AcqRel, .Release => @compileError("not supported for atomic loads"),
+            else => @atomicLoad(u16, &self.inner.raw, ordering),
+        } };
+    }
+
+    pub inline fn store(self: *Self, value: u16, comptime ordering: Ordering) void {
+        switch (ordering) {
+            .AcqRel, .Acquire => @compileError("not supported for atomic stores"),
+            else => @atomicStore(u16, &self.inner.raw, value, ordering),
+        }
+    }
 };
 
 // Read / Write
