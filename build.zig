@@ -1,7 +1,15 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
 
 pub fn build(b: *std.build.Builder) void {
+    // Minimum Zig Version
+    const min_ver = std.SemanticVersion.parse("0.11.0-dev.323+30eb2a175") catch return; // https://github.com/ziglang/zig/commit/30eb2a175
+    if (builtin.zig_version.order(min_ver).compare(.lt)) {
+        std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
+        std.os.exit(1);
+    }
+
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
