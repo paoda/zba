@@ -15,7 +15,7 @@ const gba_height = @import("core/ppu.zig").height;
 pub const sample_rate = 1 << 15;
 pub const sample_format = SDL.AUDIO_U16;
 
-const default_title: []const u8 = "ZBA";
+const default_title = "ZBA";
 
 pub const Gui = struct {
     const Self = @This();
@@ -53,7 +53,7 @@ pub const Gui = struct {
         const win_scale = @intCast(c_int, config.config().host.win_scale);
 
         const window = SDL.SDL_CreateWindow(
-            default_title.ptr,
+            default_title,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
             @as(c_int, width * win_scale),
@@ -171,7 +171,7 @@ pub const Gui = struct {
         const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
         defer thread.join();
 
-        var title_buf: [0x100]u8 = [_]u8{0} ** 0x100;
+        var title_buf: [0x100]u8 = undefined;
 
         emu_loop: while (true) {
             var event: SDL.SDL_Event = undefined;
@@ -241,7 +241,7 @@ pub const Gui = struct {
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
             SDL.SDL_GL_SwapWindow(self.window);
 
-            const dyn_title = std.fmt.bufPrint(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, tracker.value() }) catch unreachable;
+            const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, tracker.value() }) catch unreachable;
             SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
         }
 
