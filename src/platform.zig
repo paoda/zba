@@ -44,7 +44,7 @@ pub const Gui = struct {
 
     program_id: gl.GLuint,
 
-    pub fn init(title: *const [12]u8, apu: *Apu, width: i32, height: i32) Self {
+    pub fn init(title: *const [12]u8, apu: *Apu, width: i32, height: i32) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
@@ -67,7 +67,7 @@ pub const Gui = struct {
         gl.load(ctx, Self.glGetProcAddress) catch @panic("gl.load failed");
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
-        const program_id = compileShaders();
+        const program_id = try compileShaders();
 
         return Self{
             .window = window,
@@ -78,7 +78,7 @@ pub const Gui = struct {
         };
     }
 
-    fn compileShaders() gl.GLuint {
+    fn compileShaders() !gl.GLuint {
         // TODO: Panic on Shader Compiler Failure + Error Message
         const vert_shader = @embedFile("shader/pixelbuf.vert");
         const frag_shader = @embedFile("shader/pixelbuf.frag");
@@ -89,11 +89,15 @@ pub const Gui = struct {
         gl.shaderSource(vs, 1, &[_][*c]const u8{vert_shader}, 0);
         gl.compileShader(vs);
 
+        if (!shader.didCompile(vs)) return error.VertexCompileError;
+
         const fs = gl.createShader(gl.FRAGMENT_SHADER);
         defer gl.deleteShader(fs);
 
         gl.shaderSource(fs, 1, &[_][*c]const u8{frag_shader}, 0);
         gl.compileShader(fs);
+
+        if (!shader.didCompile(fs)) return error.FragmentCompileError;
 
         const program = gl.createProgram();
         gl.attachShader(program, vs);
@@ -293,6 +297,28 @@ const Audio = struct {
         const apu = @ptrCast(T, @alignCast(@alignOf(T), userdata));
 
         _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
+    }
+};
+
+const shader = struct {
+    const Kind = enum { vertex, fragment };
+    const log = std.log.scoped(.Shader);
+
+    fn didCompile(id: gl.GLuint) bool {
+        var success: gl.GLint = undefined;
+        gl.getShaderiv(id, gl.COMPILE_STATUS, &success);
+
+        if (success == 0) err(id);
+
+        return success == 1;
+    }
+
+    fn err(id: gl.GLuint) void {
+        const buf_len = 512;
+        var error_msg: [buf_len]u8 = undefined;
+
+        gl.getShaderInfoLog(id, buf_len, 0, &error_msg);
+        log.err("{s}", .{std.mem.sliceTo(&error_msg, 0)});
     }
 };
 

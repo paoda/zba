@@ -87,7 +87,7 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
-    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height);
+    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
     gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
