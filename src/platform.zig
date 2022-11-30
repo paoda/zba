@@ -64,7 +64,7 @@ pub const Gui = struct {
         const ctx = SDL.SDL_GL_CreateContext(window) orelse panic();
         if (SDL.SDL_GL_MakeCurrent(window, ctx) < 0) panic();
 
-        gl.load(ctx, Self.glGetProcAddress) catch @panic("gl.load failed");
+        try gl.load(ctx, Self.glGetProcAddress);
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
         const program_id = try compileShaders();
@@ -164,9 +164,10 @@ pub const Gui = struct {
             gl.deleteBuffers(1, &buffer_ids[1]); // VBO
             gl.deleteVertexArrays(1, &buffer_ids[0]); // VAO
         }
-
         const vao_id = buffer_ids[0];
-        _ = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+
+        const tex_id = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+        defer gl.deleteTextures(1, &tex_id);
 
         const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
         defer thread.join();
@@ -250,7 +251,6 @@ pub const Gui = struct {
 
     pub fn deinit(self: *Self) void {
         self.audio.deinit();
-        // TODO: Buffer deletions
         gl.deleteProgram(self.program_id);
         SDL.SDL_GL_DeleteContext(self.ctx);
         SDL.SDL_DestroyWindow(self.window);
