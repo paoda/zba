@@ -5,7 +5,7 @@ const DmaControl = @import("io.zig").DmaControl;
 const Bus = @import("../Bus.zig");
 const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
 
-pub const DmaTuple = std.meta.Tuple(&[_]type{ DmaController(0), DmaController(1), DmaController(2), DmaController(3) });
+pub const DmaTuple = struct { DmaController(0), DmaController(1), DmaController(2), DmaController(3) };
 const log = std.log.scoped(.DmaTransfer);
 
 const getHalf = util.getHalf;

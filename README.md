@@ -77,7 +77,7 @@ arm7wrestler GBA Fixed | [destoer](https://github.com/destoer)
 
 ## Compiling
 
-Most recently built on Zig [v0.11.0-dev.144+892fb0fc8](https://github.com/ziglang/zig/tree/892fb0fc8)
+Most recently built on Zig [0.11.0-dev.368+1829b6eab](https://github.com/ziglang/zig/tree/1829b6eab)
 
 ### Dependencies
 

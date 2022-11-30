@@ -181,7 +181,7 @@ pub const Logger = struct {
     }
 };
 
-const FmtArgTuple = std.meta.Tuple(&.{ u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 });
+const FmtArgTuple = struct { u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32 };
 
 pub const audio = struct {
     const _io = @import("core/bus/io.zig");
