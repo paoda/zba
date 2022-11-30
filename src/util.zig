@@ -47,7 +47,7 @@ pub const FpsTracker = struct {
 
     pub fn value(self: *Self) u32 {
         if (self.timer.read() >= std.time.ns_per_s) {
-            self.fps = self.count.swap(0, .SeqCst);
+            self.fps = self.count.swap(0, .Monotonic);
             self.timer.reset();
         }
 

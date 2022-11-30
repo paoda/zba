@@ -246,7 +246,7 @@ pub const Gui = struct {
             SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
         }
 
-        quit.store(true, .SeqCst); // Terminate Emulator Thread
+        quit.store(true, .Monotonic); // Terminate Emulator Thread
     }
 
     pub fn deinit(self: *Self) void {

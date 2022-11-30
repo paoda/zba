@@ -1464,7 +1464,7 @@ const FrameBuffer = struct {
 
     layers: [2][]u8,
     buf: []u8,
-    current: u1,
+    current: std.atomic.Atomic(u8),
 
     allocator: Allocator,
 
@@ -1483,7 +1483,7 @@ const FrameBuffer = struct {
             // Front and Back Framebuffers
             .layers = [_][]u8{ buf[0..][0..framebuf_len], buf[framebuf_len..][0..framebuf_len] },
             .buf = buf,
-            .current = 0,
+            .current = std.atomic.Atomic(u8).init(0),
 
             .allocator = allocator,
         };
@@ -1495,10 +1495,12 @@ const FrameBuffer = struct {
     }
 
     pub fn swap(self: *Self) void {
-        self.current = ~self.current;
+        _ = self.current.fetchXor(1, .Release); // fetchNot(.Release)
     }
 
     pub fn get(self: *Self, comptime dev: Device) []u8 {
-        return self.layers[if (dev == .Emulator) self.current else ~self.current];
+        const current = @intCast(u1, self.current.load(.Acquire));
+
+        return self.layers[if (dev == .Emulator) current else ~current];
     }
 };

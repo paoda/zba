@@ -56,7 +56,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
         .Unlimited, .UnlimitedFPS => {
             log.info("Emulation w/out video sync", .{});
 
-            while (!quit.load(.SeqCst)) {
+            while (!quit.load(.Monotonic)) {
                 runFrame(scheduler, cpu);
                 audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
@@ -68,7 +68,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
             var timer = Timer.start() catch @panic("failed to initalize std.timer.Timer");
             var wake_time: u64 = frame_period;
 
-            while (!quit.load(.SeqCst)) {
+            while (!quit.load(.Monotonic)) {
                 runFrame(scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);
 
