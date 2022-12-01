@@ -58,7 +58,10 @@ pub fn load(allocator: Allocator, file_path: []const u8) !void {
     const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
     defer allocator.free(contents);
 
-    const table = try toml.parseContents(allocator, contents, null);
+    var parser = try toml.parseFile(allocator, file_path);
+    defer parser.deinit();
+
+    const table = try parser.parse();
     defer table.deinit();
 
     // TODO: Report unknown config options
