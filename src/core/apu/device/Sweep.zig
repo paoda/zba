@@ -31,7 +31,6 @@ pub fn tick(self: *Self, ch1: *ToneSweep) void {
     if (self.timer == 0) {
         const period = ch1.sweep.period.read();
         self.timer = if (period == 0) 8 else period;
-        if (!self.calc_performed) self.calc_performed = true;
 
         if (self.enabled and period != 0) {
             const new_freq = self.calculate(ch1.sweep, &ch1.enabled);
@@ -52,7 +51,10 @@ pub fn calculate(self: *Self, sweep: io.Sweep, ch_enable: *bool) u12 {
     const shadow_shifted = shadow >> sweep.shift.read();
     const decrease = sweep.direction.read();
 
-    const freq = if (decrease) shadow - shadow_shifted else shadow + shadow_shifted;
+    const freq = if (decrease) blk: {
+        self.calc_performed = true;
+        break :blk shadow - shadow_shifted;
+    } else shadow + shadow_shifted;
     if (freq > 0x7FF) ch_enable.* = false;
 
     return freq;

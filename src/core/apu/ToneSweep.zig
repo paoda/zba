@@ -94,10 +94,9 @@ pub fn sound1CntL(self: *const Self) u8 {
 pub fn setSound1CntL(self: *Self, value: u8) void {
     const new = io.Sweep{ .raw = value };
 
-    if (self.sweep.direction.read() and !new.direction.read()) {
-        // Sweep Negate bit has been cleared
-        // If At least 1 Sweep Calculation has been made since
-        // the last trigger, the channel is immediately disabled
+    if (!new.direction.read()) {
+        // If at least one (1) sweep calculation has been made with
+        // the negate bit set (since last trigger), disable the channel
 
         if (self.sweep_dev.calc_performed) self.enabled = false;
     }
