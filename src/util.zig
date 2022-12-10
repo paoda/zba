@@ -282,7 +282,9 @@ pub fn RingBuffer(comptime T: type) type {
     return struct {
         const Self = @This();
         const Index = usize;
-        const max_capacity = (std.math.powi(Index, 2, @typeInfo(Index).Int.bits - 1) catch @compileError("uhhhhh")) - 1;
+        const max_capacity = (@as(Index, 1) << @typeInfo(Index).Int.bits - 1) - 1; // half the range of index type
+
+        const log = std.log.scoped(.RingBuffer);
 
         read: Index,
         write: Index,
@@ -294,8 +296,10 @@ pub fn RingBuffer(comptime T: type) type {
         const Error = error{buffer_full};
 
         pub fn init(buf: []T) Self {
+            std.mem.set(T, buf, 0);
+
             std.debug.assert(std.math.isPowerOfTwo(buf.len)); // capacity must be a power of two
-            std.debug.assert(buf.len <= max_capacity); // Capacity must be half the range of the index data types
+            std.debug.assert(buf.len <= max_capacity);
 
             return .{ .read = 0, .write = 0, .buf = buf, .mutex = .{} };
         }
@@ -315,14 +319,14 @@ pub fn RingBuffer(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            if (self.isEmpty()) return null;
-            defer self.read += 1;
-
-            return self.buf[self.mask(self.read)];
+            return self._pop();
         }
 
-        pub fn len(self: *const Self) Index {
-            return self.write - self.read;
+        pub fn len(self: *Self) Index {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self._len();
         }
 
         fn _push(self: *Self, value: T) Error!void {
@@ -332,8 +336,19 @@ pub fn RingBuffer(comptime T: type) type {
             self.buf[self.mask(self.write)] = value;
         }
 
+        fn _pop(self: *Self) ?T {
+            if (self.isEmpty()) return null;
+            defer self.read += 1;
+
+            return self.buf[self.mask(self.read)];
+        }
+
+        fn _len(self: *const Self) Index {
+            return self.write - self.read;
+        }
+
         fn isFull(self: *const Self) bool {
-            return self.len() == self.buf.len;
+            return self._len() == self.buf.len;
         }
 
         fn isEmpty(self: *const Self) bool {
@@ -344,4 +359,26 @@ pub fn RingBuffer(comptime T: type) type {
             return idx & (self.buf.len - 1);
         }
     };
+}
+
+test "RingBuffer" {
+    const Queue = RingBuffer(u8);
+
+    var buf: [4]u8 = undefined;
+    var queue = Queue.init(&buf);
+
+    try queue.push(1, 2);
+    try std.testing.expectEqual(@as(?u8, 1), queue.pop());
+
+    try queue.push(3, 4);
+    try std.testing.expectError(Queue.Error.buffer_full, queue.push(5, 6));
+    try std.testing.expectEqual(@as(?u8, 2), queue.pop());
+
+    try queue.push(7, 8);
+
+    try std.testing.expectEqual(@as(?u8, 3), queue.pop());
+    try std.testing.expectEqual(@as(?u8, 4), queue.pop());
+    try std.testing.expectEqual(@as(?u8, 7), queue.pop());
+    try std.testing.expectEqual(@as(?u8, 8), queue.pop());
+    try std.testing.expectEqual(@as(?u8, null), queue.pop());
 }
