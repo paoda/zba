@@ -22,6 +22,7 @@ const params = clap.parseParamsComptime(
     \\-h, --help            Display this help and exit.
     \\-s, --skip            Skip BIOS.
     \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
+    \\ --gdb                Run ZBA from the context of a GDB Server
     \\<str>                 Path to the GBA GamePak ROM.
     \\
 );
@@ -87,10 +88,37 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
-    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
-    defer gui.deinit();
+    if (result.args.gdb) {
+        const Server = @import("gdbstub").Server;
+        const EmuThing = @import("core/emu.zig").EmuThing;
 
-    gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
+        var emu_thing = EmuThing.init(&cpu, &scheduler);
+        const emulator = emu_thing.interface();
+
+        {
+            const frames_per_second: usize = 60;
+            const emu = @import("core/emu.zig");
+
+            var i: usize = 0;
+            while (i < frames_per_second * 120) : (i += 1) {
+                emu.runFrame(&scheduler, &cpu);
+
+                std.debug.print("Frame {:0>3}/{:0>3}\r", .{ i, frames_per_second * 120 });
+            }
+        }
+
+        log.info("Ready to connect", .{});
+
+        var server = Server.init(emulator) catch |e| exitln("failed to init gdb server: {}", .{e});
+        defer server.deinit(allocator);
+
+        server.run(allocator) catch |e| exitln("gdb server crashed: {}", .{e});
+    } else {
+        var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
+        defer gui.deinit();
+
+        gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
+    }
 }
 
 fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {

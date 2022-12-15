@@ -162,3 +162,59 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
 fn spinLoop(timer: *Timer, wake_time: u64) void {
     while (true) if (timer.read() > wake_time) break;
 }
+
+pub const EmuThing = struct {
+    const Self = @This();
+    const Interface = @import("gdbstub").Emulator;
+
+    cpu: *Arm7tdmi,
+    scheduler: *Scheduler,
+
+    pub fn init(cpu: *Arm7tdmi, scheduler: *Scheduler) Self {
+        return .{ .cpu = cpu, .scheduler = scheduler };
+    }
+
+    pub fn interface(self: *Self) Interface {
+        return Interface.init(self);
+    }
+
+    pub fn read(self: *const Self, addr: u32) u8 {
+        return self.cpu.bus.dbgRead(u8, addr);
+    }
+
+    pub fn write(self: *Self, addr: u32, value: u8) void {
+        _ = value;
+        _ = self;
+        _ = addr;
+
+        std.debug.panic("TODO: Implement Debug Writes?", .{});
+    }
+
+    pub fn registers(self: *const Self) *[16]u32 {
+        return &self.cpu.r;
+    }
+
+    pub fn cpsr(self: *const Self) u32 {
+        return self.cpu.cpsr.raw;
+    }
+
+    pub fn step(self: *Self) void {
+        const cpu = self.cpu;
+        const sched = self.scheduler;
+
+        // TODO: How can I make it easier to keep this in lock-step with runFrame?
+        while (true) {
+            if (!cpu.stepDmaTransfer()) {
+                if (cpu.isHalted()) {
+                    // Fast-forward to next Event
+                    sched.tick = sched.queue.peek().?.tick;
+                } else {
+                    cpu.step();
+                    break; // this function won't return until we've actually stepped once
+                }
+            }
+
+            if (sched.tick >= sched.nextTimestamp()) sched.handleEvent(cpu);
+        }
+    }
+};
