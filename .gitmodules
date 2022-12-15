@@ -13,3 +13,6 @@
 [submodule "lib/zig-toml"]
 	path = lib/zig-toml
 	url = https://github.com/aeronavery/zig-toml
+[submodule "lib/zba-gdbstub"]
+	path = lib/zba-gdbstub
+	url = https://git.musuka.dev/paoda/zba-gdbstub
