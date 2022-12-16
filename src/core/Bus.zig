@@ -197,8 +197,29 @@ fn fillTableExternalMemory(bus: *Self, addr: usize) ?*anyopaque {
     return &bus.pak.buf[masked_addr];
 }
 
-// TODO: Take advantage of fastmem here too?
 pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const page = unaligned_address >> bits;
+    const offset = unaligned_address & (page_size - 1);
+
+    // We're doing some serious out-of-bounds open-bus reads
+    if (page >= table_len) return self.openBus(T, unaligned_address);
+
+    if (self.read_table[page]) |some_ptr| {
+        // We have a pointer to a page, cast the pointer to it's underlying type
+        const Ptr = [*]const T;
+        const alignment = @alignOf(std.meta.Child(Ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+
+        // Note: We don't check array length, since we force align the
+        // lower bits of the address as the GBA would
+        return ptr[forceAlign(T, offset) / @sizeOf(T)];
+    }
+
+    return self.dbgSlowRead(T, unaligned_address);
+}
+
+fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
     const page = @truncate(u8, unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
@@ -210,29 +231,18 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
 
             break :blk self.openBus(T, address);
         },
-        0x02 => self.ewram.read(T, address),
-        0x03 => self.iwram.read(T, address),
+        0x02 => unreachable, // handled by fastmem
+        0x03 => unreachable, // handled by fastmem
         0x04 => self.readIo(T, address),
 
         // Internal Display Memory
-        0x05 => self.ppu.palette.read(T, address),
-        0x06 => self.ppu.vram.read(T, address),
-        0x07 => self.ppu.oam.read(T, address),
+        0x05 => unreachable, // handled by fastmem
+        0x06 => unreachable, // handled by fastmem
+        0x07 => unreachable, // handled by fastmem
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.dbgRead(T, address),
-        0x0E...0x0F => blk: {
-            const value = self.pak.backup.read(unaligned_address);
-
-            const multiplier = switch (T) {
-                u32 => 0x01010101,
-                u16 => 0x0101,
-                u8 => 1,
-                else => @compileError("Backup: Unsupported read width"),
-            };
-
-            break :blk @as(T, value) * multiplier;
-        },
+        0x0E...0x0F => self.readBackup(T, unaligned_address),
         else => self.openBus(T, address),
     };
 }
@@ -352,20 +362,22 @@ fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.read(T, address),
-        0x0E...0x0F => blk: {
-            const value = self.pak.backup.read(unaligned_address);
-
-            const multiplier = switch (T) {
-                u32 => 0x01010101,
-                u16 => 0x0101,
-                u8 => 1,
-                else => @compileError("Backup: Unsupported read width"),
-            };
-
-            break :blk @as(T, value) * multiplier;
-        },
+        0x0E...0x0F => self.readBackup(T, unaligned_address),
         else => self.openBus(T, address),
     };
+}
+
+fn readBackup(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const value = self.pak.backup.read(unaligned_address);
+
+    const multiplier = switch (T) {
+        u32 => 0x01010101,
+        u16 => 0x0101,
+        u8 => 1,
+        else => @compileError("Backup: Unsupported read width"),
+    };
+
+    return @as(T, value) * multiplier;
 }
 
 pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
