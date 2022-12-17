@@ -839,16 +839,22 @@ pub const Ppu = struct {
     const WindowBounds = enum { win0, win1, out };
 
     fn windowBounds(self: *Self, x: u9, y: u8) ?WindowBounds {
-        const win0 = self.dispcnt.win_enable.read() & 1 == 1;
-        const win1 = (self.dispcnt.win_enable.read() >> 1) & 1 == 1;
-        const winObj = self.dispcnt.obj_win_enable.read();
+        _ = y;
+        _ = x;
+        _ = self;
+        // FIXME: Remove to enable PPU Window Emulation
+        return null;
 
-        if (!(win0 or win1 or winObj)) return null;
+        // const win0 = self.dispcnt.win_enable.read() & 1 == 1;
+        // const win1 = (self.dispcnt.win_enable.read() >> 1) & 1 == 1;
+        // const winObj = self.dispcnt.obj_win_enable.read();
 
-        if (win0 and self.win.inRange(0, x, y)) return .win0;
-        if (win1 and self.win.inRange(1, x, y)) return .win1;
+        // if (!(win0 or win1 or winObj)) return null;
 
-        return .out;
+        // if (win0 and self.win.inRange(0, x, y)) return .win0;
+        // if (win1 and self.win.inRange(1, x, y)) return .win1;
+
+        // return .out;
     }
 
     fn shouldDrawBackground(self: *Self, comptime layer: u2, bounds: ?WindowBounds, i: usize) bool {
@@ -1410,7 +1416,7 @@ fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
         0b01 => {
             // BLD_ALPHA
 
-            // We want to check if we're concerned aout the bottom layer first 
+            // We want to check if we're concerned aout the bottom layer first
             // because if so, the top layer already having a pixel is OK
             const btm_layers = bldcnt.layer_b.read();
             const is_btm_layer = (btm_layers >> 4) & 1 == 1;
