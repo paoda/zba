@@ -323,7 +323,15 @@ pub const Ppu = struct {
             // Only consider enabled Sprites
             if (attr0.is_affine.read() or !attr0.disabled.read()) {
                 const attr1 = @bitCast(Attr1, self.oam.read(u16, i + 2));
-                const sprite_height = spriteDimensions(attr0.shape.read(), attr1.size.read())[1];
+                const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
+
+                // Account for double-size affine sprites
+                const sprite_height = d[1] << blk: {
+                    if (!attr0.is_affine.read()) break :blk 0;
+
+                    const aff_attr0: AffineAttr0 = .{ .raw = attr0.raw };
+                    break :blk if (aff_attr0.double_size.read()) 1 else 0;
+                };
 
                 // When fetching sprites we only care about ones that could be rendered
                 // on this scanline
@@ -364,41 +372,79 @@ pub const Ppu = struct {
         const obj_mapping = self.dispcnt.obj_mapping.read();
         const tile_row_offset: u32 = if (is_8bpp) 8 else 4;
         const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
+        const double_size = sprite.attr0.double_size.read();
 
         const char_base = 0x4000 * 4;
-
         const y = self.vcount.scanline.read();
 
+        var sprite_x: i16 = sprite.x();
+        if (sprite_x >= 240) sprite_x -= 512;
+
+        var sprite_y: i16 = sprite.y();
+        if (sprite_y >= 160) sprite_y -= 256;
+
+        const base = 32 * @as(u32, sprite.matrixId());
+        const pa = self.oam.read(u16, base + 3 * @sizeOf(u16));
+        const pb = self.oam.read(u16, base + 7 * @sizeOf(u16));
+        const pc = self.oam.read(u16, base + 11 * @sizeOf(u16));
+        const pd = self.oam.read(u16, base + 15 * @sizeOf(u16));
+
+        const matrix = @bitCast([4]i16, [_]u16{ pa, pb, pc, pd });
+
+        const sprite_width = sprite.width << if (double_size) 1 else 0;
+        const sprite_height = sprite.height << if (double_size) 1 else 0;
+
+        const half_width = sprite_width >> 1;
+        const half_height = sprite_height >> 1;
+
         var i: u9 = 0;
-        while (i < sprite.width) : (i += 1) {
-            const x = (sprite.x() +% i) % width;
+        while (i < sprite_width) : (i += 1) {
+            // TODO: Something is wrong here
+            const x = @truncate(u9, @bitCast(u16, sprite_x + i));
+            if (x >= width) continue;
+
             if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
-            var x_pos: i32 = sprite.x();
-            if (x_pos >= 240) x_pos -= 512;
-
-            if (!(x_pos <= x and x < (x_pos + sprite.width))) continue;
+            // Check to see if sprite pixel is in bounds
+            // TODO: Are any of the checks here redundant?
+            if (!(sprite_x <= x and x < (sprite_x + sprite_width))) continue;
 
             // Sprite is within bounds and therefore should be rendered
-            // std.math.absInt is branchless
-            const tile_x = @bitCast(u32, @as(i32, std.math.absInt(@as(i32, x) - x_pos) catch unreachable));
-            const tile_y = @bitCast(u32, @as(i32, std.math.absInt(@bitCast(i8, y) -% @bitCast(i8, sprite.y())) catch unreachable));
+            const local_x = @as(i16, x) - sprite_x;
+            const local_y = @as(i16, y) - sprite_y;
 
-            const row = @truncate(u3, tile_y);
+            var rot_x = ((matrix[0] *% (local_x - half_width) +% matrix[1] *% (local_y - half_width)) >> 8);
+            var rot_y = ((matrix[2] *% (local_x - half_width) +% matrix[3] *% (local_y - half_width)) >> 8);
+
+            rot_x +%= half_width >> if (double_size) 1 else 0;
+            rot_y +%= half_height >> if (double_size) 1 else 0;
+
+            // Maybe this is the necessary check?
+            if (rot_x >= sprite.width or rot_y >= sprite.height or rot_x < 0 or rot_y < 0) continue;
+
+            const tile_x = @bitCast(u16, rot_x);
+            const tile_y = @bitCast(u16, rot_y);
+
             const col = @truncate(u3, tile_x);
+            const row = @truncate(u3, tile_y);
 
             // TODO: Finish that 2D Sprites Test ROM
             const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
             const mapping_offset = if (obj_mapping) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
             const tile_offset = (tile_x >> 3) * tile_len + (tile_y >> 3) * tile_len * mapping_offset;
 
+            // TODO: This is not the proper check
+            // if (tile_base + tile_offset >= self.vram.buf.len) continue;
+
             const tile = self.vram.buf[tile_base + tile_offset];
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
+
+            const global_x = @truncate(u9, @bitCast(u16, local_x + sprite_x));
 
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                drawSpritePixel(self.bld.cnt, &self.scanline, x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, global_x, bgr555);
             }
         }
     }
