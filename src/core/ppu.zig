@@ -725,21 +725,25 @@ pub const Ppu = struct {
     fn getBgr555(self: *Self, maybe_top: Scanline.Pixel, maybe_btm: Scanline.Pixel) u16 {
         return switch (self.bld.cnt.mode.read()) {
             0b00 => switch (maybe_top) {
-                .set => |top| top,
+                .set, .obj_set => |top| top,
                 else => self.palette.backdrop(),
             },
             0b01 => switch (maybe_top) {
-                .set => |top| switch (maybe_btm) {
-                    .set => |btm| alphaBlend(top, btm, self.bld.alpha), // ALPHA_BLEND
+                .set, .obj_set => |top| switch (maybe_btm) {
+                    .set, .obj_set => |btm| alphaBlend(top, btm, self.bld.alpha), // ALPHA_BLEND
                     else => top,
                 },
                 else => switch (maybe_btm) {
-                    .set => |btm| btm,
+                    .set, .obj_set => |btm| btm,
                     else => self.palette.backdrop(),
                 },
             },
             0b10 => switch (maybe_btm) {
-                .set => |btm| blk: {
+                .set, .obj_set => |btm| blk: {
+                    // If there's a top pixel + this btm pixel came from a sprite
+                    // don't display top pixel + don't blend btm pixel
+                    if (maybe_btm == .obj_set and maybe_top.isSet()) break :blk btm;
+
                     // BLD_WHITE
                     const evy: u16 = self.bld.y.evy.read();
 
@@ -754,12 +758,16 @@ pub const Ppu = struct {
                     break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
                 },
                 else => switch (maybe_top) {
-                    .set => |top| top,
+                    .set, .obj_set => |top| top,
                     else => self.palette.backdrop(),
                 },
             },
             0b11 => switch (maybe_btm) {
-                .set => |btm| blk: {
+                .set, .obj_set => |btm| blk: {
+                    // If there's a top pixel + this btm pixel came from a sprite
+                    // don't display top pixel + don't blend btm pixel
+                    if (maybe_btm == .obj_set and maybe_top.isSet()) break :blk btm;
+
                     // BLD_BLACK
                     const evy: u16 = self.bld.y.evy.read();
 
@@ -774,7 +782,7 @@ pub const Ppu = struct {
                     break :blk (bld_b << 10) | (bld_g << 5) | bld_r;
                 },
                 else => switch (maybe_top) {
-                    .set => |top| top,
+                    .set, .obj_set => |top| top,
                     else => self.palette.backdrop(),
                 },
             },
@@ -796,7 +804,7 @@ pub const Ppu = struct {
                 const is_top_layer = (top_layer >> layer) & 1 == 1;
 
                 if (is_top_layer) {
-                    self.scanline.top()[i] = Scanline.Pixel.from(bgr555);
+                    self.scanline.top()[i] = Scanline.Pixel.from(.Background, bgr555);
                     return;
                 }
 
@@ -805,7 +813,7 @@ pub const Ppu = struct {
                 const is_btm_layer = (btm_layer >> layer) & 1 == 1;
 
                 if (is_btm_layer) {
-                    self.scanline.btm()[i] = Scanline.Pixel.from(bgr555);
+                    self.scanline.btm()[i] = Scanline.Pixel.from(.Background, bgr555);
                     return;
                 }
 
@@ -826,14 +834,14 @@ pub const Ppu = struct {
                 const is_top_layer = (top_layer >> layer) & 1 == 1;
 
                 if (is_top_layer) {
-                    self.scanline.btm()[i] = Scanline.Pixel.from(bgr555); // this is intentional
+                    self.scanline.btm()[i] = Scanline.Pixel.from(.Background, bgr555); // this is intentional
                     return;
                 }
             },
         }
 
         // If we aren't blending here at all, just add the pixel to the top layer
-        self.scanline.top()[i] = Scanline.Pixel.from(bgr555);
+        self.scanline.top()[i] = Scanline.Pixel.from(.Background, bgr555);
     }
 
     const WindowBounds = enum { win0, win1, out };
@@ -859,7 +867,7 @@ pub const Ppu = struct {
 
     fn shouldDrawBackground(self: *Self, comptime layer: u2, bounds: ?WindowBounds, i: usize) bool {
         switch (self.bld.cnt.mode.read()) {
-            0b00 => if (self.scanline.top()[i] == .set) return false, // pass through
+            0b00 => if (self.scanline.top()[i].isSet()) return false, // pass through
             0b01 => blk: {
                 // BLD_ALPHA
 
@@ -868,7 +876,7 @@ pub const Ppu = struct {
                 const is_btm_layer = (btm_layer >> layer) & 1 == 1;
 
                 if (is_btm_layer) {
-                    if (self.scanline.btm()[i] == .set) return false;
+                    if (self.scanline.btm()[i].isSet()) return false;
 
                     // In some previous iteration we have determined that an opaque pixel was drawn at this position
                     // therefore there's no reason to draw anything here
@@ -892,7 +900,7 @@ pub const Ppu = struct {
                     break :blk;
                 }
 
-                if (self.scanline.top()[i] == .set) return false;
+                if (self.scanline.top()[i].isSet()) return false;
             },
             0b10, 0b11 => {
                 // BLD_WHITE and BLD_BLACK
@@ -900,7 +908,9 @@ pub const Ppu = struct {
                 // we want to treat the bottom layer the same as the top (despite it being repurposed)
                 // so we should apply the same logic to the bottom layer
 
-                if (self.scanline.top()[i] == .set) return false;
+                if (self.scanline.top()[i].isSet()) return false;
+
+                // If the bottom pixel comes rom a sprite, draw the pixel anyways
                 if (self.scanline.btm()[i] == .set) return false;
             },
         }
@@ -1409,10 +1419,8 @@ fn alphaBlend(top: u16, btm: u16, bldalpha: io.BldAlpha) u16 {
 }
 
 fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
-    if (scanline.top()[x] == .set) return false;
-
     switch (bldcnt.mode.read()) {
-        0b00 => if (scanline.top()[x] == .set) return false, // pass through
+        0b00 => if (scanline.top()[x].isSet()) return false,
         0b01 => {
             // BLD_ALPHA
 
@@ -1421,13 +1429,13 @@ fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
             const btm_layers = bldcnt.layer_b.read();
             const is_btm_layer = (btm_layers >> 4) & 1 == 1;
 
-            if (is_btm_layer and scanline.btm()[x] == .set) return false;
+            if (is_btm_layer and scanline.btm()[x].isSet()) return false;
 
-            if (scanline.top()[x] == .set) return false;
+            if (scanline.top()[x].isSet()) return false;
         },
         0b10, 0b11 => {
-            if (scanline.top()[x] == .set) return false;
-            if (scanline.btm()[x] == .set) return false;
+            if (scanline.top()[x].isSet()) return false;
+            if (scanline.btm()[x].isSet()) return false;
         },
     }
 
@@ -1443,7 +1451,7 @@ fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) v
             const is_top_layer = (top_layers >> 4) & 1 == 1;
 
             if (is_top_layer) {
-                scanline.top()[x] = Scanline.Pixel.from(bgr555);
+                scanline.top()[x] = Scanline.Pixel.from(.Sprite, bgr555);
                 return;
             }
 
@@ -1451,7 +1459,7 @@ fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) v
             const is_btm_layer = (btm_layers >> 4) & 1 == 1;
 
             if (is_btm_layer) {
-                scanline.btm()[x] = Scanline.Pixel.from(bgr555);
+                scanline.btm()[x] = Scanline.Pixel.from(.Sprite, bgr555);
                 return;
             }
 
@@ -1468,25 +1476,39 @@ fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) v
             const is_top_layer = (top_layers >> 4) & 1 == 1;
 
             if (is_top_layer) {
-                scanline.btm()[x] = Scanline.Pixel.from(bgr555); // This is intentional
+                scanline.btm()[x] = Scanline.Pixel.from(.Sprite, bgr555); // This is intentional
                 return;
             }
         },
     }
 
-    scanline.top()[x] = Scanline.Pixel.from(bgr555);
+    scanline.top()[x] = Scanline.Pixel.from(.Sprite, bgr555);
 }
 
 const Scanline = struct {
     const Self = @This();
 
     const Pixel = union(enum) {
+        // TODO: Rename
+        const Layer = enum { Background, Sprite };
+
         set: u16,
+        obj_set: u16,
         unset: void,
         hidden: void,
 
-        fn from(bgr555: u16) Pixel {
-            return .{ .set = bgr555 };
+        fn from(comptime layer: Layer, bgr555: u16) Pixel {
+            return switch (layer) {
+                .Background => .{ .set = bgr555 },
+                .Sprite => .{ .obj_set = bgr555 },
+            };
+        }
+
+        pub fn isSet(self: @This()) bool {
+            return switch (self) {
+                .set, .obj_set => true,
+                .unset, .hidden => false,
+            };
         }
     };
 
