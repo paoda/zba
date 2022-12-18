@@ -444,7 +444,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                drawSpritePixel(self.bld.cnt, &self.scanline, global_x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, @bitCast(Attr0, sprite.attr0), global_x, bgr555);
             }
         }
     }
@@ -494,7 +494,7 @@ pub const Ppu = struct {
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                drawSpritePixel(self.bld.cnt, &self.scanline, x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, sprite.attr0, x, bgr555);
             }
         }
     }
@@ -1442,7 +1442,13 @@ fn shouldDrawSprite(bldcnt: io.BldCnt, scanline: *Scanline, x: u9) bool {
     return true;
 }
 
-fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, x: u9, bgr555: u16) void {
+fn drawSpritePixel(bldcnt: io.BldCnt, scanline: *Scanline, attr0: Attr0, x: u9, bgr555: u16) void {
+    if (attr0.mode.read() == 1) {
+        // TODO: Force Alpha Blend in all moes?
+        scanline.top()[x] = Scanline.Pixel.from(.Sprite, bgr555);
+        return;
+    }
+
     switch (bldcnt.mode.read()) {
         0b00 => {}, // pass through
         0b01 => {
