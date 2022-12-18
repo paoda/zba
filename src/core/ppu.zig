@@ -521,16 +521,19 @@ pub const Ppu = struct {
             aff_x += self.aff_bg[n - 2].pa;
             aff_y += self.aff_bg[n - 2].pc;
 
-            const x = @bitCast(u32, ix);
-            const y = @bitCast(u32, iy);
+            const _x = @truncate(u9, @bitCast(u32, ix));
+            const _y = @truncate(u8, @bitCast(u32, iy));
 
-            const win_bounds = self.windowBounds(@truncate(u9, x), @truncate(u8, y));
+            const win_bounds = self.windowBounds(_x, _y);
             if (!shouldDrawBackground(self, n, win_bounds, i)) continue;
 
             if (self.bg[n].cnt.display_overflow.read()) {
                 ix = if (ix > px_width) @rem(ix, px_width) else if (ix < 0) px_width + @rem(ix, px_width) else ix;
                 iy = if (iy > px_height) @rem(iy, px_height) else if (iy < 0) px_height + @rem(iy, px_height) else iy;
             } else if (ix > px_width or iy > px_height or ix < 0 or iy < 0) continue;
+
+            const x = @bitCast(u32, ix);
+            const y = @bitCast(u32, iy);
 
             const tile_id: u32 = self.vram.read(u8, screen_base + ((y / 8) * @bitCast(u32, tile_width) + (x / 8)));
             const row = y & 7;
