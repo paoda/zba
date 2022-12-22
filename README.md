@@ -10,7 +10,7 @@ This is a simple (read: incomplete) for-fun long-term project. I hope to get "mo
 
 ### TODO
 
-- [ ] Affine Sprites
+- [x] Affine Sprites
 - [ ] Windowing (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/window))
 - [ ] Audio Resampler (Having issues with SDL2's)
 - [ ] Immediate Mode GUI
@@ -77,7 +77,7 @@ arm7wrestler GBA Fixed | [destoer](https://github.com/destoer)
 
 ## Compiling
 
-Most recently built on Zig [0.11.0-dev.368+1829b6eab](https://github.com/ziglang/zig/tree/1829b6eab)
+Most recently built on Zig [v0.11.0-dev.926+266e2e9a3](https://github.com/ziglang/zig/tree/266e2e9a3)
 
 ### Dependencies
 
