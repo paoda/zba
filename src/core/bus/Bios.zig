@@ -13,7 +13,7 @@ const Self = @This();
 buf: ?[]u8,
 allocator: Allocator,
 
-addr_latch: u32,
+addr_latch: u32 = 0,
 
 // https://github.com/ITotalJustice/notorious_beeg/issues/106
 pub fn read(self: *Self, comptime T: type, r15: u32, address: u32) T {
@@ -62,18 +62,19 @@ pub fn write(_: *Self, comptime T: type, addr: u32, value: T) void {
 }
 
 pub fn init(allocator: Allocator, maybe_path: ?[]const u8) !Self {
-    const buf: ?[]u8 = if (maybe_path) |path| blk: {
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
+    if (maybe_path == null) return .{ .buf = null, .allocator = allocator };
+    const path = maybe_path.?;
 
-        break :blk try file.readToEndAlloc(allocator, try file.getEndPos());
-    } else null;
+    const buf = try allocator.alloc(u8, Self.size);
+    errdefer allocator.free(buf);
 
-    return Self{
-        .buf = buf,
-        .allocator = allocator,
-        .addr_latch = 0,
-    };
+    const file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const file_len = try file.readAll(buf);
+    if (file_len != Self.size) log.err("Expected BIOS to be {}B, was {}B", .{ Self.size, file_len });
+
+    return Self{ .buf = buf, .allocator = allocator };
 }
 
 pub fn deinit(self: *Self) void {
