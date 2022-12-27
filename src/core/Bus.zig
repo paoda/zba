@@ -227,7 +227,7 @@ fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.dbgRead(T, self.cpu.r[15], address);
+                break :blk self.bios.dbgRead(T, self.cpu.r[15], unaligned_address);
 
             break :blk self.openBus(T, address);
         },
@@ -347,7 +347,7 @@ fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
         // General Internal Memory
         0x00 => blk: {
             if (address < Bios.size)
-                break :blk self.bios.read(T, self.cpu.r[15], address);
+                break :blk self.bios.read(T, self.cpu.r[15], unaligned_address);
 
             break :blk self.openBus(T, address);
         },
@@ -437,11 +437,11 @@ inline fn rotateBy(comptime T: type, address: u32) u32 {
         u32 => address & 3,
         u16 => address & 1,
         u8 => 0,
-        else => @compileError("Backup: Unsupported write width"),
+        else => @compileError("Unsupported write width"),
     };
 }
 
-inline fn forceAlign(comptime T: type, address: u32) u32 {
+pub inline fn forceAlign(comptime T: type, address: u32) u32 {
     return switch (T) {
         u32 => address & ~@as(u32, 3),
         u16 => address & ~@as(u32, 1),

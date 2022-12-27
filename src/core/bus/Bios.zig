@@ -3,6 +3,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bios);
 
+const rotr = @import("../../util.zig").rotr;
+const forceAlign = @import("../Bus.zig").forceAlign;
+
 /// Size of the BIOS in bytes
 pub const size = 0x4000;
 const Self = @This();
@@ -12,19 +15,35 @@ allocator: Allocator,
 
 addr_latch: u32,
 
-pub fn read(self: *Self, comptime T: type, r15: u32, addr: u32) T {
+// https://github.com/ITotalJustice/notorious_beeg/issues/106
+pub fn read(self: *Self, comptime T: type, r15: u32, address: u32) T {
     if (r15 < Self.size) {
+        const addr = forceAlign(T, address);
+
         self.addr_latch = addr;
         return self._read(T, addr);
     }
 
-    log.debug("Rejected read since r15=0x{X:0>8}", .{r15});
-    return @truncate(T, self._read(T, self.addr_latch));
+    log.warn("Open Bus! Read from 0x{X:0>8}, but PC was 0x{X:0>8}", .{ address, r15 });
+    const value = self._read(u32, self.addr_latch);
+
+    return @truncate(T, rotr(u32, value, 8 * rotateBy(T, address)));
 }
 
-pub fn dbgRead(self: *const Self, comptime T: type, r15: u32, addr: u32) T {
-    if (r15 < Self.size) return self._read(T, addr);
-    return @truncate(T, self._read(T, self.addr_latch + 8));
+fn rotateBy(comptime T: type, address: u32) u32 {
+    return switch (T) {
+        u8 => address & 3,
+        u16 => address & 2,
+        u32 => 0,
+        else => @compileError("bios: unsupported read width"),
+    };
+}
+
+pub fn dbgRead(self: *const Self, comptime T: type, r15: u32, address: u32) T {
+    if (r15 < Self.size) return self._read(T, forceAlign(T, address));
+
+    const value = self._read(u32, self.addr_latch);
+    return @truncate(T, rotr(u32, value, 8 * rotateBy(T, address)));
 }
 
 /// Read without the GBA safety checks
