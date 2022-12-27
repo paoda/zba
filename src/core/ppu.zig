@@ -340,6 +340,8 @@ pub const Ppu = struct {
 
                 // Sprites are expected to be able to wraparound, we perform the same check
                 // for unsigned and signed values so that we handle all valid sprite positions
+
+                // FIXME: Wrapping for Double-Size Sprites is not properly implemented
                 if (y_pos <= y and y < (y_pos + sprite_height)) {
                     for (self.scanline_sprites) |*maybe_sprite| {
                         if (maybe_sprite.* == null) {
@@ -407,7 +409,7 @@ pub const Ppu = struct {
 
             // Check to see if sprite pixel is in bounds
             // TODO: Are any of the checks here redundant?
-            if (!(sprite_x <= x and x < (sprite_x + sprite_width))) continue;
+            if (sprite_x > x and x >= (sprite_x + sprite.width)) continue;
 
             // Sprite is within bounds and therefore should be rendered
             const local_x = @as(i16, x) - sprite_x;
@@ -433,9 +435,6 @@ pub const Ppu = struct {
             const mapping_offset = if (obj_mapping) sprite.width >> 3 else if (is_8bpp) @as(u32, 0x10) else 0x20;
             const tile_offset = (tile_x >> 3) * tile_len + (tile_y >> 3) * tile_len * mapping_offset;
 
-            // TODO: This is not the proper check
-            // if (tile_base + tile_offset >= self.vram.buf.len) continue;
-
             const tile = self.vram.buf[tile_base + tile_offset];
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
@@ -457,31 +456,36 @@ pub const Ppu = struct {
         const tile_len: u32 = if (is_8bpp) 0x40 else 0x20;
 
         const char_base = 0x4000 * 4;
-
         const y = self.vcount.scanline.read();
+
+        var sprite_x: i16 = sprite.x();
+        if (sprite_x >= 240) sprite_x -= 512;
+
+        var sprite_y: i16 = sprite.y();
+        if (sprite_y >= 160) sprite_y -= 256;
 
         var i: u9 = 0;
         while (i < sprite.width) : (i += 1) {
-            const x = (sprite.x() +% i) % width;
+            // TODO: Something is Wrong Here
+            const x = @truncate(u9, @bitCast(u16, sprite_x + i));
+            if (x >= width) continue;
+
             if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
 
-            var x_pos: i32 = sprite.x();
-            if (x_pos >= 240) x_pos -= 512;
-
-            if (!(x_pos <= x and x < (x_pos + sprite.width))) continue;
+            if (sprite_x > x and x >= (sprite_x + sprite.width)) continue;
 
             // Sprite is within bounds and therefore should be rendered
-            const x_diff: i32 = std.math.absInt(@as(i32, x) - x_pos) catch unreachable;
-            const y_diff: i32 = std.math.absInt(@bitCast(i8, y) -% @bitCast(i8, sprite.y())) catch unreachable;
+            const local_x = @as(i16, x) - sprite_x;
+            const local_y = @as(i16, y) - sprite_y;
 
             // Note that we flip the tile_pos not the (tile_pos % 8) like we do for
             // Background Tiles. By doing this we mirror the entire sprite instead of
             // just a specific tile (see how sprite.width and sprite.height are involved)
-            const tile_x = @intCast(u9, x_diff) ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
-            const tile_y = @intCast(u8, y_diff) ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
+            const tile_x = @intCast(u9, local_x) ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
+            const tile_y = @intCast(u8, local_y) ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
 
-            const row = @truncate(u3, tile_y);
             const col = @truncate(u3, tile_x);
+            const row = @truncate(u3, tile_y);
 
             // TODO: Finish that 2D Sprites Test ROM
             const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
@@ -491,10 +495,12 @@ pub const Ppu = struct {
             const tile = self.vram.buf[tile_base + tile_offset];
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
+            const global_x = @truncate(u9, @bitCast(u16, local_x + sprite_x));
+
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
                 const bgr555 = self.palette.read(u16, 0x200 + pal_id * 2);
-                drawSpritePixel(self.bld.cnt, &self.scanline, sprite.attr0, x, bgr555);
+                drawSpritePixel(self.bld.cnt, &self.scanline, sprite.attr0, global_x, bgr555);
             }
         }
     }
