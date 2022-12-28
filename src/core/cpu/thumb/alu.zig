@@ -21,7 +21,8 @@ pub fn fmt4(comptime op: u4) InstrFn {
             const op2 = cpu.r[rs];
 
             var result: u32 = undefined;
-            var overflow: bool = undefined;
+            var overflow: u1 = undefined;
+
             switch (op) {
                 0x0 => result = op1 & op2, // AND
                 0x1 => result = op1 ^ op2, // EOR
@@ -34,7 +35,12 @@ pub fn fmt4(comptime op: u4) InstrFn {
                 0x8 => result = op1 & op2, // TST
                 0x9 => result = 0 -% op2, // NEG
                 0xA => result = op1 -% op2, // CMP
-                0xB => overflow = @addWithOverflow(u32, op1, op2, &result), // CMN
+                0xB => {
+                    // CMN
+                    const tmp = @addWithOverflow(op1, op2);
+                    result = tmp[0];
+                    overflow = tmp[1];
+                },
                 0xC => result = op1 | op2, // ORR
                 0xD => result = @truncate(u32, @as(u64, op2) * @as(u64, op1)),
                 0xE => result = op1 & ~op2,
@@ -71,7 +77,7 @@ pub fn fmt4(comptime op: u4) InstrFn {
                     // ADC, CMN
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(overflow);
+                    cpu.cpsr.c.write(overflow == 0b1);
                     cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0x6 => {

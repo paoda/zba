@@ -24,7 +24,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
             if (!I and opcode >> 4 & 1 == 1) cpu.r[15] -= 4;
 
             var result: u32 = undefined;
-            var overflow: bool = undefined;
+            var overflow: u1 = undefined;
 
             // Perform Data Processing Logic
             switch (kind) {
@@ -62,7 +62,9 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                     if (rd == 0xF)
                         return undefinedTestBehaviour(cpu);
 
-                    overflow = @addWithOverflow(u32, op1, op2, &result);
+                    const tmp = @addWithOverflow(op1, op2);
+                    result = tmp[0];
+                    overflow = tmp[1];
                 },
                 0xC => result = op1 | op2, // ORR
                 0xD => result = op2, // MOV
@@ -110,7 +112,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                     // ADD, ADC Flags
                     cpu.cpsr.n.write(result >> 31 & 1 == 1);
                     cpu.cpsr.z.write(result == 0);
-                    cpu.cpsr.c.write(overflow);
+                    cpu.cpsr.c.write(overflow == 0b1);
                     cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
                 0x6, 0x7 => if (S and rd != 0xF) {
@@ -141,7 +143,7 @@ pub fn dataProcessing(comptime I: bool, comptime S: bool, comptime kind: u4) Ins
                         cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
                     } else if (kind == 0xB) {
                         // CMN specific
-                        cpu.cpsr.c.write(overflow);
+                        cpu.cpsr.c.write(overflow == 0b1);
                         cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                     } else {
                         // TST, TEQ specific
@@ -162,19 +164,19 @@ pub fn sbc(left: u32, right: u32, old_carry: u1) u32 {
     return ret;
 }
 
-pub fn add(overflow: *bool, left: u32, right: u32) u32 {
-    var ret: u32 = undefined;
-    overflow.* = @addWithOverflow(u32, left, right, &ret);
-    return ret;
+pub fn add(overflow: *u1, left: u32, right: u32) u32 {
+    const ret = @addWithOverflow(left, right);
+    overflow.* = ret[1];
+
+    return ret[0];
 }
 
-pub fn adc(overflow: *bool, left: u32, right: u32, old_carry: u1) u32 {
-    var ret: u32 = undefined;
-    const first = @addWithOverflow(u32, left, right, &ret);
-    const second = @addWithOverflow(u32, ret, old_carry, &ret);
+pub fn adc(overflow: *u1, left: u32, right: u32, old_carry: u1) u32 {
+    const tmp = @addWithOverflow(left, right);
+    const ret = @addWithOverflow(tmp[0], old_carry);
+    overflow.* = tmp[1] | ret[1];
 
-    overflow.* = first or second;
-    return ret;
+    return ret[0];
 }
 
 fn undefinedTestBehaviour(cpu: *Arm7tdmi) void {
