@@ -94,7 +94,7 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
         if (!cpu.stepDmaTransfer()) {
             if (cpu.isHalted()) {
                 // Fast-forward to next Event
-                sched.tick = sched.queue.peek().?.tick;
+                sched.tick = sched.nextTimestamp();
             } else {
                 cpu.step();
             }

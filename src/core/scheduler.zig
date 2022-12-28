@@ -31,61 +31,55 @@ pub const Scheduler = struct {
     }
 
     pub fn handleEvent(self: *Self, cpu: *Arm7tdmi) void {
-        if (self.queue.removeOrNull()) |event| {
-            const late = self.tick - event.tick;
+        const event = self.queue.remove();
+        const late = self.tick - event.tick;
 
-            switch (event.kind) {
-                .HeatDeath => {
-                    log.err("u64 overflow. This *actually* should never happen.", .{});
-                    unreachable;
-                },
-                .Draw => {
-                    // The end of a VDraw
-                    cpu.bus.ppu.drawScanline();
-                    cpu.bus.ppu.onHdrawEnd(cpu, late);
-                },
-                .TimerOverflow => |id| {
-                    switch (id) {
-                        inline 0...3 => |idx| cpu.bus.tim[idx].onTimerExpire(cpu, late),
-                    }
-                },
-                .ApuChannel => |id| {
-                    switch (id) {
-                        0 => cpu.bus.apu.ch1.onToneSweepEvent(late),
-                        1 => cpu.bus.apu.ch2.onToneEvent(late),
-                        2 => cpu.bus.apu.ch3.onWaveEvent(late),
-                        3 => cpu.bus.apu.ch4.onNoiseEvent(late),
-                    }
-                },
-                .RealTimeClock => {
-                    const device = &cpu.bus.pak.gpio.device;
-                    if (device.kind != .Rtc or device.ptr == null) return;
+        switch (event.kind) {
+            .HeatDeath => {
+                log.err("u64 overflow. This *actually* should never happen.", .{});
+                unreachable;
+            },
+            .Draw => {
+                // The end of a VDraw
+                cpu.bus.ppu.drawScanline();
+                cpu.bus.ppu.onHdrawEnd(cpu, late);
+            },
+            .TimerOverflow => |id| {
+                switch (id) {
+                    inline 0...3 => |idx| cpu.bus.tim[idx].onTimerExpire(cpu, late),
+                }
+            },
+            .ApuChannel => |id| {
+                switch (id) {
+                    0 => cpu.bus.apu.ch1.onToneSweepEvent(late),
+                    1 => cpu.bus.apu.ch2.onToneEvent(late),
+                    2 => cpu.bus.apu.ch3.onWaveEvent(late),
+                    3 => cpu.bus.apu.ch4.onNoiseEvent(late),
+                }
+            },
+            .RealTimeClock => {
+                const device = &cpu.bus.pak.gpio.device;
+                if (device.kind != .Rtc or device.ptr == null) return;
 
-                    const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
-                    clock.onClockUpdate(late);
-                },
-                .FrameSequencer => cpu.bus.apu.onSequencerTick(late),
-                .SampleAudio => cpu.bus.apu.sampleAudio(late),
-                .HBlank => cpu.bus.ppu.onHblankEnd(cpu, late), // The end of a HBlank
-                .VBlank => cpu.bus.ppu.onHdrawEnd(cpu, late), // The end of a VBlank
-            }
+                const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
+                clock.onClockUpdate(late);
+            },
+            .FrameSequencer => cpu.bus.apu.onSequencerTick(late),
+            .SampleAudio => cpu.bus.apu.sampleAudio(late),
+            .HBlank => cpu.bus.ppu.onHblankEnd(cpu, late), // The end of a HBlank
+            .VBlank => cpu.bus.ppu.onHdrawEnd(cpu, late), // The end of a VBlank
         }
     }
 
     /// Removes the **first** scheduled event of type `needle`
     pub fn removeScheduledEvent(self: *Self, needle: EventKind) void {
-        var it = self.queue.iterator();
-
-        var i: usize = 0;
-        while (it.next()) |event| : (i += 1) {
+        for (self.queue.items) |event, i| {
             if (std.meta.eql(event.kind, needle)) {
 
-                // This invalidates the iterator
+                // invalidates the slice we're iterating over
                 _ = self.queue.removeIndex(i);
 
-                // Since removing something from the PQ invalidates the iterator,
-                // this implementation can safely only remove the first instance of
-                // a Scheduled Event. Exit Early
+                log.debug("Removed {?}@{}", .{ event.kind, event.tick });
                 break;
             }
         }

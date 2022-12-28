@@ -60,9 +60,8 @@ allocator: Allocator,
 pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi, paths: FilePaths) !void {
     const tables = try allocator.alloc(?*anyopaque, 3 * table_len); // Allocate all tables
 
-    const read_table: *[table_len]?*const anyopaque = tables[0..table_len];
-    const left_write: *[table_len]?*anyopaque = tables[table_len .. 2 * table_len];
-    const right_write: *[table_len]?*anyopaque = tables[2 * table_len .. 3 * table_len];
+    const read_table = tables[0..table_len];
+    const write_tables = .{ tables[table_len .. 2 * table_len], tables[2 * table_len .. 3 * table_len] };
 
     self.* = .{
         .pak = try GamePak.init(allocator, cpu, paths.rom, paths.save),
@@ -78,18 +77,15 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
         .sched = sched,
 
         .read_table = read_table,
-        .write_tables = .{ left_write, right_write },
+        .write_tables = write_tables,
         .allocator = allocator,
     };
 
-    // read_table, write_tables, and *Self are not restricted to the lifetime
-    // of this init function so we can initialize our tables here
-    fillReadTable(self, read_table);
+    self.fillReadTable(read_table);
 
-    // Internal Display Memory behavious unusually on 8-bit reads
-    // so we have two different tables depending on whether there's an 8-bit read or not
-    fillWriteTable(u32, self, left_write);
-    fillWriteTable(u8, self, right_write);
+    // Internal Display Memory behaves differently on 8-bit reads
+    self.fillWriteTable(u32, write_tables[0]);
+    self.fillWriteTable(u8, write_tables[1]);
 }
 
 pub fn deinit(self: *Self) void {
@@ -106,50 +102,50 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-fn fillReadTable(bus: *Self, table: *[table_len]?*const anyopaque) void {
+fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table) |*ptr, i| {
-        const addr = page_size * i;
+        const addr = @intCast(u32, page_size * i);
 
         ptr.* = switch (addr) {
             // General Internal Memory
             0x0000_0000...0x0000_3FFF => null, // BIOS has it's own checks
-            0x0200_0000...0x02FF_FFFF => &bus.ewram.buf[addr & 0x3FFFF],
-            0x0300_0000...0x03FF_FFFF => &bus.iwram.buf[addr & 0x7FFF],
+            0x0200_0000...0x02FF_FFFF => &self.ewram.buf[addr & 0x3FFFF],
+            0x0300_0000...0x03FF_FFFF => &self.iwram.buf[addr & 0x7FFF],
             0x0400_0000...0x0400_03FF => null, // I/O
 
             // Internal Display Memory
-            0x0500_0000...0x05FF_FFFF => &bus.ppu.palette.buf[addr & 0x3FF],
-            0x0600_0000...0x06FF_FFFF => &bus.ppu.vram.buf[vramMirror(addr)],
-            0x0700_0000...0x07FF_FFFF => &bus.ppu.oam.buf[addr & 0x3FF],
+            0x0500_0000...0x05FF_FFFF => &self.ppu.palette.buf[addr & 0x3FF],
+            0x0600_0000...0x06FF_FFFF => &self.ppu.vram.buf[vramMirror(addr)],
+            0x0700_0000...0x07FF_FFFF => &self.ppu.oam.buf[addr & 0x3FF],
 
             // External Memory (Game Pak)
-            0x0800_0000...0x0DFF_FFFF => fillTableExternalMemory(bus, addr),
+            0x0800_0000...0x0DFF_FFFF => self.fillReadTableExternal(addr),
             0x0E00_0000...0x0FFF_FFFF => null, // SRAM
             else => null,
         };
     }
 }
 
-fn fillWriteTable(comptime T: type, bus: *Self, table: *[table_len]?*const anyopaque) void {
+fn fillWriteTable(self: *Self, comptime T: type, table: *[table_len]?*const anyopaque) void {
     comptime std.debug.assert(T == u32 or T == u16 or T == u8);
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table) |*ptr, i| {
-        const addr = page_size * i;
+        const addr = @intCast(u32, page_size * i);
 
         ptr.* = switch (addr) {
             // General Internal Memory
             0x0000_0000...0x0000_3FFF => null, // BIOS has it's own checks
-            0x0200_0000...0x02FF_FFFF => &bus.ewram.buf[addr & 0x3FFFF],
-            0x0300_0000...0x03FF_FFFF => &bus.iwram.buf[addr & 0x7FFF],
+            0x0200_0000...0x02FF_FFFF => &self.ewram.buf[addr & 0x3FFFF],
+            0x0300_0000...0x03FF_FFFF => &self.iwram.buf[addr & 0x7FFF],
             0x0400_0000...0x0400_03FF => null, // I/O
 
             // Internal Display Memory
-            0x0500_0000...0x05FF_FFFF => if (T != u8) &bus.ppu.palette.buf[addr & 0x3FF] else null,
-            0x0600_0000...0x06FF_FFFF => if (T != u8) &bus.ppu.vram.buf[vramMirror(addr)] else null,
-            0x0700_0000...0x07FF_FFFF => if (T != u8) &bus.ppu.oam.buf[addr & 0x3FF] else null,
+            0x0500_0000...0x05FF_FFFF => if (T != u8) &self.ppu.palette.buf[addr & 0x3FF] else null,
+            0x0600_0000...0x06FF_FFFF => if (T != u8) &self.ppu.vram.buf[vramMirror(addr)] else null,
+            0x0700_0000...0x07FF_FFFF => if (T != u8) &self.ppu.oam.buf[addr & 0x3FF] else null,
 
             // External Memory (Game Pak)
             0x0800_0000...0x0DFF_FFFF => null, // ROM
@@ -159,24 +155,29 @@ fn fillWriteTable(comptime T: type, bus: *Self, table: *[table_len]?*const anyop
     }
 }
 
-fn fillTableExternalMemory(bus: *Self, addr: usize) ?*anyopaque {
+fn fillReadTableExternal(self: *Self, addr: u32) ?*anyopaque {
     // see `GamePak.zig` for more information about what conditions need to be true
     // so that a simple pointer dereference isn't possible
 
+    std.debug.assert(addr & @as(u32, page_size - 1) == 0); // addr is guaranteed to be page-aligned
+
     const start_addr = addr;
-    const end_addr = addr + page_size;
+    const end_addr = start_addr + page_size;
 
-    const gpio_data = start_addr <= 0x0800_00C4 and 0x0800_00C4 < end_addr;
-    const gpio_direction = start_addr <= 0x0800_00C6 and 0x0800_00C6 < end_addr;
-    const gpio_control = start_addr <= 0x0800_00C8 and 0x0800_00C8 < end_addr;
+    {
+        const data = start_addr <= 0x0800_00C4 and 0x0800_00C4 < end_addr; // GPIO Data
+        const direction = start_addr <= 0x0800_00C6 and 0x0800_00C6 < end_addr; // GPIO Direction
+        const control = start_addr <= 0x0800_00C8 and 0x0800_00C8 < end_addr; // GPIO Control
 
-    if (bus.pak.gpio.device.kind != .None and (gpio_data or gpio_direction or gpio_control)) {
-        // We found a GPIO device, and this page a GPIO register. We want to handle this in slowmem
-        return null;
+        const has_gpio = data or direction or control;
+        const gpio_kind = self.pak.gpio.device.kind;
+
+        // There is a GPIO Device, and the current page contains at least one memory-mapped GPIO register
+        if (gpio_kind != .None and has_gpio) return null;
     }
 
-    if (bus.pak.backup.kind == .Eeprom) {
-        if (bus.pak.buf.len > 0x100_000) {
+    if (self.pak.backup.kind == .Eeprom) {
+        if (self.pak.buf.len > 0x100_000) {
             // We are using a "large" EEPROM which means that if the below check is true
             // this page has an address that's reserved for the EEPROM and therefore must
             // be handled in slowmem
@@ -192,9 +193,9 @@ fn fillTableExternalMemory(bus: *Self, addr: usize) ?*anyopaque {
     // Finally, the GamePak has some unique behaviour for reads past the end of the ROM,
     // so those will be handled by slowmem as well
     const masked_addr = addr & 0x1FF_FFFF;
-    if (masked_addr >= bus.pak.buf.len) return null;
+    if (masked_addr >= self.pak.buf.len) return null;
 
-    return &bus.pak.buf[masked_addr];
+    return &self.pak.buf[masked_addr];
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
@@ -208,8 +209,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
         const Ptr = [*]const T;
-        const alignment = @alignOf(std.meta.Child(Ptr));
-        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
@@ -326,8 +326,7 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
         const Ptr = [*]const T;
-        const alignment = @alignOf(std.meta.Child(Ptr));
-        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
@@ -394,8 +393,7 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
         const Ptr = [*]T;
-        const alignment = @alignOf(std.meta.Child(Ptr));
-        const ptr = @ptrCast(Ptr, @alignCast(alignment, some_ptr));
+        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
@@ -408,8 +406,9 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     }
 }
 
-pub fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
-    // @setCold(true);
+fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    @setCold(true);
+
     const page = @truncate(u8, unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
