@@ -64,7 +64,7 @@ pub fn fmt5(comptime op: u2, comptime h1: u1, comptime h2: u1) InstrFn {
             const op2 = cpu.r[rs];
 
             var result: u32 = undefined;
-            var overflow: bool = undefined;
+            var overflow: u1 = undefined;
             switch (op) {
                 0b00 => result = add(&overflow, op1, op2), // ADD
                 0b01 => result = op1 -% op2, // CMP
@@ -126,13 +126,13 @@ pub fn fmt2(comptime I: bool, is_sub: bool, rn: u3) InstrFn {
                 cpu.cpsr.v.write(((op1 ^ result) & (~op2 ^ result)) >> 31 & 1 == 1);
             } else {
                 // ADD
-                var overflow: bool = undefined;
+                var overflow: u1 = undefined;
                 const result = add(&overflow, op1, op2);
                 cpu.r[rd] = result;
 
                 cpu.cpsr.n.write(result >> 31 & 1 == 1);
                 cpu.cpsr.z.write(result == 0);
-                cpu.cpsr.c.write(overflow);
+                cpu.cpsr.c.write(overflow == 0b1);
                 cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
             }
         }
@@ -145,7 +145,7 @@ pub fn fmt3(comptime op: u2, comptime rd: u3) InstrFn {
             const op1 = cpu.r[rd];
             const op2: u32 = opcode & 0xFF; // Offset
 
-            var overflow: bool = undefined;
+            var overflow: u1 = undefined;
             const result: u32 = switch (op) {
                 0b00 => op2, // MOV
                 0b01 => op1 -% op2, // CMP
@@ -169,7 +169,7 @@ pub fn fmt3(comptime op: u2, comptime rd: u3) InstrFn {
                 },
                 0b10 => {
                     // ADD
-                    cpu.cpsr.c.write(overflow);
+                    cpu.cpsr.c.write(overflow == 0b1);
                     cpu.cpsr.v.write(((op1 ^ result) & (op2 ^ result)) >> 31 & 1 == 1);
                 },
             }
