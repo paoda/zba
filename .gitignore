@@ -12,3 +12,7 @@
 
 # Any Custom Scripts for Debugging purposes
 *.sh
+
+
+# Dear ImGui
+**/imgui.ini

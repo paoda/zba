@@ -1,6 +1,8 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const gl = @import("gl");
+const zgui = @import("zgui");
+
 const emu = @import("core/emu.zig");
 const config = @import("config.zig");
 
@@ -12,6 +14,14 @@ const FpsTracker = @import("util.zig").FpsTracker;
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
+const GLuint = gl.GLuint;
+const GLsizei = gl.GLsizei;
+const SDL_GLContext = *anyopaque;
+const Allocator = std.mem.Allocator;
+
+const width = 1280;
+const height = 720;
+
 pub const sample_rate = 1 << 15;
 pub const sample_format = SDL.AUDIO_U16;
 
@@ -19,7 +29,6 @@ const default_title = "ZBA";
 
 pub const Gui = struct {
     const Self = @This();
-    const SDL_GLContext = *anyopaque; // SDL.SDL_GLContext is a ?*anyopaque
     const log = std.log.scoped(.Gui);
 
     // zig fmt: off
@@ -44,20 +53,20 @@ pub const Gui = struct {
 
     program_id: gl.GLuint,
 
-    pub fn init(title: *const [12]u8, apu: *Apu, width: i32, height: i32) !Self {
+    pub fn init(allocator: Allocator, title: *const [12]u8, apu: *Apu) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
 
-        const win_scale = @intCast(c_int, config.config().host.win_scale);
+        // const win_scale = @intCast(c_int, config.config().host.win_scale);
 
         const window = SDL.SDL_CreateWindow(
             default_title,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
-            @as(c_int, width * win_scale),
-            @as(c_int, height * win_scale),
+            width,
+            height,
             SDL.SDL_WINDOW_OPENGL | SDL.SDL_WINDOW_SHOWN,
         ) orelse panic();
 
@@ -67,19 +76,39 @@ pub const Gui = struct {
         gl.load(ctx, Self.glGetProcAddress) catch {};
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
-        const program_id = try compileShaders();
+        zgui.init(allocator);
+        zgui.backend.init(window, ctx, "#version 330 core");
 
         return Self{
             .window = window,
             .title = std.mem.sliceTo(title, 0),
             .ctx = ctx,
-            .program_id = program_id,
+            .program_id = try compileShaders(),
             .audio = Audio.init(apu),
         };
     }
 
-    fn compileShaders() !gl.GLuint {
-        // TODO: Panic on Shader Compiler Failure + Error Message
+    fn drawGbaTexture(self: *const Self, obj_ids: struct { GLuint, GLuint, GLuint }, tex_id: GLuint, buf: []const u8) void {
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
+
+        // Bind VAO, EBO. VBO not bound
+        gl.bindVertexArray(obj_ids[0]); // VAO
+        defer gl.bindVertexArray(0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj_ids[2]); // EBO
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        // Use compiled frag + vertex shader
+        gl.useProgram(self.program_id);
+        defer gl.useProgram(0);
+
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+    }
+
+    fn compileShaders() !GLuint {
         const vert_shader = @embedFile("shader/pixelbuf.vert");
         const frag_shader = @embedFile("shader/pixelbuf.frag");
 
@@ -108,20 +137,25 @@ pub const Gui = struct {
     }
 
     // Returns the VAO ID since it's used in run()
-    fn generateBuffers() struct { c_uint, c_uint, c_uint } {
-        var vao_id: c_uint = undefined;
-        var vbo_id: c_uint = undefined;
-        var ebo_id: c_uint = undefined;
+    fn genBufferObjects() struct { GLuint, GLuint, GLuint } {
+        var vao_id: GLuint = undefined;
+        var vbo_id: GLuint = undefined;
+        var ebo_id: GLuint = undefined;
+
         gl.genVertexArrays(1, &vao_id);
         gl.genBuffers(1, &vbo_id);
         gl.genBuffers(1, &ebo_id);
 
         gl.bindVertexArray(vao_id);
+        defer gl.bindVertexArray(0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
+        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
 
         // Position
@@ -137,21 +171,70 @@ pub const Gui = struct {
         return .{ vao_id, vbo_id, ebo_id };
     }
 
-    fn generateTexture(buf: []const u8) c_uint {
-        var tex_id: c_uint = undefined;
+    fn genGbaTexture(buf: []const u8) GLuint {
+        var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
-        gl.bindTexture(gl.TEXTURE_2D, tex_id);
 
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
-        // gl.generateMipmap(gl.TEXTURE_2D); // TODO: Remove?
 
         return tex_id;
+    }
+
+    fn genOutTexture() GLuint {
+        var tex_id: GLuint = undefined;
+        gl.genTextures(1, &tex_id);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, null);
+
+        return tex_id;
+    }
+
+    fn genFrameBufObject(tex_id: c_uint) !GLuint {
+        var fbo_id: GLuint = undefined;
+        gl.genFramebuffers(1, &fbo_id);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+        defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+        gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
+
+        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
+        gl.drawBuffers(1, &draw_buffers);
+
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+            return error.FrameBufferObejctInitFailed;
+
+        return fbo_id;
+    }
+
+    fn draw(self: *Self, tex_id: GLuint) void {
+        _ = self;
+
+        {
+            _ = zgui.begin("Game Boy Advance Screen", .{ .flags = .{ .no_resize = true } });
+            defer zgui.end();
+
+            const args = .{
+                .w = gba_width,
+                .h = gba_height,
+                .uv0 = .{ 0.0, 1.0 },
+                .uv1 = .{ 1.0, 0.0 },
+            };
+
+            zgui.image(@intToPtr(*anyopaque, tex_id), args);
+        }
     }
 
     const RunOptions = struct {
@@ -166,16 +249,18 @@ pub const Gui = struct {
         const tracker = opt.tracker;
         const quit = opt.quit;
 
-        var buffer_ids = Self.generateBuffers();
-        defer {
-            gl.deleteBuffers(1, &buffer_ids[2]); // EBO
-            gl.deleteBuffers(1, &buffer_ids[1]); // VBO
-            gl.deleteVertexArrays(1, &buffer_ids[0]); // VAO
-        }
-        const vao_id = buffer_ids[0];
+        const obj_ids = Self.genBufferObjects();
+        defer gl.deleteBuffers(3, @as(*const [3]c_uint, &obj_ids));
 
-        const tex_id = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
-        defer gl.deleteTextures(1, &tex_id);
+        const emu_tex = Self.genGbaTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+        const out_tex = Self.genOutTexture();
+        defer gl.deleteTextures(2, &[_]c_uint{ emu_tex, out_tex });
+
+        const fbo_id = try Self.genFrameBufObject(out_tex);
+        defer gl.deleteFramebuffers(1, &fbo_id);
+
+        var quit = std.atomic.Atomic(bool).init(false);
+        var tracker = FpsTracker.init();
 
         var title_buf: [0x100]u8 = undefined;
 
@@ -187,6 +272,8 @@ pub const Gui = struct {
             if (quit.load(.Monotonic)) break :emu_loop;
 
             while (SDL.SDL_PollEvent(&event) != 0) {
+                _ = zgui.backend.processEvent(&event);
+
                 switch (event.type) {
                     SDL.SDL_QUIT => break :emu_loop,
                     SDL.SDL_KEYDOWN => {
@@ -239,13 +326,25 @@ pub const Gui = struct {
                 }
             }
 
-            // Emulator has an internal Double Buffer
-            const framebuf = cpu.bus.ppu.framebuf.get(.Renderer);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, framebuf.ptr);
+            {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+                defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
-            gl.useProgram(self.program_id);
-            gl.bindVertexArray(vao_id);
-            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+                const buf = cpu.bus.ppu.framebuf.get(.Renderer);
+                gl.viewport(0, 0, gba_width, gba_height);
+                self.drawGbaTexture(obj_ids, emu_tex, buf);
+            }
+
+            // Background
+            const size = zgui.io.getDisplaySize();
+            gl.viewport(0, 0, @floatToInt(c_int, size[0]), @floatToInt(c_int, size[1]));
+            gl.clearColor(0, 0, 0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            zgui.backend.newFrame(width, height);
+            self.draw(out_tex);
+            zgui.backend.draw();
+
             SDL.SDL_GL_SwapWindow(self.window);
 
             if (tracker) |t| {
@@ -259,6 +358,10 @@ pub const Gui = struct {
 
     pub fn deinit(self: *Self) void {
         self.audio.deinit();
+
+        zgui.backend.deinit();
+        zgui.deinit();
+
         gl.deleteProgram(self.program_id);
         SDL.SDL_GL_DeleteContext(self.ctx);
         SDL.SDL_DestroyWindow(self.window);

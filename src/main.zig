@@ -16,8 +16,6 @@ const Allocator = std.mem.Allocator;
 const Atomic = std.atomic.Atomic;
 
 const log = std.log.scoped(.Cli);
-const width = @import("core/ppu.zig").width;
-const height = @import("core/ppu.zig").height;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
 // CLI Arguments + Help Text
@@ -91,9 +89,11 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
-    var quit = Atomic(bool).init(false);
-    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
+    // TODO: Just copy the title instead of grabbing a pointer to it
+    var gui = Gui.init(allocator, &bus.pak.title, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
+
+    var quit = Atomic(bool).init(false);
 
     if (result.args.gdb) {
         const Server = @import("gdbstub").Server;

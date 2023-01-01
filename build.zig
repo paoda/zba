@@ -2,7 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
-const Gdbstub = @import("lib/zba-gdbstub/build.zig");
+const gdbstub = @import("lib/zba-gdbstub/build.zig");
+const zgui = @import("lib/zgui/build.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Minimum Zig Version
@@ -43,13 +44,20 @@ pub fn build(b: *std.build.Builder) void {
     exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
 
     // gdbstub
-    Gdbstub.link(exe);
+    gdbstub.link(exe);
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
     sdk.link(exe, .dynamic);
     exe.addModule("sdl2", sdk.getNativeModule());
 
+    // Dear ImGui bindings
+    const zgui_options = zgui.BuildOptionsStep.init(b, .{ .backend = .sdl2_opengl3 });
+    const zgui_pkg = zgui.getPkg(&.{zgui_options.getPkg()});
+    exe.addPackage(zgui_pkg);
+    zgui.link(exe, zgui_options);
+
+    exe.setBuildMode(mode);
     exe.install();
 
     const run_cmd = exe.run();
