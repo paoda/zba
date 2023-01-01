@@ -64,7 +64,7 @@ pub const Gui = struct {
         const ctx = SDL.SDL_GL_CreateContext(window) orelse panic();
         if (SDL.SDL_GL_MakeCurrent(window, ctx) < 0) panic();
 
-        try gl.load(ctx, Self.glGetProcAddress);
+        gl.load(ctx, Self.glGetProcAddress) catch {};
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
         const program_id = try compileShaders();
