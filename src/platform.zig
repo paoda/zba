@@ -100,7 +100,7 @@ pub const Gui = struct {
         zgui.plot.init();
         zgui.backend.init(window, ctx, "#version 330 core");
 
-        zgui.io.setIniFilename(null);
+        // zgui.io.setIniFilename(null);
 
         return Self{
             .window = window,
@@ -260,25 +260,48 @@ pub const Gui = struct {
     }
 
     fn draw(self: *Self, tex_id: GLuint, cpu: *const Arm7tdmi) void {
-        _ = cpu;
         const win_scale = config.config().host.win_scale;
 
         {
+            const w = @intToFloat(f32, gba_width * win_scale);
+            const h = @intToFloat(f32, gba_height * win_scale);
+
             _ = zgui.begin("Game Boy Advance Screen", .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
             defer zgui.end();
 
-            const img_args = .{
-                .w = @intToFloat(f32, gba_width * win_scale),
-                .h = @intToFloat(f32, gba_height * win_scale),
-                .uv0 = .{ 0.0, 1.0 },
-                .uv1 = .{ 1.0, 0.0 },
-            };
-
-            zgui.image(@intToPtr(*anyopaque, tex_id), img_args);
+            zgui.image(@intToPtr(*anyopaque, tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
         }
 
         {
-            _ = zgui.begin("Emulator Performance", .{});
+            _ = zgui.begin("Information", .{});
+            defer zgui.end();
+
+            {
+                var i: usize = 0;
+                while (i < 8) : (i += 1) {
+                    zgui.text("R{}: 0x{X:0>8}", .{ i, cpu.r[i] });
+
+                    zgui.sameLine(.{});
+
+                    const prefix = if (8 + i < 10) " " else "";
+                    zgui.text("{s}R{}: 0x{X:0>8}", .{ prefix, 8 + i, cpu.r[8 + i] });
+                }
+            }
+
+            zgui.separator();
+
+            widgets.psr("CPSR", cpu.cpsr);
+            widgets.psr("SPSR", cpu.spsr);
+
+            zgui.separator();
+
+            widgets.interrupts(" IE", cpu.bus.io.ie); // space is for padding
+            widgets.interrupts("IRQ", cpu.bus.io.irq);
+        }
+
+        {
+            _ = zgui.begin("Performance", .{});
+            defer zgui.end();
 
             const tmp = blk: {
                 var buf: [0x400]u32 = undefined;
@@ -307,6 +330,8 @@ pub const Gui = struct {
             const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
 
             if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
+                defer zgui.plot.endPlot();
+
                 zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
                 zgui.plot.setupAxis(.x1, x_args);
                 zgui.plot.setupAxis(.y1, y_args);
@@ -315,7 +340,6 @@ pub const Gui = struct {
                 zgui.plot.setupFinish();
 
                 zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
-                zgui.plot.endPlot();
             }
 
             const stats: struct { u32, u32, u32 } = blk: {
@@ -336,8 +360,6 @@ pub const Gui = struct {
             zgui.text("Average: {:0>3} fps", .{stats[0]});
             zgui.text(" Median: {:0>3} fps", .{stats[1]});
             zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
-
-            defer zgui.end();
         }
 
         {
@@ -542,3 +564,87 @@ fn panic() noreturn {
     const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
     @panic(std.mem.sliceTo(str, 0));
 }
+
+const widgets = struct {
+    fn interrupts(comptime label: []const u8, int: anytype) void {
+        const h = 15.0;
+        const w = 9.0 * 2 + 3.5;
+        const ww = 9.0 * 3;
+
+        {
+            zgui.text(label ++ ":", .{});
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("VBL", .{ .w = w, .h = h, .selected = int.vblank.read() });
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("HBL", .{ .w = w, .h = h, .selected = int.hblank.read() });
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("VCT", .{ .w = w, .h = h, .selected = int.coincidence.read() });
+
+            {
+                zgui.sameLine(.{});
+                _ = zgui.selectable("TIM0", .{ .w = ww, .h = h, .selected = int.tim0.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("TIM1", .{ .w = ww, .h = h, .selected = int.tim1.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("TIM2", .{ .w = ww, .h = h, .selected = int.tim2.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("TIM3", .{ .w = ww, .h = h, .selected = int.tim3.read() });
+            }
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("SRL", .{ .w = w, .h = h, .selected = int.serial.read() });
+
+            {
+                zgui.sameLine(.{});
+                _ = zgui.selectable("DMA0", .{ .w = ww, .h = h, .selected = int.dma0.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("DMA1", .{ .w = ww, .h = h, .selected = int.dma1.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("DMA2", .{ .w = ww, .h = h, .selected = int.dma2.read() });
+
+                zgui.sameLine(.{});
+                _ = zgui.selectable("DMA3", .{ .w = ww, .h = h, .selected = int.dma3.read() });
+            }
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("KPD", .{ .w = w, .h = h, .selected = int.keypad.read() });
+
+            zgui.sameLine(.{});
+            _ = zgui.selectable("GPK", .{ .w = w, .h = h, .selected = int.game_pak.read() });
+        }
+    }
+
+    fn psr(comptime label: []const u8, register: anytype) void {
+        const Mode = @import("core/cpu.zig").Mode;
+
+        const maybe_mode = std.meta.intToEnum(Mode, register.mode.read()) catch null;
+        const mode = if (maybe_mode) |mode| mode.toString() else "???";
+        const w = 9.0;
+        const h = 15.0;
+
+        zgui.text(label ++ ": 0x{X:0>8}", .{register.raw});
+
+        zgui.sameLine(.{});
+        _ = zgui.selectable("N", .{ .w = w, .h = h, .selected = register.n.read() });
+
+        zgui.sameLine(.{});
+        _ = zgui.selectable("Z", .{ .w = w, .h = h, .selected = register.z.read() });
+
+        zgui.sameLine(.{});
+        _ = zgui.selectable("C", .{ .w = w, .h = h, .selected = register.c.read() });
+
+        zgui.sameLine(.{});
+        _ = zgui.selectable("V", .{ .w = w, .h = h, .selected = register.v.read() });
+
+        zgui.sameLine(.{});
+        zgui.text("{s}", .{mode});
+    }
+};
