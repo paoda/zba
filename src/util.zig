@@ -317,3 +317,78 @@ pub const FrameBuffer = struct {
         return self.layers[if (dev == .Emulator) self.current else ~self.current];
     }
 };
+
+pub fn RingBuffer(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        const Index = usize;
+        const max_capacity = (@as(Index, 1) << @typeInfo(Index).Int.bits - 1) - 1; // half the range of index type
+
+        const log = std.log.scoped(.RingBuffer);
+
+        read: Index,
+        write: Index,
+        buf: []T,
+
+        const Error = error{buffer_full};
+
+        pub fn init(buf: []T) Self {
+            std.debug.assert(std.math.isPowerOfTwo(buf.len)); // capacity must be a power of two
+            std.debug.assert(buf.len <= max_capacity);
+
+            std.mem.set(T, buf, 0);
+
+            return .{ .read = 0, .write = 0, .buf = buf };
+        }
+
+        pub fn deinit(self: *Self, allocator: Allocator) void {
+            allocator.free(self.buf);
+            self.* = undefined;
+        }
+
+        pub fn push(self: *Self, value: T) Error!void {
+            if (self.isFull()) return error.buffer_full;
+            defer self.write += 1;
+
+            self.buf[self.mask(self.write)] = value;
+        }
+
+        pub fn pop(self: *Self) ?T {
+            if (self.isEmpty()) return null;
+            defer self.read += 1;
+
+            return self.buf[self.mask(self.read)];
+        }
+
+        /// Returns the number of entries read
+        pub fn copy(self: *const Self, cpy: []T) Index {
+            const count = std.math.min(self.len(), cpy.len);
+            var start: Index = self.read;
+
+            for (cpy) |*v, i| {
+                if (i >= count) break;
+
+                v.* = self.buf[self.mask(start)];
+                start += 1;
+            }
+
+            return count;
+        }
+
+        fn len(self: *const Self) Index {
+            return self.write - self.read;
+        }
+
+        fn isFull(self: *const Self) bool {
+            return self.len() == self.buf.len;
+        }
+
+        fn isEmpty(self: *const Self) bool {
+            return self.read == self.write;
+        }
+
+        fn mask(self: *const Self, idx: Index) Index {
+            return idx & (self.buf.len - 1);
+        }
+    };
+}

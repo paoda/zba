@@ -10,6 +10,7 @@ const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
+const RingBuffer = @import("util.zig").RingBuffer;
 
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
@@ -31,6 +32,25 @@ pub const Gui = struct {
     const Self = @This();
     const log = std.log.scoped(.Gui);
 
+    const State = struct {
+        fps_hist: RingBuffer(u32),
+        allocator: Allocator,
+
+        pub fn init(allocator: Allocator) !@This() {
+            const history = try allocator.alloc(u32, 0x400);
+
+            return .{
+                .fps_hist = RingBuffer(u32).init(history),
+                .allocator = allocator,
+            };
+        }
+
+        fn deinit(self: *@This()) void {
+            self.fps_hist.deinit(self.allocator);
+            self.* = undefined;
+        }
+    };
+
     // zig fmt: off
     const vertices: [32]f32 = [_]f32{
         // Positions        // Colours      // Texture Coords
@@ -51,6 +71,8 @@ pub const Gui = struct {
     title: []const u8,
     audio: Audio,
 
+    state: State,
+
     program_id: gl.GLuint,
 
     pub fn init(allocator: Allocator, title: *const [12]u8, apu: *Apu) !Self {
@@ -58,8 +80,6 @@ pub const Gui = struct {
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
-
-        // const win_scale = @intCast(c_int, config.config().host.win_scale);
 
         const window = SDL.SDL_CreateWindow(
             default_title,
@@ -77,7 +97,10 @@ pub const Gui = struct {
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
         zgui.init(allocator);
+        zgui.plot.init();
         zgui.backend.init(window, ctx, "#version 330 core");
+
+        zgui.io.setIniFilename(null);
 
         return Self{
             .window = window,
@@ -85,7 +108,24 @@ pub const Gui = struct {
             .ctx = ctx,
             .program_id = try compileShaders(),
             .audio = Audio.init(apu),
+
+            .state = try State.init(allocator),
         };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.audio.deinit();
+        self.state.deinit();
+
+        zgui.backend.deinit();
+        zgui.plot.deinit();
+        zgui.deinit();
+
+        gl.deleteProgram(self.program_id);
+        SDL.SDL_GL_DeleteContext(self.ctx);
+        SDL.SDL_DestroyWindow(self.window);
+        SDL.SDL_Quit();
+        self.* = undefined;
     }
 
     fn drawGbaTexture(self: *const Self, obj_ids: struct { GLuint, GLuint, GLuint }, tex_id: GLuint, buf: []const u8) void {
@@ -219,21 +259,89 @@ pub const Gui = struct {
         return fbo_id;
     }
 
-    fn draw(self: *Self, tex_id: GLuint) void {
-        _ = self;
+    fn draw(self: *Self, tex_id: GLuint, cpu: *const Arm7tdmi) void {
+        _ = cpu;
+        const win_scale = config.config().host.win_scale;
 
         {
-            _ = zgui.begin("Game Boy Advance Screen", .{ .flags = .{ .no_resize = true } });
+            _ = zgui.begin("Game Boy Advance Screen", .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
             defer zgui.end();
 
-            const args = .{
-                .w = gba_width,
-                .h = gba_height,
+            const img_args = .{
+                .w = @intToFloat(f32, gba_width * win_scale),
+                .h = @intToFloat(f32, gba_height * win_scale),
                 .uv0 = .{ 0.0, 1.0 },
                 .uv1 = .{ 1.0, 0.0 },
             };
 
-            zgui.image(@intToPtr(*anyopaque, tex_id), args);
+            zgui.image(@intToPtr(*anyopaque, tex_id), img_args);
+        }
+
+        {
+            _ = zgui.begin("Emulator Performance", .{});
+
+            const tmp = blk: {
+                var buf: [0x400]u32 = undefined;
+                const len = self.state.fps_hist.copy(&buf);
+
+                break :blk .{ buf, len };
+            };
+            const values = tmp[0];
+            const len = tmp[1];
+
+            if (len == values.len) _ = self.state.fps_hist.pop();
+
+            const sorted = blk: {
+                var buf: @TypeOf(values) = undefined;
+
+                std.mem.copy(u32, buf[0..len], values[0..len]);
+                std.sort.sort(u32, buf[0..len], {}, std.sort.asc(u32));
+
+                break :blk buf;
+            };
+
+            const y_max = 2 * if (len != 0) @intToFloat(f64, sorted[len - 1]) else emu.frame_rate;
+            const x_max = @intToFloat(f64, values.len);
+
+            const y_args = .{ .flags = .{ .no_grid_lines = true } };
+            const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
+
+            if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
+                zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
+                zgui.plot.setupAxis(.x1, x_args);
+                zgui.plot.setupAxis(.y1, y_args);
+                zgui.plot.setupAxisLimits(.y1, .{ .min = 0.0, .max = y_max, .cond = .always });
+                zgui.plot.setupAxisLimits(.x1, .{ .min = 0.0, .max = x_max, .cond = .always });
+                zgui.plot.setupFinish();
+
+                zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
+                zgui.plot.endPlot();
+            }
+
+            const stats: struct { u32, u32, u32 } = blk: {
+                if (len == 0) break :blk .{ 0, 0, 0 };
+
+                const average = average: {
+                    var sum: u32 = 0;
+                    for (sorted[0..len]) |value| sum += value;
+
+                    break :average @intCast(u32, sum / len);
+                };
+                const median = sorted[len / 2];
+                const low = sorted[len / 100]; // 1% Low
+
+                break :blk .{ average, median, low };
+            };
+
+            zgui.text("Average: {:0>3} fps", .{stats[0]});
+            zgui.text(" Median: {:0>3} fps", .{stats[1]});
+            zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
+
+            defer zgui.end();
+        }
+
+        {
+            zgui.showDemoWindow(null);
         }
     }
 
@@ -342,31 +450,21 @@ pub const Gui = struct {
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             zgui.backend.newFrame(width, height);
-            self.draw(out_tex);
+            self.draw(out_tex, cpu);
             zgui.backend.draw();
 
             SDL.SDL_GL_SwapWindow(self.window);
 
             if (tracker) |t| {
-                const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, t.value() }) catch unreachable;
+                const emu_fps = t.value();
+                self.state.fps_hist.push(emu_fps) catch {};
+
+                const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, emu_fps }) catch unreachable;
                 SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
             }
         }
 
         quit.store(true, .Monotonic); // Terminate Emulator Thread
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.audio.deinit();
-
-        zgui.backend.deinit();
-        zgui.deinit();
-
-        gl.deleteProgram(self.program_id);
-        SDL.SDL_GL_DeleteContext(self.ctx);
-        SDL.SDL_DestroyWindow(self.window);
-        SDL.SDL_Quit();
-        self.* = undefined;
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
