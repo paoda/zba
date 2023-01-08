@@ -843,7 +843,12 @@ pub const Ppu = struct {
                 const is_top_layer = (top_layer >> layer) & 1 == 1;
 
                 if (is_top_layer) {
-                    self.scanline.btm()[i] = Scanline.Pixel.from(.Background, bgr555); // this is intentional
+                    const pixel = self.scanline.btm()[i];
+
+                    // FIXME: Can't I do this check ealier? Test Amazing Mirror File Select, bld_demo.gba
+                    if (!pixel.isSet())
+                        self.scanline.btm()[i] = Scanline.Pixel.from(.Background, bgr555); // this is intentional
+
                     return;
                 }
             },
