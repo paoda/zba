@@ -363,6 +363,28 @@ pub const Gui = struct {
         }
 
         {
+            _ = zgui.begin("Scheduler", .{});
+            defer zgui.end();
+
+            const scheduler = cpu.sched;
+
+            zgui.text("tick: {X:0>16}", .{scheduler.tick});
+            zgui.separator();
+
+            const Event = std.meta.Child(@TypeOf(scheduler.queue.items));
+
+            var items: [20]Event = undefined;
+            const len = scheduler.queue.len;
+
+            std.mem.copy(Event, &items, scheduler.queue.items);
+            std.sort.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
+
+            for (items[0..len]) |event| {
+                zgui.text("{X:0>16} | {?}", .{ event.tick, event.kind });
+            }
+        }
+
+        {
             zgui.showDemoWindow(null);
         }
     }
@@ -648,5 +670,13 @@ const widgets = struct {
 
         zgui.sameLine(.{});
         zgui.text("{s}", .{mode});
+    }
+
+    fn eventDesc(comptime T: type) fn (void, T, T) bool {
+        return struct {
+            fn inner(_: void, left: T, right: T) bool {
+                return left.tick > right.tick;
+            }
+        }.inner;
     }
 };
