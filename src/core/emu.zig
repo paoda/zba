@@ -4,7 +4,7 @@ const config = @import("../config.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const FpsTracker = @import("../util.zig").FpsTracker;
+const Tracker = @import("../util.zig").FpsTracker;
 
 const Timer = std.time.Timer;
 const Atomic = std.atomic.Atomic;
@@ -35,18 +35,18 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: *FpsTracker) void {
+pub fn run(quit: *Atomic(bool), pause: *Atomic(bool), cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker) void {
     const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     if (config.config().guest.video_sync) {
-        inner(.LimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+        inner(.LimitedFPS, audio_sync, quit, pause, cpu, scheduler, tracker);
     } else {
-        inner(.UnlimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+        inner(.UnlimitedFPS, audio_sync, quit, pause, cpu, scheduler, tracker);
     }
 }
 
-fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: ?*FpsTracker) void {
+fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), pause: *Atomic(bool), cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker) void {
     if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
         std.debug.assert(tracker != null);
         log.info("FPS tracking enabled", .{});
@@ -57,6 +57,8 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
             log.info("Emulation w/out video sync", .{});
 
             while (!quit.load(.Monotonic)) {
+                if (pause.load(.Monotonic)) continue;
+
                 runFrame(scheduler, cpu);
                 audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
@@ -69,6 +71,8 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
             var wake_time: u64 = frame_period;
 
             while (!quit.load(.Monotonic)) {
+                if (pause.load(.Monotonic)) continue;
+
                 runFrame(scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);
 

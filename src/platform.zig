@@ -389,8 +389,9 @@ pub const Gui = struct {
         const fbo_id = try Self.genFrameBufObject(out_tex);
         defer gl.deleteFramebuffers(1, &fbo_id);
 
-        var quit = std.atomic.Atomic(bool).init(false);
         var tracker = FpsTracker.init();
+        var quit = std.atomic.Atomic(bool).init(false);
+        var pause = std.atomic.Atomic(bool).init(false);
 
         var title_buf: [0x100]u8 = undefined;
 
@@ -441,12 +442,6 @@ pub const Gui = struct {
                             SDL.SDLK_s => keyinput.shoulder_r.set(),
                             SDL.SDLK_RETURN => keyinput.start.set(),
                             SDL.SDLK_RSHIFT => keyinput.select.set(),
-                            SDL.SDLK_i => {
-                                comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
-                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))});
-                            },
-                            // SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
-                            SDL.SDLK_k => {},
                             else => {},
                         }
 
@@ -456,37 +451,44 @@ pub const Gui = struct {
                 }
             }
 
+            // We Access non-atomic parts of the Emulator here
             {
-                gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
-                defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+                pause.store(true, .Monotonic);
+                defer pause.store(false, .Monotonic);
 
-                const buf = cpu.bus.ppu.framebuf.get(.Renderer);
-                gl.viewport(0, 0, gba_width, gba_height);
-                self.drawGbaTexture(obj_ids, emu_tex, buf);
+                self.state.fps_hist.push(tracker.value()) catch {};
+
+                // Draw GBA Screen to Texture
+                {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+                    defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+                    const buf = cpu.bus.ppu.framebuf.get(.Renderer);
+                    gl.viewport(0, 0, gba_width, gba_height);
+                    self.drawGbaTexture(obj_ids, emu_tex, buf);
+                }
+
+                // Background Colour
+                const size = zgui.io.getDisplaySize();
+                gl.viewport(0, 0, @floatToInt(c_int, size[0]), @floatToInt(c_int, size[1]));
+                gl.clearColor(0, 0, 0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                if (tracker) |t| {
+                    const emu_fps = t.value();
+                    self.state.fps_hist.push(emu_fps) catch {};
+
+                    const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, emu_fps }) catch unreachable;
+                    SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
+                }
+
+                zgui.backend.newFrame(width, height);
+                self.draw(out_tex, cpu);
+                zgui.backend.draw();
             }
-
-            // Background
-            const size = zgui.io.getDisplaySize();
-            gl.viewport(0, 0, @floatToInt(c_int, size[0]), @floatToInt(c_int, size[1]));
-            gl.clearColor(0, 0, 0, 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            zgui.backend.newFrame(width, height);
-            self.draw(out_tex, cpu);
-            zgui.backend.draw();
 
             SDL.SDL_GL_SwapWindow(self.window);
-
-            if (tracker) |t| {
-                const emu_fps = t.value();
-                self.state.fps_hist.push(emu_fps) catch {};
-
-                const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, emu_fps }) catch unreachable;
-                SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
-            }
         }
-
-        quit.store(true, .Monotonic); // Terminate Emulator Thread
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
