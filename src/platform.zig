@@ -34,19 +34,14 @@ pub const Gui = struct {
 
     const State = struct {
         fps_hist: RingBuffer(u32),
-        allocator: Allocator,
 
         pub fn init(allocator: Allocator) !@This() {
             const history = try allocator.alloc(u32, 0x400);
-
-            return .{
-                .fps_hist = RingBuffer(u32).init(history),
-                .allocator = allocator,
-            };
+            return .{ .fps_hist = RingBuffer(u32).init(history) };
         }
 
-        fn deinit(self: *@This()) void {
-            self.fps_hist.deinit(self.allocator);
+        fn deinit(self: *@This(), allocator: Allocator) void {
+            self.fps_hist.deinit(allocator);
             self.* = undefined;
         }
     };
@@ -68,14 +63,15 @@ pub const Gui = struct {
 
     window: *SDL.SDL_Window,
     ctx: SDL_GLContext,
-    title: []const u8,
+    title: [:0]const u8,
     audio: Audio,
 
     state: State,
 
+    allocator: Allocator,
     program_id: gl.GLuint,
 
-    pub fn init(allocator: Allocator, title: *const [12]u8, apu: *Apu) !Self {
+    pub fn init(allocator: Allocator, title: [12]u8, apu: *Apu) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
@@ -104,18 +100,19 @@ pub const Gui = struct {
 
         return Self{
             .window = window,
-            .title = std.mem.sliceTo(title, 0),
+            .title = try allocator.dupeZ(u8, &title),
             .ctx = ctx,
             .program_id = try compileShaders(),
             .audio = Audio.init(apu),
 
+            .allocator = allocator,
             .state = try State.init(allocator),
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.audio.deinit();
-        self.state.deinit();
+        self.state.deinit(self.allocator);
 
         zgui.backend.deinit();
         zgui.plot.deinit();
@@ -125,6 +122,8 @@ pub const Gui = struct {
         SDL.SDL_GL_DeleteContext(self.ctx);
         SDL.SDL_DestroyWindow(self.window);
         SDL.SDL_Quit();
+
+        self.allocator.free(self.title);
         self.* = undefined;
     }
 
@@ -266,7 +265,7 @@ pub const Gui = struct {
             const w = @intToFloat(f32, gba_width * win_scale);
             const h = @intToFloat(f32, gba_height * win_scale);
 
-            _ = zgui.begin("Game Boy Advance Screen", .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
+            _ = zgui.begin(self.title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
             defer zgui.end();
 
             zgui.image(@intToPtr(*anyopaque, tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });

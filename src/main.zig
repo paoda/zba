@@ -90,7 +90,7 @@ pub fn main() void {
     }
 
     // TODO: Just copy the title instead of grabbing a pointer to it
-    var gui = Gui.init(allocator, &bus.pak.title, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
+    var gui = Gui.init(allocator, bus.pak.title, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
     var quit = Atomic(bool).init(false);

@@ -188,7 +188,7 @@ pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_pat
     const kind = Backup.guess(file_buf);
     const device = if (config.config().guest.force_rtc) .Rtc else guessDevice(file_buf);
 
-    logHeader(file_buf, &title);
+    logHeader(file_buf, title);
 
     return .{
         .buf = file_buf,
@@ -220,19 +220,17 @@ fn guessDevice(buf: []const u8) Gpio.Device.Kind {
     }
 
     // TODO: Detect other GPIO devices
-
     return .None;
 }
 
-fn logHeader(buf: []const u8, title: *const [12]u8) void {
-    const code = buf[0xAC..0xB0];
-    const maker = buf[0xB0..0xB2];
-    const version = buf[0xBC];
+fn logHeader(buf: []const u8, title: [12]u8) void {
+    const ver = buf[0xBC];
 
     log.info("Title: {s}", .{title});
-    if (version != 0) log.info("Version: {}", .{version});
-    log.info("Game Code: {s}", .{code});
-    log.info("Maker Code: {s}", .{maker});
+    if (ver != 0) log.info("Version: {}", .{ver});
+
+    log.info("Game Code: {s}", .{buf[0xAC..0xB0]});
+    log.info("Maker Code: {s}", .{buf[0xB0..0xB2]});
 }
 
 test "OOB Access" {
