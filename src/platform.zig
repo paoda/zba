@@ -2,6 +2,7 @@ const std = @import("std");
 const SDL = @import("sdl2");
 const gl = @import("gl");
 const zgui = @import("zgui");
+const nfd = @import("nfd");
 
 const emu = @import("core/emu.zig");
 const config = @import("config.zig");
@@ -34,6 +35,7 @@ pub const Gui = struct {
 
     const State = struct {
         fps_hist: RingBuffer(u32),
+        should_quit: bool = false,
 
         pub fn init(allocator: Allocator) !@This() {
             const history = try allocator.alloc(u32, 0x400);
@@ -262,6 +264,36 @@ pub const Gui = struct {
         const win_scale = config.config().host.win_scale;
 
         {
+            _ = zgui.beginMainMenuBar();
+            defer zgui.endMainMenuBar();
+
+            if (zgui.beginMenu("File", true)) {
+                defer zgui.endMenu();
+
+                if (zgui.menuItem("Quit", .{})) self.state.should_quit = true;
+                if (zgui.menuItem("Insert ROM", .{})) blk: {
+                    const maybe_path = nfd.openFileDialog("gba", null) catch |e| {
+                        log.err("failed to open file dialog: {?}", .{e});
+                        break :blk;
+                    };
+
+                    if (maybe_path) |file_path| {
+                        defer nfd.freePath(file_path);
+                        log.info("user chose: \"{s}\"", .{file_path});
+
+                        // emu.loadRom(cpu, file_path);
+                    }
+                }
+            }
+
+            if (zgui.beginMenu("Emulation", true)) {
+                defer zgui.endMenu();
+
+                if (zgui.menuItem("Restart", .{})) log.warn("TODO: Restart Emulator", .{});
+            }
+        }
+
+        {
             const w = @intToFloat(f32, gba_width * win_scale);
             const h = @intToFloat(f32, gba_height * win_scale);
 
@@ -422,6 +454,8 @@ pub const Gui = struct {
             // This might be true if the emu is running via a gdbstub server
             // and the gdb stub exits first
             if (quit.load(.Monotonic)) break :emu_loop;
+            // Quit Signal from Dear Imgui
+            if (self.state.should_quit) break :emu_loop;
 
             while (SDL.SDL_PollEvent(&event) != 0) {
                 _ = zgui.backend.processEvent(&event);
