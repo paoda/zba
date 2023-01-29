@@ -92,8 +92,9 @@ pub fn main() void {
         const Server = @import("gdbstub").Server;
         const EmuThing = @import("core/emu.zig").EmuThing;
 
-        var emu_thing = EmuThing.init(&cpu, &scheduler);
-        const emulator = emu_thing.interface();
+        var wrapper = EmuThing.init(&cpu, &scheduler);
+        var emulator = wrapper.interface(allocator);
+        defer emulator.deinit();
 
         {
             const frames_per_second: usize = 60;

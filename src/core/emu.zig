@@ -166,6 +166,7 @@ fn spinLoop(timer: *Timer, wake_time: u64) void {
 pub const EmuThing = struct {
     const Self = @This();
     const Interface = @import("gdbstub").Emulator;
+    const Allocator = std.mem.Allocator;
 
     cpu: *Arm7tdmi,
     scheduler: *Scheduler,
@@ -174,8 +175,8 @@ pub const EmuThing = struct {
         return .{ .cpu = cpu, .scheduler = scheduler };
     }
 
-    pub fn interface(self: *Self) Interface {
-        return Interface.init(self);
+    pub fn interface(self: *Self, allocator: Allocator) Interface {
+        return Interface.init(allocator, self);
     }
 
     pub fn read(self: *const Self, addr: u32) u8 {
