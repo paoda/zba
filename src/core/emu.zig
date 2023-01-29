@@ -183,11 +183,7 @@ pub const EmuThing = struct {
     }
 
     pub fn write(self: *Self, addr: u32, value: u8) void {
-        _ = value;
-        _ = self;
-        _ = addr;
-
-        std.debug.panic("TODO: Implement Debug Writes?", .{});
+        self.cpu.bus.dbgWrite(u8, addr, value);
     }
 
     pub fn registers(self: *const Self) *[16]u32 {

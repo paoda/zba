@@ -198,55 +198,6 @@ fn fillReadTableExternal(self: *Self, addr: u32) ?*anyopaque {
     return &self.pak.buf[masked_addr];
 }
 
-pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
-    const page = unaligned_address >> bits;
-    const offset = unaligned_address & (page_size - 1);
-
-    // We're doing some serious out-of-bounds open-bus reads
-    if (page >= table_len) return self.openBus(T, unaligned_address);
-
-    if (self.read_table[page]) |some_ptr| {
-        // We have a pointer to a page, cast the pointer to it's underlying type
-        const Ptr = [*]const T;
-        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
-
-        // Note: We don't check array length, since we force align the
-        // lower bits of the address as the GBA would
-        return ptr[forceAlign(T, offset) / @sizeOf(T)];
-    }
-
-    return self.dbgSlowRead(T, unaligned_address);
-}
-
-fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const page = @truncate(u8, unaligned_address >> 24);
-    const address = forceAlign(T, unaligned_address);
-
-    return switch (page) {
-        // General Internal Memory
-        0x00 => blk: {
-            if (address < Bios.size)
-                break :blk self.bios.dbgRead(T, self.cpu.r[15], unaligned_address);
-
-            break :blk self.openBus(T, address);
-        },
-        0x02 => unreachable, // handled by fastmem
-        0x03 => unreachable, // handled by fastmem
-        0x04 => self.readIo(T, address),
-
-        // Internal Display Memory
-        0x05 => unreachable, // handled by fastmem
-        0x06 => unreachable, // handled by fastmem
-        0x07 => unreachable, // handled by fastmem
-
-        // External Memory (Game Pak)
-        0x08...0x0D => self.pak.dbgRead(T, address),
-        0x0E...0x0F => self.readBackup(T, unaligned_address),
-        else => self.openBus(T, address),
-    };
-}
-
 fn readIo(self: *const Self, comptime T: type, address: u32) T {
     return io.read(self, T, address) orelse self.openBus(T, address);
 }
@@ -336,6 +287,27 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
     return self.slowRead(T, unaligned_address);
 }
 
+pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const page = unaligned_address >> bits;
+    const offset = unaligned_address & (page_size - 1);
+
+    // We're doing some serious out-of-bounds open-bus reads
+    if (page >= table_len) return self.openBus(T, unaligned_address);
+
+    if (self.read_table[page]) |some_ptr| {
+        // We have a pointer to a page, cast the pointer to it's underlying type
+        const Ptr = [*]const T;
+        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+
+        // Note: We don't check array length, since we force align the
+        // lower bits of the address as the GBA would
+        return ptr[forceAlign(T, offset) / @sizeOf(T)];
+    }
+
+    return self.dbgSlowRead(T, unaligned_address);
+}
+
 fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
     @setCold(true);
 
@@ -361,6 +333,34 @@ fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.read(T, address),
+        0x0E...0x0F => self.readBackup(T, unaligned_address),
+        else => self.openBus(T, address),
+    };
+}
+
+fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
+    const page = @truncate(u8, unaligned_address >> 24);
+    const address = forceAlign(T, unaligned_address);
+
+    return switch (page) {
+        // General Internal Memory
+        0x00 => blk: {
+            if (address < Bios.size)
+                break :blk self.bios.dbgRead(T, self.cpu.r[15], unaligned_address);
+
+            break :blk self.openBus(T, address);
+        },
+        0x02 => unreachable, // handled by fastmem
+        0x03 => unreachable, // handled by fastmem
+        0x04 => self.readIo(T, address),
+
+        // Internal Display Memory
+        0x05 => unreachable, // handled by fastmem
+        0x06 => unreachable, // handled by fastmem
+        0x07 => unreachable, // handled by fastmem
+
+        // External Memory (Game Pak)
+        0x08...0x0D => self.pak.dbgRead(T, address),
         0x0E...0x0F => self.readBackup(T, unaligned_address),
         else => self.openBus(T, address),
     };
@@ -406,6 +406,31 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     }
 }
 
+/// Mostly Identical to `Bus.write`, slowmeme is handled by `Bus.dbgSlowWrite`
+pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const page = unaligned_address >> bits;
+    const offset = unaligned_address & (page_size - 1);
+
+    // We're doing some serious out-of-bounds open-bus writes, they do nothing though
+    if (page >= table_len) return;
+
+    if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
+        // We have a pointer to a page, cast the pointer to it's underlying type
+        const Ptr = [*]T;
+        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+
+        // Note: We don't check array length, since we force align the
+        // lower bits of the address as the GBA would
+        ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
+    } else {
+        // we can return early if this is an 8-bit OAM write
+        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
+
+        self.dbgSlowWrite(T, unaligned_address, value);
+    }
+}
+
 fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
     @setCold(true);
 
@@ -427,6 +452,31 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),
         0x0E...0x0F => self.pak.backup.write(unaligned_address, @truncate(u8, rotr(T, value, 8 * rotateBy(T, unaligned_address)))),
+        else => {},
+    }
+}
+
+fn dbgSlowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
+    @setCold(true);
+
+    const page = @truncate(u8, unaligned_address >> 24);
+    const address = forceAlign(T, unaligned_address);
+
+    switch (page) {
+        // General Internal Memory
+        0x00 => self.bios.write(T, address, value),
+        0x02 => unreachable, // completely handled by fastmem
+        0x03 => unreachable, // completely handled by fastmem
+        0x04 => return, // FIXME: Let debug writes mess with I/O
+
+        // Internal Display Memory
+        0x05 => self.ppu.palette.write(T, address, value),
+        0x06 => self.ppu.vram.write(T, self.ppu.dispcnt, address, value),
+        0x07 => unreachable, // completely handled by fastmem
+
+        // External Memory (Game Pak)
+        0x08...0x0D => return, // FIXME: Debug Write to Backup/GPIO w/out messing with state
+        0x0E...0x0F => return, // FIXME: Debug Write to Backup w/out messing with state
         else => {},
     }
 }
