@@ -13,7 +13,7 @@ This is a simple (read: incomplete) for-fun long-term project. I hope to get "mo
 - [x] Affine Sprites
 - [ ] Windowing (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/window))
 - [ ] Audio Resampler (Having issues with SDL2's)
-- [ ] Immediate Mode GUI
+- [x] Immediate Mode GUI (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/imgui))
 - [ ] Refactoring for easy-ish perf boosts
 
 ## Usage
@@ -91,17 +91,17 @@ zig-datetime | <https://github.com/frmdstryr/zig-datetime>
 `bitfields.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
 `gl.zig` | <https://github.com/MasterQ32/zig-opengl>
 
-Use `git submodule update --init` from the project root to pull the git submodules `SDL.zig`, `zig-clap`, `known-folders`, `zig-toml` and `zig-datetime`
+Use `git submodule update --init` from the project root to pull the git relevant git submodules
 
 Be sure to provide SDL2 using:
 
 - Linux: Your distro's package manager
-- MacOS: ¯\\\_(ツ)_/¯
+- MacOS: `brew` (install [this formula](https://formulae.brew.sh/formula/sdl2))
 - Windows: [`vcpkg`](https://github.com/Microsoft/vcpkg) (install `sdl2:x64-windows`)
 
 `SDL.zig` will provide a helpful compile error if the zig compiler is unable to find SDL2.
 
-Once you've got all the dependencies, execute `zig build -Drelease-fast`. The executable is located at `zig-out/bin/`.
+Once you've got all the dependencies, execute `zig build -Doptimize=ReleaseSafe`. The executable is located at `zig-out/bin/`.
 
 ## Controls
 
