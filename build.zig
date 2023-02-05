@@ -47,7 +47,7 @@ pub fn build(b: *std.build.Builder) void {
     // gdbstub
     gdbstub.link(exe);
     // NativeFileDialog(ue) Bindings
-    exe.linkLibrary(nfd.makeLib(b, mode, target));
+    exe.linkLibrary(nfd.makeLib(b, target, optimize));
     exe.addPackage(nfd.getPackage("nfd"));
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
@@ -61,7 +61,6 @@ pub fn build(b: *std.build.Builder) void {
     zgui.link(exe, zgui_options);
     exe.addPackage(zgui_pkg);
 
-    exe.setBuildMode(mode);
     exe.install();
 
     const run_cmd = exe.run();
