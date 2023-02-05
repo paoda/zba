@@ -39,7 +39,7 @@ jobs:
         with:
           submodules: true
       - name: build 
-        run: zig build -Drelease-safe
+        run: zig build -Doptimize=ReleaseSafe
       - name: upload
         uses: actions/upload-artifact@v3
         with:
