@@ -84,10 +84,12 @@ Most recently built on Zig [v0.11.0-dev.1580+a5b34a61a](https://github.com/zigla
 Dependency | Source
 --- | ---
 SDL.zig | <https://github.com/MasterQ32/SDL.zig>
-zig-clap | <https://github.com/Hejsil/zig-clap>
 known-folders | <https://github.com/ziglibs/known-folders>
-zig-toml | <https://github.com/aeronavery/zig-toml>
+nfd-zig | <https://github.com/fabioarnold/nfd-zig>
+zgui | <https://github.com/michal-z/zig-gamedev/tree/main/libs/zgui>
+zig-clap | <https://github.com/Hejsil/zig-clap>
 zig-datetime | <https://github.com/frmdstryr/zig-datetime>
+zig-toml | <https://github.com/aeronavery/zig-toml>
 `bitfields.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
 `gl.zig` | <https://github.com/MasterQ32/zig-opengl>
 
