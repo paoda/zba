@@ -48,7 +48,7 @@ pub fn build(b: *std.build.Builder) void {
     gdbstub.link(exe);
     // NativeFileDialog(ue) Bindings
     exe.linkLibrary(nfd.makeLib(b, target, optimize));
-    exe.addPackage(nfd.getPackage("nfd"));
+    exe.addModule("nfd", nfd.getModule(b));
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
@@ -56,10 +56,9 @@ pub fn build(b: *std.build.Builder) void {
     exe.addModule("sdl2", sdk.getNativeModule());
 
     // Dear ImGui bindings
-    const zgui_options = zgui.BuildOptionsStep.init(b, .{ .backend = .sdl2_opengl3 });
-    const zgui_pkg = zgui.getPkg(&.{zgui_options.getPkg()});
-    zgui.link(exe, zgui_options);
-    exe.addPackage(zgui_pkg);
+    const zgui_pkg = zgui.package(b, .{ .options = .{ .backend = .sdl2_opengl3 } });
+    exe.addModule("zgui", zgui_pkg.module);
+    zgui.link(exe, zgui_pkg.options);
 
     exe.install();
 
