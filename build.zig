@@ -4,7 +4,7 @@ const Sdk = @import("lib/SDL.zig/Sdk.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Minimum Zig Version
-    const min_ver = std.SemanticVersion.parse("0.11.0-dev.1557+03cdb4fb5") catch return; // https://github.com/ziglang/zig/commit/03cdb4fb5
+    const min_ver = std.SemanticVersion.parse("0.11.0-dev.1580+a5b34a61a") catch return; // https://github.com/ziglang/zig/commit/a5b34a61a
     if (builtin.zig_version.order(min_ver).compare(.lt)) {
         std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
         std.os.exit(1);
