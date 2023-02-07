@@ -23,28 +23,27 @@ pub fn build(b: *std.build.Builder) void {
     exe.setMainPkgPath("."); // Necessary so that src/main.zig can embed example.toml
 
     // Known Folders (%APPDATA%, XDG, etc.)
-    exe.addPackagePath("known_folders", "lib/known-folders/known-folders.zig");
+    exe.addAnonymousModule("known_folders", .{ .source_file = .{ .path = "lib/known-folders/known-folders.zig" } });
 
     // DateTime Library
-    exe.addPackagePath("datetime", "lib/zig-datetime/src/main.zig");
+    exe.addAnonymousModule("datetime", .{ .source_file = .{ .path = "lib/zig-datetime/src/main.zig" } });
 
     // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
-    // exe.addPackage(.{ .name = "bitfield", .path = .{ .path = "lib/util/bitfield.zig" } });
-    exe.addPackagePath("bitfield", "lib/util/bitfield.zig");
+    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/util/bitfield.zig" } });
 
     // Argument Parsing Library
-    exe.addPackagePath("clap", "lib/zig-clap/clap.zig");
+    exe.addAnonymousModule("clap", .{ .source_file = .{ .path = "lib/zig-clap/clap.zig" } });
 
     // TOML Library
-    exe.addPackagePath("toml", "lib/zig-toml/src/toml.zig");
+    exe.addAnonymousModule("toml", .{ .source_file = .{ .path = "lib/zig-toml/src/toml.zig" } });
 
     // OpenGL 3.3 Bindings
-    exe.addPackagePath("gl", "lib/gl.zig");
+    exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
     sdk.link(exe, .dynamic);
-    exe.addPackage(sdk.getNativePackage("sdl2"));
+    exe.addModule("sdl2", sdk.getNativeModule());
 
     exe.install();
 
