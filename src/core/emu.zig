@@ -199,15 +199,18 @@ pub const EmuThing = struct {
         const cpu = self.cpu;
         const sched = self.scheduler;
 
+        // Is true when we have executed one (1) instruction
+        var did_step: bool = false;
+
         // TODO: How can I make it easier to keep this in lock-step with runFrame?
-        while (true) {
+        while (!did_step) {
             if (!cpu.stepDmaTransfer()) {
                 if (cpu.isHalted()) {
                     // Fast-forward to next Event
                     sched.tick = sched.queue.peek().?.tick;
                 } else {
                     cpu.step();
-                    break; // this function won't return until we've actually stepped once
+                    did_step = true;
                 }
             }
 
