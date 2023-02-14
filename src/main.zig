@@ -4,14 +4,17 @@ const known_folders = @import("known_folders");
 const clap = @import("clap");
 
 const config = @import("config.zig");
+const emu = @import("core/emu.zig");
 
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
-
+const FpsTracker = @import("util.zig").FpsTracker;
 const Allocator = std.mem.Allocator;
+const Atomic = std.atomic.Atomic;
+
 const log = std.log.scoped(.Cli);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
@@ -88,6 +91,10 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
+    var quit = Atomic(bool).init(false);
+    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
+    defer gui.deinit();
+
     if (result.args.gdb) {
         const Server = @import("gdbstub").Server;
         const EmuThing = @import("core/emu.zig").EmuThing;
@@ -96,29 +103,33 @@ pub fn main() void {
         var emulator = wrapper.interface(allocator);
         defer emulator.deinit();
 
-        {
-            const frames_per_second: usize = 60;
-            const emu = @import("core/emu.zig");
-
-            var i: usize = 0;
-            while (i < frames_per_second * 120) : (i += 1) {
-                emu.runFrame(&scheduler, &cpu);
-
-                std.debug.print("Frame {:0>3}/{:0>3}\r", .{ i, frames_per_second * 120 });
-            }
-        }
-
         log.info("Ready to connect", .{});
 
         var server = Server.init(emulator) catch |e| exitln("failed to init gdb server: {}", .{e});
         defer server.deinit(allocator);
 
-        server.run(allocator) catch |e| exitln("gdb server crashed: {}", .{e});
-    } else {
-        var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
-        defer gui.deinit();
+        log.info("Starting GDB Server Thread", .{});
 
-        gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
+        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
+        defer thread.join();
+
+        gui.run(.{
+            .cpu = &cpu,
+            .scheduler = &scheduler,
+            .quit = &quit,
+        }) catch |e| exitln("main thread panicked: {}", .{e});
+    } else {
+        var tracker = FpsTracker.init();
+
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &scheduler, &cpu, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
+        defer thread.join();
+
+        gui.run(.{
+            .cpu = &cpu,
+            .scheduler = &scheduler,
+            .tracker = &tracker,
+            .quit = &quit,
+        }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }
 

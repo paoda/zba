@@ -154,9 +154,17 @@ pub const Gui = struct {
         return tex_id;
     }
 
-    pub fn run(self: *Self, cpu: *Arm7tdmi, scheduler: *Scheduler) !void {
-        var quit = std.atomic.Atomic(bool).init(false);
-        var tracker = FpsTracker.init();
+    const RunOptions = struct {
+        quit: *std.atomic.Atomic(bool),
+        tracker: ?*FpsTracker = null,
+        cpu: *Arm7tdmi,
+        scheduler: *Scheduler,
+    };
+
+    pub fn run(self: *Self, opt: RunOptions) !void {
+        const cpu = opt.cpu;
+        const tracker = opt.tracker;
+        const quit = opt.quit;
 
         var buffer_ids = Self.generateBuffers();
         defer {
@@ -169,13 +177,15 @@ pub const Gui = struct {
         const tex_id = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
         defer gl.deleteTextures(1, &tex_id);
 
-        const thread = try std.Thread.spawn(.{}, emu.run, .{ &quit, scheduler, cpu, &tracker });
-        defer thread.join();
-
         var title_buf: [0x100]u8 = undefined;
 
         emu_loop: while (true) {
             var event: SDL.SDL_Event = undefined;
+
+            // This might be true if the emu is running via a gdbstub server
+            // and the gdb stub exits first
+            if (quit.load(.Monotonic)) break :emu_loop;
+
             while (SDL.SDL_PollEvent(&event) != 0) {
                 switch (event.type) {
                     SDL.SDL_QUIT => break :emu_loop,
@@ -238,8 +248,10 @@ pub const Gui = struct {
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
             SDL.SDL_GL_SwapWindow(self.window);
 
-            const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, tracker.value() }) catch unreachable;
-            SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
+            if (tracker) |t| {
+                const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, t.value() }) catch unreachable;
+                SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
+            }
         }
 
         quit.store(true, .Monotonic); // Terminate Emulator Thread
