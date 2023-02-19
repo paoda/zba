@@ -40,7 +40,7 @@ jobs:
         with:
           submodules: true
       - name: build 
-        run: zig build -Doptimize=ReleaseSafe
+        run: zig build -Doptimize=ReleaseSafe -Dcpu=baseline
       - name: upload
         uses: actions/upload-artifact@v3
         with:
