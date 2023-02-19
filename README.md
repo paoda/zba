@@ -96,7 +96,7 @@ Use `git submodule update --init` from the project root to pull the git relevant
 Be sure to provide SDL2 using:
 
 - Linux: Your distro's package manager
-- MacOS: `brew` (install [this formula](https://formulae.brew.sh/formula/sdl2))
+- macOS: ¯\\\_(ツ)_/¯ (try [this formula](https://formulae.brew.sh/formula/sdl2)?)
 - Windows: [`vcpkg`](https://github.com/Microsoft/vcpkg) (install `sdl2:x64-windows`)
 
 `SDL.zig` will provide a helpful compile error if the zig compiler is unable to find SDL2.
