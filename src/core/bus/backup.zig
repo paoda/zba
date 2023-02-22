@@ -137,6 +137,7 @@ pub const Backup = struct {
         for (backup_kinds) |needle| {
             const needle_len = needle.str.len;
 
+            // TODO: Use new for loop syntax?
             var i: usize = 0;
             while ((i + needle_len) < rom.len) : (i += 1) {
                 if (std.mem.eql(u8, needle.str, rom[i..][0..needle_len])) return needle.kind;

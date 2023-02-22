@@ -146,9 +146,8 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
 
     const step = 2 * std.time.ns_per_ms; // Granularity of 2ms
     const times = sleep_for / step;
-    var i: usize = 0;
 
-    while (i < times) : (i += 1) {
+    for (0..times) |_| {
         std.time.sleep(step);
 
         // Upon wakeup, check to see if this particular sleep was longer than expected

@@ -213,6 +213,7 @@ fn guessDevice(buf: []const u8) Gpio.Device.Kind {
     // Try to Guess if ROM uses RTC
     const needle = "RTC_V"; // I was told SIIRTC_V, though Pokemen Firered (USA) is a false negative
 
+    // TODO: Use new for loop syntax?
     var i: usize = 0;
     while ((i + needle.len) < buf.len) : (i += 1) {
         if (std.mem.eql(u8, needle, buf[i..(i + needle.len)])) return .Rtc;

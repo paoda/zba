@@ -339,10 +339,7 @@ fn DmaController(comptime id: u2) type {
 }
 
 pub fn onBlanking(bus: *Bus, comptime kind: DmaKind) void {
-    comptime var i: usize = 0;
-    inline while (i < 4) : (i += 1) {
-        bus.dma[i].poll(kind);
-    }
+    inline for (0..4) |i| bus.dma[i].poll(kind);
 }
 
 const Adjustment = enum(u2) {

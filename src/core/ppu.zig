@@ -625,8 +625,7 @@ pub const Ppu = struct {
                 const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
-                var layer: usize = 0;
-                while (layer < 4) : (layer += 1) {
+                for (0..4) |layer| {
                     self.drawSprites(@truncate(u2, layer));
                     if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackground(0);
                     if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackground(1);
@@ -640,8 +639,7 @@ pub const Ppu = struct {
                 const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
-                var layer: usize = 0;
-                while (layer < 4) : (layer += 1) {
+                for (0..4) |layer| {
                     self.drawSprites(@truncate(u2, layer));
                     if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackground(0);
                     if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackground(1);
@@ -654,8 +652,7 @@ pub const Ppu = struct {
                 const framebuf_base = width * @as(usize, scanline);
                 if (obj_enable) self.fetchSprites();
 
-                var layer: usize = 0;
-                while (layer < 4) : (layer += 1) {
+                for (0..4) |layer| {
                     self.drawSprites(@truncate(u2, layer));
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
                     if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawAffineBackground(3);
@@ -671,7 +668,7 @@ pub const Ppu = struct {
                 const vram_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.vram.buf));
                 const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
-                for (vram_buf[vram_base .. vram_base + width]) |bgr555, i| {
+                for (vram_buf[vram_base .. vram_base + width], 0..) |bgr555, i| {
                     framebuf[framebuf_base + i] = rgba888(bgr555);
                 }
             },
@@ -685,7 +682,7 @@ pub const Ppu = struct {
                 const pal_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.palette.buf));
                 const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
-                for (self.vram.buf[vram_base .. vram_base + width]) |pal_id, i| {
+                for (self.vram.buf[vram_base .. vram_base + width], 0..) |pal_id, i| {
                     framebuf[framebuf_base + i] = rgba888(pal_buf[pal_id]);
                 }
             },
@@ -701,8 +698,7 @@ pub const Ppu = struct {
                 const vram_buf = @ptrCast([*]const u16, @alignCast(@alignOf(u16), self.vram.buf));
                 const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
-                var i: usize = 0;
-                while (i < width) : (i += 1) {
+                for (0..width) |i| {
                     const bgr555 = if (scanline < m5_height and i < m5_width) vram_buf[vram_base + i] else self.palette.backdrop();
                     framebuf[framebuf_base + i] = rgba888(bgr555);
                 }
@@ -718,7 +714,7 @@ pub const Ppu = struct {
         // FIXME: @ptrCast between slices changing the length isn't implemented yet
         const framebuf = @ptrCast([*]u32, @alignCast(@alignOf(u32), self.framebuf.get(.Emulator)));
 
-        for (self.scanline.top()) |maybe_top, i| {
+        for (self.scanline.top(), 0..) |maybe_top, i| {
             const maybe_btm = self.scanline.btm()[i];
 
             const bgr555 = self.getBgr555(maybe_top, maybe_btm);

@@ -73,7 +73,7 @@ pub const Scheduler = struct {
 
     /// Removes the **first** scheduled event of type `needle`
     pub fn removeScheduledEvent(self: *Self, needle: EventKind) void {
-        for (self.queue.items) |event, i| {
+        for (self.queue.items, 0..) |event, i| {
             if (std.meta.eql(event.kind, needle)) {
 
                 // invalidates the slice we're iterating over

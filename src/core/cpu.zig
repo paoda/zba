@@ -39,13 +39,12 @@ pub const arm = struct {
     }
 
     fn populate() [0x1000]InstrFn {
-        return comptime {
+        comptime {
             @setEvalBranchQuota(0xE000);
-            var ret = [_]InstrFn{und} ** 0x1000;
+            var table = [_]InstrFn{und} ** 0x1000;
 
-            var i: usize = 0;
-            while (i < ret.len) : (i += 1) {
-                ret[i] = switch (@as(u2, i >> 10)) {
+            for (&table, 0..) |*handler, i| {
+                handler.* = switch (@as(u2, i >> 10)) {
                     0b00 => if (i == 0x121) blk: {
                         break :blk branchExchange;
                     } else if (i & 0xFCF == 0x009) blk: {
@@ -107,8 +106,8 @@ pub const arm = struct {
                 };
             }
 
-            return ret;
-        };
+            return table;
+        }
     }
 };
 
@@ -136,13 +135,12 @@ pub const thumb = struct {
     }
 
     fn populate() [0x400]InstrFn {
-        return comptime {
+        comptime {
             @setEvalBranchQuota(5025); // This is exact
-            var ret = [_]InstrFn{und} ** 0x400;
+            var table = [_]InstrFn{und} ** 0x400;
 
-            var i: usize = 0;
-            while (i < ret.len) : (i += 1) {
-                ret[i] = switch (@as(u3, i >> 7 & 0x7)) {
+            for (&table, 0..) |*handler, i| {
+                handler.* = switch (@as(u3, i >> 7 & 0x7)) {
                     0b000 => if (i >> 5 & 0x3 == 0b11) blk: {
                         const I = i >> 4 & 1 == 1;
                         const is_sub = i >> 3 & 1 == 1;
@@ -230,8 +228,8 @@ pub const thumb = struct {
                 };
             }
 
-            return ret;
-        };
+            return table;
+        }
     }
 };
 
@@ -385,8 +383,7 @@ pub const Arm7tdmi = struct {
         const now = getModeChecked(self, self.cpsr.mode.read());
 
         // Bank R8 -> r12
-        var i: usize = 0;
-        while (i < 5) : (i += 1) {
+        for (0..5) |i| {
             self.bank.fiq[Bank.fiqIdx(i, now)] = self.r[8 + i];
         }
 
@@ -404,8 +401,7 @@ pub const Arm7tdmi = struct {
         }
 
         // Grab R8 -> R12
-        i = 0;
-        while (i < 5) : (i += 1) {
+        for (0..5) |i| {
             self.r[8 + i] = self.bank.fiq[Bank.fiqIdx(i, next)];
         }
 
@@ -470,8 +466,7 @@ pub const Arm7tdmi = struct {
     }
 
     pub fn stepDmaTransfer(self: *Self) bool {
-        comptime var i: usize = 0;
-        inline while (i < 4) : (i += 1) {
+        inline for (0..4) |i| {
             if (self.bus.dma[i].in_progress) {
                 self.bus.dma[i].step(self);
                 return true;

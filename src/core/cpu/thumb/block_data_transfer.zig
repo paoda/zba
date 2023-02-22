@@ -92,8 +92,7 @@ pub fn fmt15(comptime L: bool, comptime rb: u3) InstrFn {
 inline fn countRlist(opcode: u16) u32 {
     var count: u32 = 0;
 
-    comptime var i: u4 = 0;
-    inline while (i < 8) : (i += 1) {
+    inline for (0..8) |i| {
         if (opcode >> (7 - i) & 1 == 1) count += 1;
     }
 
