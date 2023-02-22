@@ -365,7 +365,7 @@ pub fn RingBuffer(comptime T: type) type {
             const count = std.math.min(self.len(), cpy.len);
             var start: Index = self.read;
 
-            for (cpy) |*v, i| {
+            for (cpy, 0..) |*v, i| {
                 if (i >= count) break;
 
                 v.* = self.buf[self.mask(start)];
