@@ -293,13 +293,13 @@ pub const Clock = struct {
         self.cpu.sched.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
 
         const now = DateTime.now();
-        self.year = bcd(u8, @intCast(u8, now.date.year - 2000));
-        self.month = bcd(u5, now.date.month);
-        self.day = bcd(u6, now.date.day);
-        self.weekday = bcd(u3, (now.date.weekday() + 1) % 7); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
-        self.hour = bcd(u6, now.time.hour);
-        self.minute = bcd(u7, now.time.minute);
-        self.second = bcd(u7, now.time.second);
+        self.year = bcd(@intCast(u8, now.date.year - 2000));
+        self.month = @truncate(u5, bcd(now.date.month));
+        self.day = @truncate(u6, bcd(now.date.day));
+        self.weekday = @truncate(u3, bcd((now.date.weekday() + 1) % 7)); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
+        self.hour = @truncate(u6, bcd(now.time.hour));
+        self.minute = @truncate(u7, bcd(now.time.minute));
+        self.second = @truncate(u7, bcd(now.time.second));
     }
 
     fn step(self: *Self, value: Data) u4 {
@@ -449,16 +449,8 @@ pub const Clock = struct {
     }
 };
 
-fn bcd(comptime T: type, value: u8) T {
-    var input = value;
-    var ret: u8 = 0;
-    var shift: u3 = 0;
-
-    while (input > 0) {
-        ret |= (input % 10) << (shift << 2);
-        shift += 1;
-        input /= 10;
-    }
-
-    return @truncate(T, ret);
+/// Converts an 8-bit unsigned integer to its BCD representation.
+/// Note: Algorithm only works for values between 0 and 99 inclusive.
+fn bcd(value: u8) u8 {
+    return ((value / 10) << 4) + (value % 10);
 }

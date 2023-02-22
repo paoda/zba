@@ -93,7 +93,7 @@ pub fn main() void {
     gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
 }
 
-pub fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
+fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
     const rom_path = romPath(result);
     log.info("ROM path: {s}", .{rom_path});
 
