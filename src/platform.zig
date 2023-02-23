@@ -307,16 +307,13 @@ pub const Gui = struct {
             _ = zgui.begin("Information", .{});
             defer zgui.end();
 
-            {
-                var i: usize = 0;
-                while (i < 8) : (i += 1) {
-                    zgui.text("R{}: 0x{X:0>8}", .{ i, cpu.r[i] });
+            for (0..8) |i| {
+                zgui.text("R{}: 0x{X:0>8}", .{ i, cpu.r[i] });
 
-                    zgui.sameLine(.{});
+                zgui.sameLine(.{});
 
-                    const prefix = if (8 + i < 10) " " else "";
-                    zgui.text("{s}R{}: 0x{X:0>8}", .{ prefix, 8 + i, cpu.r[8 + i] });
-                }
+                const prefix = if (8 + i < 10) " " else "";
+                zgui.text("{s}R{}: 0x{X:0>8}", .{ prefix, 8 + i, cpu.r[8 + i] });
             }
 
             zgui.separator();
@@ -415,13 +412,14 @@ pub const Gui = struct {
             }
         }
 
-        {
-            zgui.showDemoWindow(null);
-        }
+        // {
+        //     zgui.showDemoWindow(null);
+        // }
     }
 
     const RunOptions = struct {
         quit: *std.atomic.Atomic(bool),
+        pause: ?*std.atomic.Atomic(bool) = null,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
@@ -431,6 +429,7 @@ pub const Gui = struct {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
         const quit = opt.quit;
+        const pause = opt.pause;
 
         const obj_ids = Self.genBufferObjects();
         defer gl.deleteBuffers(3, @as(*const [3]c_uint, &obj_ids));
@@ -442,21 +441,16 @@ pub const Gui = struct {
         const fbo_id = try Self.genFrameBufObject(out_tex);
         defer gl.deleteFramebuffers(1, &fbo_id);
 
-        var tracker = FpsTracker.init();
-        var quit = std.atomic.Atomic(bool).init(false);
-        var pause = std.atomic.Atomic(bool).init(false);
-
-        var title_buf: [0x100]u8 = undefined;
-
         emu_loop: while (true) {
-            var event: SDL.SDL_Event = undefined;
-
-            // This might be true if the emu is running via a gdbstub server
-            // and the gdb stub exits first
+            // `quit` from RunOptions may be modified by the GDBSTUB thread,
+            // so we want to recognize that it may change to `true` and exit the GUI thread
             if (quit.load(.Monotonic)) break :emu_loop;
-            // Quit Signal from Dear Imgui
+
+            // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
+            // should exit, in which case we should also handle this
             if (self.state.should_quit) break :emu_loop;
 
+            var event: SDL.SDL_Event = undefined;
             while (SDL.SDL_PollEvent(&event) != 0) {
                 _ = zgui.backend.processEvent(&event);
 
@@ -506,12 +500,17 @@ pub const Gui = struct {
                 }
             }
 
-            // We Access non-atomic parts of the Emulator here
+            // If `Gui.run` has been passed with a `pause` atomic, we should
+            // pause the emulation thread while we access the data there
             {
-                pause.store(true, .Monotonic);
-                defer pause.store(false, .Monotonic);
+                // TODO: Is there a nicer way to express this?
+                if (pause) |val| val.store(true, .Monotonic);
+                defer if (pause) |val| val.store(false, .Monotonic);
 
-                self.state.fps_hist.push(tracker.value()) catch {};
+                // Add FPS count to the histogram
+                if (tracker) |t| {
+                    self.state.fps_hist.push(t.value()) catch {};
+                }
 
                 // Draw GBA Screen to Texture
                 {
@@ -529,14 +528,6 @@ pub const Gui = struct {
                 gl.clearColor(0, 0, 0, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
-                if (tracker) |t| {
-                    const emu_fps = t.value();
-                    self.state.fps_hist.push(emu_fps) catch {};
-
-                    const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, emu_fps }) catch unreachable;
-                    SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
-                }
-
                 zgui.backend.newFrame(width, height);
                 self.draw(out_tex, cpu);
                 zgui.backend.draw();
@@ -544,6 +535,8 @@ pub const Gui = struct {
 
             SDL.SDL_GL_SwapWindow(self.window);
         }
+
+        quit.store(true, .Monotonic); // Signals to emu thread to exit
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {

@@ -120,8 +120,9 @@ pub fn main() void {
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
+        var pause = Atomic(bool).init(false);
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &scheduler, &cpu, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &pause, &cpu, &scheduler, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
         gui.run(.{
@@ -129,6 +130,7 @@ pub fn main() void {
             .scheduler = &scheduler,
             .tracker = &tracker,
             .quit = &quit,
+            .pause = &pause,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }
