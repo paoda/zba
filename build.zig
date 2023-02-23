@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
+const Gdbstub = @import("lib/zba-gdbstub/build.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Minimum Zig Version
@@ -39,6 +41,9 @@ pub fn build(b: *std.build.Builder) void {
 
     // OpenGL 3.3 Bindings
     exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
+
+    // gdbstub
+    Gdbstub.link(exe);
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);

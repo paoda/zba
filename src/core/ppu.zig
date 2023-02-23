@@ -986,8 +986,7 @@ pub const Ppu = struct {
             cpu.handleInterrupt();
         }
 
-        // See if HBlank DMA is present and not enabled
-
+        // If we're not also in VBlank, attempt to run any pending DMA Reqs
         if (!self.dispstat.vblank.read())
             dma.onBlanking(cpu.bus, .HBlank);
 

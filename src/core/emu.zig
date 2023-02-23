@@ -162,3 +162,59 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
 fn spinLoop(timer: *Timer, wake_time: u64) void {
     while (true) if (timer.read() > wake_time) break;
 }
+
+pub const EmuThing = struct {
+    const Self = @This();
+    const Interface = @import("gdbstub").Emulator;
+    const Allocator = std.mem.Allocator;
+
+    cpu: *Arm7tdmi,
+    scheduler: *Scheduler,
+
+    pub fn init(cpu: *Arm7tdmi, scheduler: *Scheduler) Self {
+        return .{ .cpu = cpu, .scheduler = scheduler };
+    }
+
+    pub fn interface(self: *Self, allocator: Allocator) Interface {
+        return Interface.init(allocator, self);
+    }
+
+    pub fn read(self: *const Self, addr: u32) u8 {
+        return self.cpu.bus.dbgRead(u8, addr);
+    }
+
+    pub fn write(self: *Self, addr: u32, value: u8) void {
+        self.cpu.bus.dbgWrite(u8, addr, value);
+    }
+
+    pub fn registers(self: *const Self) *[16]u32 {
+        return &self.cpu.r;
+    }
+
+    pub fn cpsr(self: *const Self) u32 {
+        return self.cpu.cpsr.raw;
+    }
+
+    pub fn step(self: *Self) void {
+        const cpu = self.cpu;
+        const sched = self.scheduler;
+
+        // Is true when we have executed one (1) instruction
+        var did_step: bool = false;
+
+        // TODO: How can I make it easier to keep this in lock-step with runFrame?
+        while (!did_step) {
+            if (!cpu.stepDmaTransfer()) {
+                if (cpu.isHalted()) {
+                    // Fast-forward to next Event
+                    sched.tick = sched.queue.peek().?.tick;
+                } else {
+                    cpu.step();
+                    did_step = true;
+                }
+            }
+
+            if (sched.tick >= sched.nextTimestamp()) sched.handleEvent(cpu);
+        }
+    }
+};

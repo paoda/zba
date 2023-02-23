@@ -4,14 +4,17 @@ const known_folders = @import("known_folders");
 const clap = @import("clap");
 
 const config = @import("config.zig");
+const emu = @import("core/emu.zig");
 
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
-
+const FpsTracker = @import("util.zig").FpsTracker;
 const Allocator = std.mem.Allocator;
+const Atomic = std.atomic.Atomic;
+
 const log = std.log.scoped(.Cli);
 const width = @import("core/ppu.zig").width;
 const height = @import("core/ppu.zig").height;
@@ -22,6 +25,7 @@ const params = clap.parseParamsComptime(
     \\-h, --help            Display this help and exit.
     \\-s, --skip            Skip BIOS.
     \\-b, --bios <str>      Optional path to a GBA BIOS ROM.
+    \\ --gdb                Run ZBA from the context of a GDB Server
     \\<str>                 Path to the GBA GamePak ROM.
     \\
 );
@@ -87,10 +91,46 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
+    var quit = Atomic(bool).init(false);
     var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
-    gui.run(&cpu, &scheduler) catch |e| exitln("failed to run gui thread: {}", .{e});
+    if (result.args.gdb) {
+        const Server = @import("gdbstub").Server;
+        const EmuThing = @import("core/emu.zig").EmuThing;
+
+        var wrapper = EmuThing.init(&cpu, &scheduler);
+        var emulator = wrapper.interface(allocator);
+        defer emulator.deinit();
+
+        log.info("Ready to connect", .{});
+
+        var server = Server.init(emulator) catch |e| exitln("failed to init gdb server: {}", .{e});
+        defer server.deinit(allocator);
+
+        log.info("Starting GDB Server Thread", .{});
+
+        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
+        defer thread.join();
+
+        gui.run(.{
+            .cpu = &cpu,
+            .scheduler = &scheduler,
+            .quit = &quit,
+        }) catch |e| exitln("main thread panicked: {}", .{e});
+    } else {
+        var tracker = FpsTracker.init();
+
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &scheduler, &cpu, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
+        defer thread.join();
+
+        gui.run(.{
+            .cpu = &cpu,
+            .scheduler = &scheduler,
+            .tracker = &tracker,
+            .quit = &quit,
+        }) catch |e| exitln("main thread panicked: {}", .{e});
+    }
 }
 
 fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
