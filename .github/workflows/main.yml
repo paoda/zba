@@ -38,7 +38,7 @@ jobs:
             brew install sdl2
       - uses: actions/checkout@v3
         with:
-          submodules: true
+          submodules: recursive
       - name: build 
         run: zig build -Doptimize=ReleaseSafe -Dcpu=baseline
       - name: upload
@@ -51,7 +51,7 @@ jobs:
     steps: 
       - uses: actions/checkout@v3
         with:
-          submodules: true
+          submodules: recursive
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: master
