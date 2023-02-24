@@ -77,6 +77,10 @@ pub fn init(allocator: Allocator, maybe_path: ?[]const u8) !Self {
     return Self{ .buf = buf, .allocator = allocator };
 }
 
+pub fn reset(self: *Self) void {
+    self.addr_latch = 0;
+}
+
 pub fn deinit(self: *Self) void {
     if (self.buf) |buf| self.allocator.free(buf);
     self.* = undefined;

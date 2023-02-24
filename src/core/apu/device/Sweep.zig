@@ -3,26 +3,18 @@ const ToneSweep = @import("../ToneSweep.zig");
 
 const Self = @This();
 
-timer: u8,
-enabled: bool,
-shadow: u11,
+timer: u8 = 0,
+enabled: bool = false,
+shadow: u11 = 0,
 
-calc_performed: bool,
+calc_performed: bool = false,
 
 pub fn create() Self {
-    return .{
-        .timer = 0,
-        .enabled = false,
-        .shadow = 0,
-        .calc_performed = false,
-    };
+    return .{};
 }
 
 pub fn reset(self: *Self) void {
-    self.timer = 0;
-    self.enabled = false;
-    self.shadow = 0;
-    self.calc_performed = false;
+    self.* = .{};
 }
 
 pub fn tick(self: *Self, ch1: *ToneSweep) void {

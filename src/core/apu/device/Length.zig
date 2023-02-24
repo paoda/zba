@@ -1,13 +1,13 @@
 const Self = @This();
 
-timer: u9,
+timer: u9 = 0,
 
 pub fn create() Self {
-    return .{ .timer = 0 };
+    return .{};
 }
 
 pub fn reset(self: *Self) void {
-    self.timer = 0;
+    self.* = .{};
 }
 
 pub fn tick(self: *Self, enabled: bool, ch_enable: *bool) void {

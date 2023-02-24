@@ -195,6 +195,10 @@ fn DmaController(comptime id: u2) type {
             };
         }
 
+        pub fn reset(self: *Self) void {
+            self.* = Self.init();
+        }
+
         pub fn setDmasad(self: *Self, addr: u32) void {
             self.sad = addr & sad_mask;
         }

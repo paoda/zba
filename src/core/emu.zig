@@ -222,3 +222,10 @@ pub const EmuThing = struct {
         }
     }
 };
+
+pub fn reset(cpu: *Arm7tdmi) void {
+    // @breakpoint();
+    cpu.sched.reset(); // Yes this is order sensitive, see the PPU reset for why
+    cpu.bus.reset();
+    cpu.reset();
+}

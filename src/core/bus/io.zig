@@ -38,6 +38,10 @@ pub const Io = struct {
         };
     }
 
+    pub fn reset(self: *Self) void {
+        self.* = Self.init();
+    }
+
     fn setIrqs(self: *Io, word: u32) void {
         self.ie.raw = @truncate(u16, word);
         self.irq.raw &= ~@truncate(u16, word >> 16);

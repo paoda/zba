@@ -102,6 +102,32 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
+pub fn reset(self: *Self) void {
+    self.bios.reset();
+    // TODO: deinit ppu
+    self.apu.reset();
+    self.iwram.reset();
+    self.ewram.reset();
+
+    // https://github.com/ziglang/zig/issues/14705
+    {
+        comptime var i: usize = 0;
+        inline while (i < self.dma.len) : (i += 1) {
+            self.dma[0].reset();
+        }
+    }
+
+    // https://github.com/ziglang/zig/issues/14705
+    {
+        comptime var i: usize = 0;
+        inline while (i < self.tim.len) : (i += 1) {
+            self.tim[0].reset();
+        }
+    }
+
+    self.io.reset();
+}
+
 fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     const vramMirror = @import("ppu/Vram.zig").mirror;
 

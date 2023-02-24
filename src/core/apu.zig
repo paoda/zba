@@ -289,7 +289,28 @@ pub const Apu = struct {
         return apu;
     }
 
-    fn reset(self: *Self) void {
+    /// Used when resetting the emulator
+    pub fn reset(self: *Self) void {
+        // FIXME: These reset functions are meant to emulate obscure APU behaviour. Write proper emu reset fns
+        self.ch1.reset();
+        self.ch2.reset();
+        self.ch3.reset();
+        self.ch4.reset();
+
+        self.chA.reset();
+        self.chB.reset();
+
+        self.psg_cnt = .{ .raw = 0 };
+        self.dma_cnt = .{ .raw = 0 };
+        self.cnt = .{ .raw = 0 };
+        self.bias = .{ .raw = 0x200 };
+
+        self.sampling_cycle = 0;
+        self.fs.reset();
+    }
+
+    /// Emulates the reset behaviour of the APU
+    fn _reset(self: *Self) void {
         // All PSG Registers between 0x0400_0060..0x0400_0081 are zeroed
         // 0x0400_0082 and 0x0400_0088 retain their values
         self.ch1.reset();
@@ -351,7 +372,7 @@ pub const Apu = struct {
             // Rest Noise
             self.ch4.lfsr.reset();
         } else {
-            self.reset();
+            self._reset();
         }
     }
 
@@ -528,6 +549,11 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
             };
         }
 
+        /// Used when resetting hte emulator (not emulation code)
+        fn reset(self: *Self) void {
+            self.* = Self.init();
+        }
+
         pub fn push(self: *Self, value: u32) void {
             if (!self.enabled) self.enable();
 
@@ -562,10 +588,14 @@ pub const FrameSequencer = struct {
     const Self = @This();
     pub const interval = (1 << 24) / 512;
 
-    step: u3,
+    step: u3 = 0,
 
     pub fn init() Self {
-        return .{ .step = 0 };
+        return .{};
+    }
+
+    pub fn reset(self: *Self) void {
+        self.* = .{};
     }
 
     pub fn tick(self: *Self) void {

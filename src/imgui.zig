@@ -48,7 +48,7 @@ pub const State = struct {
     }
 };
 
-pub fn draw(state: *State, tex_id: GLuint, cpu: *const Arm7tdmi) void {
+pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
     const win_scale = config.config().host.win_scale;
 
     {
@@ -77,7 +77,9 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *const Arm7tdmi) void {
         if (zgui.beginMenu("Emulation", true)) {
             defer zgui.endMenu();
 
-            if (zgui.menuItem("Restart", .{})) log.warn("TODO: Restart Emulator", .{});
+            if (zgui.menuItem("Restart", .{})) {
+                emu.reset(cpu);
+            }
         }
     }
 

@@ -314,6 +314,14 @@ pub const Arm7tdmi = struct {
         };
     }
 
+    // FIXME: Resetting disables logging (if enabled)
+    pub fn reset(self: *Self) void {
+        const bus_ptr = self.bus;
+        const scheduler_ptr = self.sched;
+
+        self.* = Self.init(scheduler_ptr, bus_ptr, null);
+    }
+
     pub inline fn hasSPSR(self: *const Self) bool {
         const mode = getModeChecked(self, self.cpsr.mode.read());
         return switch (mode) {
