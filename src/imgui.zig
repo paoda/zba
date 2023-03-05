@@ -33,9 +33,10 @@ pub const State = struct {
 
     pub fn init(allocator: Allocator, title: [12]u8) !@This() {
         const history = try allocator.alloc(u32, histogram_len);
+        const without_null = std.mem.sliceTo(&title, 0);
 
         return .{
-            .title = try allocator.dupeZ(u8, &title),
+            .title = try allocator.dupeZ(u8, without_null),
             .fps_hist = RingBuffer(u32).init(history),
         };
     }
@@ -87,7 +88,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         const w = @intToFloat(f32, gba_width * win_scale);
         const h = @intToFloat(f32, gba_height * win_scale);
 
-        _ = zgui.begin(state.title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
+        const window_title = if (state.title.len != 0) state.title else "[No Title]";
+        _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 
         zgui.image(@intToPtr(*anyopaque, tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
