@@ -251,7 +251,7 @@ pub const FrameBuffer = struct {
 
     layers: [2][]u8,
     buf: []u8,
-    current: u1,
+    current: u1 = 0,
 
     allocator: Allocator,
 
@@ -266,10 +266,14 @@ pub const FrameBuffer = struct {
             // Front and Back Framebuffers
             .layers = [_][]u8{ buf[0..][0..len], buf[len..][0..len] },
             .buf = buf,
-            .current = 0,
 
             .allocator = allocator,
         };
+    }
+
+    pub fn reset(self: *Self) void {
+        std.mem.set(u8, self.buf, 0);
+        self.current = 0;
     }
 
     pub fn deinit(self: *Self) void {

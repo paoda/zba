@@ -37,6 +37,10 @@ pub fn init(allocator: Allocator) !Self {
     return Self{ .buf = buf, .allocator = allocator };
 }
 
+pub fn reset(self: *Self) void {
+    std.mem.set(u8, self.buf, 0);
+}
+
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.buf);
     self.* = undefined;

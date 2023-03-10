@@ -104,7 +104,7 @@ pub fn deinit(self: *Self) void {
 
 pub fn reset(self: *Self) void {
     self.bios.reset();
-    // TODO: deinit ppu
+    self.ppu.reset();
     self.apu.reset();
     self.iwram.reset();
     self.ewram.reset();

@@ -278,14 +278,18 @@ pub const Apu = struct {
             .is_buffer_full = false,
         };
 
-        sched.push(.SampleAudio, apu.interval());
-        sched.push(.{ .ApuChannel = 0 }, @import("apu/signal/Square.zig").interval);
-        sched.push(.{ .ApuChannel = 1 }, @import("apu/signal/Square.zig").interval);
-        sched.push(.{ .ApuChannel = 2 }, @import("apu/signal/Wave.zig").interval);
-        sched.push(.{ .ApuChannel = 3 }, @import("apu/signal/Lfsr.zig").interval);
-        sched.push(.FrameSequencer, FrameSequencer.interval);
+        Self.initEvents(apu.sched, apu.interval());
 
         return apu;
+    }
+
+    fn initEvents(scheduler: *Scheduler, apu_interval: u64) void {
+        scheduler.push(.SampleAudio, apu_interval);
+        scheduler.push(.{ .ApuChannel = 0 }, @import("apu/signal/Square.zig").interval);
+        scheduler.push(.{ .ApuChannel = 1 }, @import("apu/signal/Square.zig").interval);
+        scheduler.push(.{ .ApuChannel = 2 }, @import("apu/signal/Wave.zig").interval);
+        scheduler.push(.{ .ApuChannel = 3 }, @import("apu/signal/Lfsr.zig").interval);
+        scheduler.push(.FrameSequencer, FrameSequencer.interval);
     }
 
     /// Used when resetting the emulator
@@ -306,6 +310,8 @@ pub const Apu = struct {
 
         self.sampling_cycle = 0;
         self.fs.reset();
+
+        Self.initEvents(self.sched, self.interval());
     }
 
     /// Emulates the reset behaviour of the APU
