@@ -128,6 +128,21 @@ pub fn reset(self: *Self) void {
     self.io.reset();
 }
 
+pub fn replaceGamepak(self: *Self, file_path: []const u8) !void {
+    // Note: `save_path` isn't owned by `Backup`
+    const save_path = self.pak.backup.save_path;
+    self.pak.deinit();
+
+    self.pak = try GamePak.init(self.allocator, self.cpu, file_path, save_path);
+
+    const read_ptr: *[table_len]?*const anyopaque = @constCast(self.read_table);
+    const write_ptrs: [2]*[table_len]?*anyopaque = .{ @constCast(self.write_tables[0]), @constCast(self.write_tables[1]) };
+
+    self.fillReadTable(read_ptr);
+    self.fillWriteTable(u32, write_ptrs[0]);
+    self.fillWriteTable(u8, write_ptrs[1]);
+}
+
 fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     const vramMirror = @import("ppu/Vram.zig").mirror;
 

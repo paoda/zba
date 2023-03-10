@@ -249,3 +249,8 @@ pub fn reset(cpu: *Arm7tdmi) void {
     cpu.bus.reset();
     cpu.reset();
 }
+
+pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
+    try cpu.bus.replaceGamepak(file_path);
+    reset(cpu);
+}

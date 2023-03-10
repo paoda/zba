@@ -70,7 +70,10 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                     defer nfd.freePath(file_path);
                     log.info("user chose: \"{s}\"", .{file_path});
 
-                    // emu.loadRom(cpu, file_path);
+                    emu.replaceGamepak(cpu, file_path) catch |e| {
+                        log.err("failed to replace GamePak: {}", .{e});
+                        break :blk;
+                    };
                 }
             }
         }
