@@ -70,9 +70,10 @@ pub fn main() void {
     const paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
     defer if (paths.save) |path| allocator.free(path);
 
-    const log_file = if (config.config().debug.cpu_trace) blk: {
-        break :blk std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e});
-    } else null;
+    const log_file = switch (config.config().debug.cpu_trace) {
+        true => std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e}),
+        false => null,
+    };
     defer if (log_file) |file| file.close();
 
     // TODO: Take Emulator Init Code out of main.zig

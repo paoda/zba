@@ -2,8 +2,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").arm.InstrFn;
 
-const sext = @import("../../../util.zig").sext;
-const rotr = @import("../../../util.zig").rotr;
+const sext = @import("zba-util").sext;
+const rotr = @import("zba-util").rotr;
 
 pub fn halfAndSignedDataTransfer(comptime P: bool, comptime U: bool, comptime I: bool, comptime W: bool, comptime L: bool) InstrFn {
     return struct {

@@ -19,7 +19,7 @@ const log = std.log.scoped(.Bus);
 
 const createDmaTuple = @import("bus/dma.zig").create;
 const createTimerTuple = @import("bus/timer.zig").create;
-const rotr = @import("../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 
 const timings: [2][0x10]u8 = [_][0x10]u8{
     // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused

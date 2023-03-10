@@ -14,7 +14,6 @@ const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
-const intToBytes = util.intToBytes;
 
 const log = std.log.scoped(.APU);
 
@@ -557,7 +556,7 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         pub fn push(self: *Self, value: u32) void {
             if (!self.enabled) self.enable();
 
-            self.fifo.write(&intToBytes(u32, value)) catch |e| log.err("{} Error: {}", .{ kind, e });
+            self.fifo.write(std.mem.asBytes(&value)) catch |e| log.err("{} Error: {}", .{ kind, e });
         }
 
         fn enable(self: *Self) void {

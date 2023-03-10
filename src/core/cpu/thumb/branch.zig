@@ -3,7 +3,7 @@ const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
 const checkCond = @import("../../cpu.zig").checkCond;
-const sext = @import("../../../util.zig").sext;
+const sext = @import("zba-util").sext;
 
 pub fn fmt16(comptime cond: u4) InstrFn {
     return struct {

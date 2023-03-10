@@ -12,7 +12,7 @@ const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const setQuart = util.setQuart;
 
-const rotr = @import("../../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 
 pub fn create() DmaTuple {
     return .{ DmaController(0).init(), DmaController(1).init(), DmaController(2).init(), DmaController(3).init() };

@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bios);
 
-const rotr = @import("../../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 const forceAlign = @import("../Bus.zig").forceAlign;
 
 /// Size of the BIOS in bytes

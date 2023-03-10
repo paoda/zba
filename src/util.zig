@@ -7,27 +7,6 @@ const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 
 const Allocator = std.mem.Allocator;
 
-// Sign-Extend value of type `T` to type `U`
-pub fn sext(comptime T: type, comptime U: type, value: T) T {
-    // U must have less bits than T
-    comptime std.debug.assert(@typeInfo(U).Int.bits <= @typeInfo(T).Int.bits);
-
-    const iT = std.meta.Int(.signed, @typeInfo(T).Int.bits);
-    const ExtU = if (@typeInfo(U).Int.signedness == .unsigned) T else iT;
-    const shift_amt = @intCast(Log2Int(T), @typeInfo(T).Int.bits - @typeInfo(U).Int.bits);
-
-    return @bitCast(T, @bitCast(iT, @as(ExtU, @truncate(U, value)) << shift_amt) >> shift_amt);
-}
-
-/// See https://godbolt.org/z/W3en9Eche
-pub inline fn rotr(comptime T: type, x: T, r: anytype) T {
-    if (@typeInfo(T).Int.signedness == .signed)
-        @compileError("cannot rotate signed integer");
-
-    const ar = @intCast(Log2Int(T), @mod(r, @typeInfo(T).Int.bits));
-    return x >> ar | x << (1 +% ~ar);
-}
-
 pub const FpsTracker = struct {
     const Self = @This();
 
@@ -56,17 +35,6 @@ pub const FpsTracker = struct {
         return self.fps;
     }
 };
-
-pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
-    comptime std.debug.assert(@typeInfo(T) == .Int);
-
-    var result: [@sizeOf(T)]u8 = undefined;
-
-    var i: Log2Int(T) = 0;
-    while (i < result.len) : (i += 1) result[i] = @truncate(u8, value >> i * @bitSizeOf(u8));
-
-    return result;
-}
 
 /// Creates a copy of a title with all Filesystem-invalid characters replaced
 ///
@@ -317,78 +285,3 @@ pub const FrameBuffer = struct {
         return self.layers[if (dev == .Emulator) self.current else ~self.current];
     }
 };
-
-pub fn RingBuffer(comptime T: type) type {
-    return struct {
-        const Self = @This();
-        const Index = usize;
-        const max_capacity = (@as(Index, 1) << @typeInfo(Index).Int.bits - 1) - 1; // half the range of index type
-
-        const log = std.log.scoped(.RingBuffer);
-
-        read: Index,
-        write: Index,
-        buf: []T,
-
-        const Error = error{buffer_full};
-
-        pub fn init(buf: []T) Self {
-            std.debug.assert(std.math.isPowerOfTwo(buf.len)); // capacity must be a power of two
-            std.debug.assert(buf.len <= max_capacity);
-
-            std.mem.set(T, buf, 0);
-
-            return .{ .read = 0, .write = 0, .buf = buf };
-        }
-
-        pub fn deinit(self: *Self, allocator: Allocator) void {
-            allocator.free(self.buf);
-            self.* = undefined;
-        }
-
-        pub fn push(self: *Self, value: T) Error!void {
-            if (self.isFull()) return error.buffer_full;
-            defer self.write += 1;
-
-            self.buf[self.mask(self.write)] = value;
-        }
-
-        pub fn pop(self: *Self) ?T {
-            if (self.isEmpty()) return null;
-            defer self.read += 1;
-
-            return self.buf[self.mask(self.read)];
-        }
-
-        /// Returns the number of entries read
-        pub fn copy(self: *const Self, cpy: []T) Index {
-            const count = std.math.min(self.len(), cpy.len);
-            var start: Index = self.read;
-
-            for (cpy, 0..) |*v, i| {
-                if (i >= count) break;
-
-                v.* = self.buf[self.mask(start)];
-                start += 1;
-            }
-
-            return count;
-        }
-
-        fn len(self: *const Self) Index {
-            return self.write - self.read;
-        }
-
-        fn isFull(self: *const Self) bool {
-            return self.len() == self.buf.len;
-        }
-
-        fn isEmpty(self: *const Self) bool {
-            return self.read == self.write;
-        }
-
-        fn mask(self: *const Self, idx: Index) Index {
-            return idx & (self.buf.len - 1);
-        }
-    };
-}

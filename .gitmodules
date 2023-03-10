@@ -22,3 +22,6 @@
 [submodule "lib/nfd-zig"]
 	path = lib/nfd-zig
 	url = https://github.com/fabioarnold/nfd-zig
+[submodule "lib/zba-util"]
+	path = lib/zba-util
+	url = https://git.musuka.dev/paoda/zba-util.git

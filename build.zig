@@ -33,7 +33,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.addAnonymousModule("datetime", .{ .source_file = .{ .path = "lib/zig-datetime/src/main.zig" } });
 
     // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
-    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/util/bitfield.zig" } });
+    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } });
 
     // Argument Parsing Library
     exe.addAnonymousModule("clap", .{ .source_file = .{ .path = "lib/zig-clap/clap.zig" } });
@@ -43,6 +43,9 @@ pub fn build(b: *std.build.Builder) void {
 
     // OpenGL 3.3 Bindings
     exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
+
+    // ZBA utility code
+    exe.addAnonymousModule("zba-util", .{ .source_file = .{ .path = "lib/zba-util/src/lib.zig" } });
 
     // gdbstub
     gdbstub.link(exe);

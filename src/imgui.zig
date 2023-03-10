@@ -11,7 +11,7 @@ const emu = @import("core/emu.zig");
 
 const Gui = @import("platform.zig").Gui;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
-const RingBuffer = @import("util.zig").RingBuffer;
+const RingBuffer = @import("zba-util").RingBuffer;
 
 const Allocator = std.mem.Allocator;
 const GLuint = gl.GLuint;
@@ -43,7 +43,7 @@ pub const State = struct {
 
     pub fn deinit(self: *@This(), allocator: Allocator) void {
         allocator.free(self.title);
-        self.fps_hist.deinit(allocator);
+        allocator.free(self.fps_hist.buf);
 
         self.* = undefined;
     }
