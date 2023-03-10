@@ -6,6 +6,7 @@ const clap = @import("clap");
 const config = @import("config.zig");
 const emu = @import("core/emu.zig");
 
+const TwoWayChannel = @import("zba-util").TwoWayChannel;
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
@@ -13,7 +14,6 @@ const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
 const FpsTracker = @import("util.zig").FpsTracker;
 const Allocator = std.mem.Allocator;
-const Atomic = std.atomic.Atomic;
 
 const log = std.log.scoped(.Cli);
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
@@ -94,7 +94,10 @@ pub fn main() void {
     var gui = Gui.init(allocator, bus.pak.title, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
-    var quit = Atomic(bool).init(false);
+    var quit = std.atomic.Atomic(bool).init(false);
+
+    var items: [0x100]u8 = undefined;
+    var channel = TwoWayChannel.init(&items);
 
     if (result.args.gdb) {
         const Server = @import("gdbstub").Server;
@@ -117,21 +120,19 @@ pub fn main() void {
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .quit = &quit,
+            .channel = &channel,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
-        var pause = Atomic(bool).init(false);
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &pause, &cpu, &scheduler, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &channel }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
+            .channel = &channel,
             .tracker = &tracker,
-            .quit = &quit,
-            .pause = &pause,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }

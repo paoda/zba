@@ -11,7 +11,7 @@ const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
-const RingBuffer = @import("util.zig").RingBuffer;
+const TwoWayChannel = @import("zba-util").TwoWayChannel;
 
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
@@ -243,8 +243,7 @@ pub const Gui = struct {
     }
 
     const RunOptions = struct {
-        quit: *std.atomic.Atomic(bool),
-        pause: ?*std.atomic.Atomic(bool) = null,
+        channel: *TwoWayChannel,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
@@ -253,8 +252,7 @@ pub const Gui = struct {
     pub fn run(self: *Self, opt: RunOptions) !void {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
-        const quit = opt.quit;
-        const pause = opt.pause;
+        const channel = opt.channel;
 
         const obj_ids = Self.genBufferObjects();
         defer gl.deleteBuffers(3, @as(*const [3]c_uint, &obj_ids));
@@ -269,7 +267,10 @@ pub const Gui = struct {
         emu_loop: while (true) {
             // `quit` from RunOptions may be modified by the GDBSTUB thread,
             // so we want to recognize that it may change to `true` and exit the GUI thread
-            if (quit.load(.Monotonic)) break :emu_loop;
+            if (channel.gui.pop()) |event| switch (event) {
+                .Quit => break :emu_loop,
+                .Paused => @panic("TODO: We want to peek (and then pop if it's .Quit), not always pop"),
+            };
 
             // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
             // should exit, in which case we should also handle this
@@ -325,17 +326,18 @@ pub const Gui = struct {
                 }
             }
 
-            // If `Gui.run` has been passed with a `pause` atomic, we should
-            // pause the emulation thread while we access the data there
             {
-                // TODO: Is there a nicer way to express this?
-                if (pause) |val| val.store(true, .Monotonic);
-                defer if (pause) |val| val.store(false, .Monotonic);
+                channel.emu.push(.Pause);
+                defer channel.emu.push(.Resume);
+
+                // Spin Loop until we know that the emu is paused
+                wait: while (true) switch (channel.gui.pop() orelse continue) {
+                    .Paused => break :wait,
+                    else => |any| std.debug.panic("[Gui/Channel]: Unhandled Event: {}", .{any}),
+                };
 
                 // Add FPS count to the histogram
-                if (tracker) |t| {
-                    self.state.fps_hist.push(t.value()) catch {};
-                }
+                if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
 
                 // Draw GBA Screen to Texture
                 {
@@ -361,7 +363,7 @@ pub const Gui = struct {
             SDL.SDL_GL_SwapWindow(self.window);
         }
 
-        quit.store(true, .Monotonic); // Signals to emu thread to exit
+        channel.emu.push(.Quit);
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
