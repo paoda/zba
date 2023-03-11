@@ -16,3 +16,12 @@
 [submodule "lib/zba-gdbstub"]
 	path = lib/zba-gdbstub
 	url = https://git.musuka.dev/paoda/zba-gdbstub
+[submodule "lib/zgui"]
+	path = lib/zgui
+	url = https://git.musuka.dev/paoda/zgui
+[submodule "lib/nfd-zig"]
+	path = lib/nfd-zig
+	url = https://github.com/fabioarnold/nfd-zig
+[submodule "lib/zba-util"]
+	path = lib/zba-util
+	url = https://git.musuka.dev/paoda/zba-util.git

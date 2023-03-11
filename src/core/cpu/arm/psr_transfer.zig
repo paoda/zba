@@ -7,7 +7,7 @@ const PSR = @import("../../cpu.zig").PSR;
 
 const log = std.log.scoped(.PsrTransfer);
 
-const rotr = @import("../../../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 
 pub fn psrTransfer(comptime I: bool, comptime R: bool, comptime kind: u2) InstrFn {
     return struct {

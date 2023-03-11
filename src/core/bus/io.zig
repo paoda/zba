@@ -38,6 +38,10 @@ pub const Io = struct {
         };
     }
 
+    pub fn reset(self: *Self) void {
+        self.* = Self.init();
+    }
+
     fn setIrqs(self: *Io, word: u32) void {
         self.ie.raw = @truncate(u16, word);
         self.irq.raw &= ~@truncate(u16, word >> 16);
@@ -346,10 +350,10 @@ const InterruptEnable = extern union {
     vblank: Bit(u16, 0),
     hblank: Bit(u16, 1),
     coincidence: Bit(u16, 2),
-    tm0_overflow: Bit(u16, 3),
-    tm1_overflow: Bit(u16, 4),
-    tm2_overflow: Bit(u16, 5),
-    tm3_overflow: Bit(u16, 6),
+    tim0: Bit(u16, 3),
+    tim1: Bit(u16, 4),
+    tim2: Bit(u16, 5),
+    tim3: Bit(u16, 6),
     serial: Bit(u16, 7),
     dma0: Bit(u16, 8),
     dma1: Bit(u16, 9),

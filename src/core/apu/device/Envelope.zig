@@ -3,17 +3,16 @@ const io = @import("../../bus/io.zig");
 const Self = @This();
 
 /// Period Timer
-timer: u3,
+timer: u3 = 0,
 /// Current Volume
-vol: u4,
+vol: u4 = 0,
 
 pub fn create() Self {
-    return .{ .timer = 0, .vol = 0 };
+    return .{};
 }
 
 pub fn reset(self: *Self) void {
-    self.timer = 0;
-    self.vol = 0;
+    self.* = .{};
 }
 
 pub fn tick(self: *Self, nrx2: io.Envelope) void {

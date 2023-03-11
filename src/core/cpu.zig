@@ -314,6 +314,14 @@ pub const Arm7tdmi = struct {
         };
     }
 
+    // FIXME: Resetting disables logging (if enabled)
+    pub fn reset(self: *Self) void {
+        const bus_ptr = self.bus;
+        const scheduler_ptr = self.sched;
+
+        self.* = Self.init(scheduler_ptr, bus_ptr, null);
+    }
+
     pub inline fn hasSPSR(self: *const Self) bool {
         const mode = getModeChecked(self, self.cpsr.mode.read());
         return switch (mode) {
@@ -642,7 +650,7 @@ pub const PSR = extern union {
     }
 };
 
-const Mode = enum(u5) {
+pub const Mode = enum(u5) {
     User = 0b10000,
     Fiq = 0b10001,
     Irq = 0b10010,
@@ -651,7 +659,7 @@ const Mode = enum(u5) {
     Undefined = 0b11011,
     System = 0b11111,
 
-    fn toString(self: Mode) []const u8 {
+    pub fn toString(self: Mode) []const u8 {
         return switch (self) {
             .User => "usr",
             .Fiq => "fiq",

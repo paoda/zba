@@ -7,27 +7,6 @@ const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 
 const Allocator = std.mem.Allocator;
 
-// Sign-Extend value of type `T` to type `U`
-pub fn sext(comptime T: type, comptime U: type, value: T) T {
-    // U must have less bits than T
-    comptime std.debug.assert(@typeInfo(U).Int.bits <= @typeInfo(T).Int.bits);
-
-    const iT = std.meta.Int(.signed, @typeInfo(T).Int.bits);
-    const ExtU = if (@typeInfo(U).Int.signedness == .unsigned) T else iT;
-    const shift_amt = @intCast(Log2Int(T), @typeInfo(T).Int.bits - @typeInfo(U).Int.bits);
-
-    return @bitCast(T, @bitCast(iT, @as(ExtU, @truncate(U, value)) << shift_amt) >> shift_amt);
-}
-
-/// See https://godbolt.org/z/W3en9Eche
-pub inline fn rotr(comptime T: type, x: T, r: anytype) T {
-    if (@typeInfo(T).Int.signedness == .signed)
-        @compileError("cannot rotate signed integer");
-
-    const ar = @intCast(Log2Int(T), @mod(r, @typeInfo(T).Int.bits));
-    return x >> ar | x << (1 +% ~ar);
-}
-
 pub const FpsTracker = struct {
     const Self = @This();
 
@@ -57,17 +36,6 @@ pub const FpsTracker = struct {
     }
 };
 
-pub fn intToBytes(comptime T: type, value: anytype) [@sizeOf(T)]u8 {
-    comptime std.debug.assert(@typeInfo(T) == .Int);
-
-    var result: [@sizeOf(T)]u8 = undefined;
-
-    var i: Log2Int(T) = 0;
-    while (i < result.len) : (i += 1) result[i] = @truncate(u8, value >> i * @bitSizeOf(u8));
-
-    return result;
-}
-
 /// Creates a copy of a title with all Filesystem-invalid characters replaced
 ///
 /// e.g. POKEPIN R/S to POKEPIN R_S
@@ -82,7 +50,7 @@ pub fn escape(title: [12]u8) [12]u8 {
 }
 
 pub const FilePaths = struct {
-    rom: []const u8,
+    rom: ?[]const u8,
     bios: ?[]const u8,
     save: ?[]const u8,
 };
@@ -283,7 +251,7 @@ pub const FrameBuffer = struct {
 
     layers: [2][]u8,
     buf: []u8,
-    current: u1,
+    current: u1 = 0,
 
     allocator: Allocator,
 
@@ -298,10 +266,14 @@ pub const FrameBuffer = struct {
             // Front and Back Framebuffers
             .layers = [_][]u8{ buf[0..][0..len], buf[len..][0..len] },
             .buf = buf,
-            .current = 0,
 
             .allocator = allocator,
         };
+    }
+
+    pub fn reset(self: *Self) void {
+        std.mem.set(u8, self.buf, 0);
+        self.current = 0;
     }
 
     pub fn deinit(self: *Self) void {

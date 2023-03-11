@@ -4,10 +4,10 @@ const config = @import("../config.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
-const FpsTracker = @import("../util.zig").FpsTracker;
+const Tracker = @import("../util.zig").FpsTracker;
+const TwoWayChannel = @import("zba-util").TwoWayChannel;
 
 const Timer = std.time.Timer;
-const Atomic = std.atomic.Atomic;
 
 /// 4 Cycles in 1 dot
 const cycles_per_dot = 4;
@@ -35,28 +35,41 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: *FpsTracker) void {
+pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, channel: *TwoWayChannel) void {
     const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     if (config.config().guest.video_sync) {
-        inner(.LimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+        inner(.LimitedFPS, audio_sync, cpu, scheduler, tracker, channel);
     } else {
-        inner(.UnlimitedFPS, audio_sync, quit, scheduler, cpu, tracker);
+        inner(.UnlimitedFPS, audio_sync, cpu, scheduler, tracker, channel);
     }
 }
 
-fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), scheduler: *Scheduler, cpu: *Arm7tdmi, tracker: ?*FpsTracker) void {
+fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, channel: *TwoWayChannel) void {
     if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
         std.debug.assert(tracker != null);
         log.info("FPS tracking enabled", .{});
     }
 
+    var paused: bool = false;
+
     switch (kind) {
         .Unlimited, .UnlimitedFPS => {
             log.info("Emulation w/out video sync", .{});
 
-            while (!quit.load(.Monotonic)) {
+            while (true) {
+                if (channel.emu.pop()) |e| switch (e) {
+                    .Quit => break,
+                    .Resume => paused = false,
+                    .Pause => {
+                        paused = true;
+                        channel.gui.push(.Paused);
+                    },
+                };
+
+                if (paused) continue;
+
                 runFrame(scheduler, cpu);
                 audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
 
@@ -68,7 +81,18 @@ fn inner(comptime kind: RunKind, audio_sync: bool, quit: *Atomic(bool), schedule
             var timer = Timer.start() catch @panic("failed to initalize std.timer.Timer");
             var wake_time: u64 = frame_period;
 
-            while (!quit.load(.Monotonic)) {
+            while (true) {
+                if (channel.emu.pop()) |e| switch (e) {
+                    .Quit => break,
+                    .Resume => paused = false,
+                    .Pause => {
+                        paused = true;
+                        channel.gui.push(.Paused);
+                    },
+                };
+
+                if (paused) continue;
+
                 runFrame(scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);
 
@@ -218,3 +242,15 @@ pub const EmuThing = struct {
         }
     }
 };
+
+pub fn reset(cpu: *Arm7tdmi) void {
+    // @breakpoint();
+    cpu.sched.reset(); // Yes this is order sensitive, see the PPU reset for why
+    cpu.bus.reset();
+    cpu.reset();
+}
+
+pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
+    try cpu.bus.replaceGamepak(file_path);
+    reset(cpu);
+}

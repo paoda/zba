@@ -11,11 +11,11 @@ const log = std.log.scoped(.Scheduler);
 pub const Scheduler = struct {
     const Self = @This();
 
-    tick: u64,
+    tick: u64 = 0,
     queue: PriorityQueue(Event, void, lessThan),
 
     pub fn init(allocator: Allocator) Self {
-        var sched = Self{ .tick = 0, .queue = PriorityQueue(Event, void, lessThan).init(allocator, {}) };
+        var sched = Self{ .queue = PriorityQueue(Event, void, lessThan).init(allocator, {}) };
         sched.queue.add(.{ .kind = .HeatDeath, .tick = std.math.maxInt(u64) }) catch unreachable;
 
         return sched;
@@ -24,6 +24,17 @@ pub const Scheduler = struct {
     pub fn deinit(self: *Self) void {
         self.queue.deinit();
         self.* = undefined;
+    }
+
+    pub fn reset(self: *Self) void {
+        // `std.PriorityQueue` provides no reset function, so we will just create a new one
+        const allocator = self.queue.allocator;
+        self.queue.deinit();
+
+        var new_queue = PriorityQueue(Event, void, lessThan).init(allocator, {});
+        new_queue.add(.{ .kind = .HeatDeath, .tick = std.math.maxInt(u64) }) catch unreachable;
+
+        self.* = .{ .queue = new_queue };
     }
 
     pub inline fn now(self: *const Self) u64 {

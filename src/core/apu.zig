@@ -14,7 +14,6 @@ const SoundFifo = std.fifo.LinearFifo(u8, .{ .Static = 0x20 });
 
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
-const intToBytes = util.intToBytes;
 
 const log = std.log.scoped(.APU);
 
@@ -279,17 +278,44 @@ pub const Apu = struct {
             .is_buffer_full = false,
         };
 
-        sched.push(.SampleAudio, apu.interval());
-        sched.push(.{ .ApuChannel = 0 }, @import("apu/signal/Square.zig").interval);
-        sched.push(.{ .ApuChannel = 1 }, @import("apu/signal/Square.zig").interval);
-        sched.push(.{ .ApuChannel = 2 }, @import("apu/signal/Wave.zig").interval);
-        sched.push(.{ .ApuChannel = 3 }, @import("apu/signal/Lfsr.zig").interval);
-        sched.push(.FrameSequencer, FrameSequencer.interval);
+        Self.initEvents(apu.sched, apu.interval());
 
         return apu;
     }
 
-    fn reset(self: *Self) void {
+    fn initEvents(scheduler: *Scheduler, apu_interval: u64) void {
+        scheduler.push(.SampleAudio, apu_interval);
+        scheduler.push(.{ .ApuChannel = 0 }, @import("apu/signal/Square.zig").interval);
+        scheduler.push(.{ .ApuChannel = 1 }, @import("apu/signal/Square.zig").interval);
+        scheduler.push(.{ .ApuChannel = 2 }, @import("apu/signal/Wave.zig").interval);
+        scheduler.push(.{ .ApuChannel = 3 }, @import("apu/signal/Lfsr.zig").interval);
+        scheduler.push(.FrameSequencer, FrameSequencer.interval);
+    }
+
+    /// Used when resetting the emulator
+    pub fn reset(self: *Self) void {
+        // FIXME: These reset functions are meant to emulate obscure APU behaviour. Write proper emu reset fns
+        self.ch1.reset();
+        self.ch2.reset();
+        self.ch3.reset();
+        self.ch4.reset();
+
+        self.chA.reset();
+        self.chB.reset();
+
+        self.psg_cnt = .{ .raw = 0 };
+        self.dma_cnt = .{ .raw = 0 };
+        self.cnt = .{ .raw = 0 };
+        self.bias = .{ .raw = 0x200 };
+
+        self.sampling_cycle = 0;
+        self.fs.reset();
+
+        Self.initEvents(self.sched, self.interval());
+    }
+
+    /// Emulates the reset behaviour of the APU
+    fn _reset(self: *Self) void {
         // All PSG Registers between 0x0400_0060..0x0400_0081 are zeroed
         // 0x0400_0082 and 0x0400_0088 retain their values
         self.ch1.reset();
@@ -351,7 +377,7 @@ pub const Apu = struct {
             // Rest Noise
             self.ch4.lfsr.reset();
         } else {
-            self.reset();
+            self._reset();
         }
     }
 
@@ -528,10 +554,15 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
             };
         }
 
+        /// Used when resetting hte emulator (not emulation code)
+        fn reset(self: *Self) void {
+            self.* = Self.init();
+        }
+
         pub fn push(self: *Self, value: u32) void {
             if (!self.enabled) self.enable();
 
-            self.fifo.write(&intToBytes(u32, value)) catch |e| log.err("{} Error: {}", .{ kind, e });
+            self.fifo.write(std.mem.asBytes(&value)) catch |e| log.err("{} Error: {}", .{ kind, e });
         }
 
         fn enable(self: *Self) void {
@@ -562,10 +593,14 @@ pub const FrameSequencer = struct {
     const Self = @This();
     pub const interval = (1 << 24) / 512;
 
-    step: u3,
+    step: u3 = 0,
 
     pub fn init() Self {
-        return .{ .step = 0 };
+        return .{};
+    }
+
+    pub fn reset(self: *Self) void {
+        self.* = .{};
     }
 
     pub fn tick(self: *Self) void {

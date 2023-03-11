@@ -19,7 +19,7 @@ const log = std.log.scoped(.Bus);
 
 const createDmaTuple = @import("bus/dma.zig").create;
 const createTimerTuple = @import("bus/timer.zig").create;
-const rotr = @import("../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 
 const timings: [2][0x10]u8 = [_][0x10]u8{
     // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused
@@ -100,6 +100,47 @@ pub fn deinit(self: *Self) void {
     // FIXME: please figure out another way
     self.allocator.free(@ptrCast([*]const ?*anyopaque, self.read_table[0..])[0 .. 3 * table_len]);
     self.* = undefined;
+}
+
+pub fn reset(self: *Self) void {
+    self.bios.reset();
+    self.ppu.reset();
+    self.apu.reset();
+    self.iwram.reset();
+    self.ewram.reset();
+
+    // https://github.com/ziglang/zig/issues/14705
+    {
+        comptime var i: usize = 0;
+        inline while (i < self.dma.len) : (i += 1) {
+            self.dma[0].reset();
+        }
+    }
+
+    // https://github.com/ziglang/zig/issues/14705
+    {
+        comptime var i: usize = 0;
+        inline while (i < self.tim.len) : (i += 1) {
+            self.tim[0].reset();
+        }
+    }
+
+    self.io.reset();
+}
+
+pub fn replaceGamepak(self: *Self, file_path: []const u8) !void {
+    // Note: `save_path` isn't owned by `Backup`
+    const save_path = self.pak.backup.save_path;
+    self.pak.deinit();
+
+    self.pak = try GamePak.init(self.allocator, self.cpu, file_path, save_path);
+
+    const read_ptr: *[table_len]?*const anyopaque = @constCast(self.read_table);
+    const write_ptrs: [2]*[table_len]?*anyopaque = .{ @constCast(self.write_tables[0]), @constCast(self.write_tables[1]) };
+
+    self.fillReadTable(read_ptr);
+    self.fillWriteTable(u32, write_ptrs[0]);
+    self.fillWriteTable(u8, write_ptrs[1]);
 }
 
 fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {

@@ -1,25 +1,36 @@
 const std = @import("std");
 const SDL = @import("sdl2");
 const gl = @import("gl");
+const zgui = @import("zgui");
+
 const emu = @import("core/emu.zig");
 const config = @import("config.zig");
+const imgui = @import("imgui.zig");
 
 const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
+const TwoWayChannel = @import("zba-util").TwoWayChannel;
 
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
 
+const GLuint = gl.GLuint;
+const GLsizei = gl.GLsizei;
+const SDL_GLContext = *anyopaque;
+const Allocator = std.mem.Allocator;
+
+const width = 1280;
+const height = 720;
+
 pub const sample_rate = 1 << 15;
 pub const sample_format = SDL.AUDIO_U16;
 
-const default_title = "ZBA";
+const window_title = "ZBA";
 
 pub const Gui = struct {
     const Self = @This();
-    const SDL_GLContext = *anyopaque; // SDL.SDL_GLContext is a ?*anyopaque
     const log = std.log.scoped(.Gui);
 
     // zig fmt: off
@@ -39,25 +50,25 @@ pub const Gui = struct {
 
     window: *SDL.SDL_Window,
     ctx: SDL_GLContext,
-    title: []const u8,
     audio: Audio,
 
+    state: imgui.State,
+
+    allocator: Allocator,
     program_id: gl.GLuint,
 
-    pub fn init(title: *const [12]u8, apu: *Apu, width: i32, height: i32) !Self {
+    pub fn init(allocator: Allocator, apu: *Apu) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
 
-        const win_scale = @intCast(c_int, config.config().host.win_scale);
-
         const window = SDL.SDL_CreateWindow(
-            default_title,
+            window_title,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
-            @as(c_int, width * win_scale),
-            @as(c_int, height * win_scale),
+            width,
+            height,
             SDL.SDL_WINDOW_OPENGL | SDL.SDL_WINDOW_SHOWN,
         ) orelse panic();
 
@@ -67,19 +78,60 @@ pub const Gui = struct {
         gl.load(ctx, Self.glGetProcAddress) catch {};
         if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
 
-        const program_id = try compileShaders();
+        zgui.init(allocator);
+        zgui.plot.init();
+        zgui.backend.init(window, ctx, "#version 330 core");
+
+        // zgui.io.setIniFilename(null);
 
         return Self{
             .window = window,
-            .title = std.mem.sliceTo(title, 0),
             .ctx = ctx,
-            .program_id = program_id,
+            .program_id = try compileShaders(),
             .audio = Audio.init(apu),
+
+            .allocator = allocator,
+            .state = try imgui.State.init(allocator),
         };
     }
 
-    fn compileShaders() !gl.GLuint {
-        // TODO: Panic on Shader Compiler Failure + Error Message
+    pub fn deinit(self: *Self) void {
+        self.audio.deinit();
+        self.state.deinit(self.allocator);
+
+        zgui.backend.deinit();
+        zgui.plot.deinit();
+        zgui.deinit();
+
+        gl.deleteProgram(self.program_id);
+        SDL.SDL_GL_DeleteContext(self.ctx);
+        SDL.SDL_DestroyWindow(self.window);
+        SDL.SDL_Quit();
+
+        self.* = undefined;
+    }
+
+    fn drawGbaTexture(self: *const Self, obj_ids: struct { GLuint, GLuint, GLuint }, tex_id: GLuint, buf: []const u8) void {
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
+
+        // Bind VAO, EBO. VBO not bound
+        gl.bindVertexArray(obj_ids[0]); // VAO
+        defer gl.bindVertexArray(0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj_ids[2]); // EBO
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        // Use compiled frag + vertex shader
+        gl.useProgram(self.program_id);
+        defer gl.useProgram(0);
+
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+    }
+
+    fn compileShaders() !GLuint {
         const vert_shader = @embedFile("shader/pixelbuf.vert");
         const frag_shader = @embedFile("shader/pixelbuf.frag");
 
@@ -108,24 +160,29 @@ pub const Gui = struct {
     }
 
     // Returns the VAO ID since it's used in run()
-    fn generateBuffers() struct { c_uint, c_uint, c_uint } {
-        var vao_id: c_uint = undefined;
-        var vbo_id: c_uint = undefined;
-        var ebo_id: c_uint = undefined;
+    fn genBufferObjects() struct { GLuint, GLuint, GLuint } {
+        var vao_id: GLuint = undefined;
+        var vbo_id: GLuint = undefined;
+        var ebo_id: GLuint = undefined;
+
         gl.genVertexArrays(1, &vao_id);
         gl.genBuffers(1, &vbo_id);
         gl.genBuffers(1, &ebo_id);
 
         gl.bindVertexArray(vao_id);
+        defer gl.bindVertexArray(0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
+        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
 
         // Position
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, 0)); // lmao
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
         gl.enableVertexAttribArray(0);
         // Colour
         gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (3 * @sizeOf(f32))));
@@ -137,25 +194,56 @@ pub const Gui = struct {
         return .{ vao_id, vbo_id, ebo_id };
     }
 
-    fn generateTexture(buf: []const u8) c_uint {
-        var tex_id: c_uint = undefined;
+    fn genGbaTexture(buf: []const u8) GLuint {
+        var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
-        gl.bindTexture(gl.TEXTURE_2D, tex_id);
 
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
-        // gl.generateMipmap(gl.TEXTURE_2D); // TODO: Remove?
 
         return tex_id;
     }
 
+    fn genOutTexture() GLuint {
+        var tex_id: GLuint = undefined;
+        gl.genTextures(1, &tex_id);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, null);
+
+        return tex_id;
+    }
+
+    fn genFrameBufObject(tex_id: c_uint) !GLuint {
+        var fbo_id: GLuint = undefined;
+        gl.genFramebuffers(1, &fbo_id);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+        defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+        gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
+
+        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
+        gl.drawBuffers(1, &draw_buffers);
+
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+            return error.FrameBufferObejctInitFailed;
+
+        return fbo_id;
+    }
+
     const RunOptions = struct {
-        quit: *std.atomic.Atomic(bool),
+        channel: *TwoWayChannel,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
@@ -164,29 +252,34 @@ pub const Gui = struct {
     pub fn run(self: *Self, opt: RunOptions) !void {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
-        const quit = opt.quit;
+        const channel = opt.channel;
 
-        var buffer_ids = Self.generateBuffers();
-        defer {
-            gl.deleteBuffers(1, &buffer_ids[2]); // EBO
-            gl.deleteBuffers(1, &buffer_ids[1]); // VBO
-            gl.deleteVertexArrays(1, &buffer_ids[0]); // VAO
-        }
-        const vao_id = buffer_ids[0];
+        const obj_ids = Self.genBufferObjects();
+        defer gl.deleteBuffers(3, @as(*const [3]c_uint, &obj_ids));
 
-        const tex_id = Self.generateTexture(cpu.bus.ppu.framebuf.get(.Renderer));
-        defer gl.deleteTextures(1, &tex_id);
+        const emu_tex = Self.genGbaTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+        const out_tex = Self.genOutTexture();
+        defer gl.deleteTextures(2, &[_]c_uint{ emu_tex, out_tex });
 
-        var title_buf: [0x100]u8 = undefined;
+        const fbo_id = try Self.genFrameBufObject(out_tex);
+        defer gl.deleteFramebuffers(1, &fbo_id);
 
         emu_loop: while (true) {
+            // `quit` from RunOptions may be modified by the GDBSTUB thread,
+            // so we want to recognize that it may change to `true` and exit the GUI thread
+            if (channel.gui.pop()) |event| switch (event) {
+                .Quit => break :emu_loop,
+                .Paused => @panic("TODO: We want to peek (and then pop if it's .Quit), not always pop"),
+            };
+
+            // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
+            // should exit, in which case we should also handle this
+            if (self.state.should_quit) break :emu_loop;
+
             var event: SDL.SDL_Event = undefined;
-
-            // This might be true if the emu is running via a gdbstub server
-            // and the gdb stub exits first
-            if (quit.load(.Monotonic)) break :emu_loop;
-
             while (SDL.SDL_PollEvent(&event) != 0) {
+                _ = zgui.backend.processEvent(&event);
+
                 switch (event.type) {
                     SDL.SDL_QUIT => break :emu_loop,
                     SDL.SDL_KEYDOWN => {
@@ -224,12 +317,6 @@ pub const Gui = struct {
                             SDL.SDLK_s => keyinput.shoulder_r.set(),
                             SDL.SDLK_RETURN => keyinput.start.set(),
                             SDL.SDLK_RSHIFT => keyinput.select.set(),
-                            SDL.SDLK_i => {
-                                comptime std.debug.assert(sample_format == SDL.AUDIO_U16);
-                                log.err("Sample Count: {}", .{@intCast(u32, SDL.SDL_AudioStreamAvailable(cpu.bus.apu.stream)) / (2 * @sizeOf(u16))});
-                            },
-                            // SDL.SDLK_j => log.err("Scheduler Capacity: {} | Scheduler Event Count: {}", .{ scheduler.queue.capacity(), scheduler.queue.count() }),
-                            SDL.SDLK_k => {},
                             else => {},
                         }
 
@@ -239,31 +326,44 @@ pub const Gui = struct {
                 }
             }
 
-            // Emulator has an internal Double Buffer
-            const framebuf = cpu.bus.ppu.framebuf.get(.Renderer);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, framebuf.ptr);
+            {
+                channel.emu.push(.Pause);
+                defer channel.emu.push(.Resume);
 
-            gl.useProgram(self.program_id);
-            gl.bindVertexArray(vao_id);
-            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
-            SDL.SDL_GL_SwapWindow(self.window);
+                // Spin Loop until we know that the emu is paused
+                wait: while (true) switch (channel.gui.pop() orelse continue) {
+                    .Paused => break :wait,
+                    else => |any| std.debug.panic("[Gui/Channel]: Unhandled Event: {}", .{any}),
+                };
 
-            if (tracker) |t| {
-                const dyn_title = std.fmt.bufPrintZ(&title_buf, "ZBA | {s} [Emu: {}fps] ", .{ self.title, t.value() }) catch unreachable;
-                SDL.SDL_SetWindowTitle(self.window, dyn_title.ptr);
+                // Add FPS count to the histogram
+                if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
+
+                // Draw GBA Screen to Texture
+                {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+                    defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+                    const buf = cpu.bus.ppu.framebuf.get(.Renderer);
+                    gl.viewport(0, 0, gba_width, gba_height);
+                    self.drawGbaTexture(obj_ids, emu_tex, buf);
+                }
+
+                // Background Colour
+                const size = zgui.io.getDisplaySize();
+                gl.viewport(0, 0, @floatToInt(c_int, size[0]), @floatToInt(c_int, size[1]));
+                gl.clearColor(0, 0, 0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                zgui.backend.newFrame(width, height);
+                imgui.draw(&self.state, out_tex, cpu);
+                zgui.backend.draw();
             }
+
+            SDL.SDL_GL_SwapWindow(self.window);
         }
 
-        quit.store(true, .Monotonic); // Terminate Emulator Thread
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.audio.deinit();
-        gl.deleteProgram(self.program_id);
-        SDL.SDL_GL_DeleteContext(self.ctx);
-        SDL.SDL_DestroyWindow(self.window);
-        SDL.SDL_Quit();
-        self.* = undefined;
+        channel.emu.push(.Quit);
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {

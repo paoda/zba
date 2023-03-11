@@ -6,6 +6,7 @@ const clap = @import("clap");
 const config = @import("config.zig");
 const emu = @import("core/emu.zig");
 
+const TwoWayChannel = @import("zba-util").TwoWayChannel;
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
@@ -13,11 +14,8 @@ const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
 const FpsTracker = @import("util.zig").FpsTracker;
 const Allocator = std.mem.Allocator;
-const Atomic = std.atomic.Atomic;
 
 const log = std.log.scoped(.Cli);
-const width = @import("core/ppu.zig").width;
-const height = @import("core/ppu.zig").height;
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
 
 // CLI Arguments + Help Text
@@ -72,9 +70,10 @@ pub fn main() void {
     const paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
     defer if (paths.save) |path| allocator.free(path);
 
-    const log_file = if (config.config().debug.cpu_trace) blk: {
-        break :blk std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e});
-    } else null;
+    const log_file = switch (config.config().debug.cpu_trace) {
+        true => std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e}),
+        false => null,
+    };
     defer if (log_file) |file| file.close();
 
     // TODO: Take Emulator Init Code out of main.zig
@@ -91,9 +90,14 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
-    var quit = Atomic(bool).init(false);
-    var gui = Gui.init(&bus.pak.title, &bus.apu, width, height) catch |e| exitln("failed to init gui: {}", .{e});
+    // TODO: Just copy the title instead of grabbing a pointer to it
+    var gui = Gui.init(allocator, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
+
+    var quit = std.atomic.Atomic(bool).init(false);
+
+    var items: [0x100]u8 = undefined;
+    var channel = TwoWayChannel.init(&items);
 
     if (result.args.gdb) {
         const Server = @import("gdbstub").Server;
@@ -116,26 +120,26 @@ pub fn main() void {
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .quit = &quit,
+            .channel = &channel,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &quit, &scheduler, &cpu, &tracker }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &channel }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
+            .channel = &channel,
             .tracker = &tracker,
-            .quit = &quit,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }
 
 fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
     const rom_path = romPath(result);
-    log.info("ROM path: {s}", .{rom_path});
+    log.info("ROM path: {?s}", .{rom_path});
 
     const bios_path = result.args.bios;
     if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.warn("No BIOS provided", .{});
@@ -184,10 +188,10 @@ fn ensureConfigDirExists(config_path: []const u8) !void {
     try dir.makePath("zba");
 }
 
-fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
+fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) ?[]const u8 {
     return switch (result.positionals.len) {
+        0 => null,
         1 => result.positionals[0],
-        0 => exitln("ZBA requires a path to a GamePak ROM", .{}),
         else => exitln("ZBA received too many positional arguments.", .{}),
     };
 }

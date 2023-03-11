@@ -2,6 +2,8 @@
 
 A Game Boy Advance Emulator written in Zig ⚡!
 
+![ZBA running リズム天国](assets/screenshot.png)
+
 ## Scope
 
 I'm hardly the first to write a Game Boy Advance Emulator nor will I be the last. This project isn't going to compete with the GOATs like [mGBA](https://github.com/mgba-emu) or [NanoBoyAdvance](https://github.com/nba-emu/NanoBoyAdvance). There aren't any interesting ideas either like in [DSHBA](https://github.com/DenSinH/DSHBA).
@@ -13,14 +15,13 @@ This is a simple (read: incomplete) for-fun long-term project. I hope to get "mo
 - [x] Affine Sprites
 - [ ] Windowing (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/window))
 - [ ] Audio Resampler (Having issues with SDL2's)
-- [x] Immediate Mode GUI (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/imgui))
 - [ ] Refactoring for easy-ish perf boosts
 
 ## Usage
 
 As it currently exists, ZBA is run from the terminal. In your console of choice, type `./zba --help` to see what you can do.
 
-I typically find myself typing `./zba -b ./bin/bios.bin ./bin/test/suite.gba` to see how badly my "cool new feature" broke everything else.
+I typically find myself typing `./zba -b ./bin/bios.bin` and then going to File -> Insert ROM to load the title of my choice.
 
 Need a BIOS? Why not try using the open-source [Cult-Of-GBA BIOS](https://github.com/Cult-of-GBA/BIOS) written by [fleroviux](https://github.com/fleroviux) and [DenSinH](https://github.com/DenSinH)?
 
@@ -84,10 +85,12 @@ Most recently built on Zig [v0.11.0-dev.1580+a5b34a61a](https://github.com/zigla
 Dependency | Source
 --- | ---
 SDL.zig | <https://github.com/MasterQ32/SDL.zig>
-zig-clap | <https://github.com/Hejsil/zig-clap>
 known-folders | <https://github.com/ziglibs/known-folders>
-zig-toml | <https://github.com/aeronavery/zig-toml>
+nfd-zig | <https://github.com/fabioarnold/nfd-zig>
+zgui | <https://github.com/michal-z/zig-gamedev/tree/main/libs/zgui>
+zig-clap | <https://github.com/Hejsil/zig-clap>
 zig-datetime | <https://github.com/frmdstryr/zig-datetime>
+zig-toml | <https://github.com/aeronavery/zig-toml>
 `bitfields.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
 `gl.zig` | <https://github.com/MasterQ32/zig-opengl>
 

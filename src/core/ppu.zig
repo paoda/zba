@@ -290,6 +290,26 @@ pub const Ppu = struct {
         };
     }
 
+    pub fn reset(self: *Self) void {
+        self.sched.push(.Draw, 240 * 4);
+
+        self.vram.reset();
+        self.palette.reset();
+        self.oam.reset();
+        self.framebuf.reset();
+
+        self.win = Window.init();
+        self.bg = [_]Background{Background.init()} ** 4;
+        self.aff_bg = [_]AffineBackground{AffineBackground.init()} ** 2;
+        self.bld = Blend.create();
+        self.dispcnt = .{ .raw = 0x0000 };
+        self.dispstat = .{ .raw = 0x0000 };
+        self.vcount = .{ .raw = 0x0000 };
+
+        self.scanline.reset();
+        std.mem.set(?Sprite, self.scanline_sprites, null);
+    }
+
     pub fn deinit(self: *Self) void {
         self.allocator.destroy(self.scanline_sprites);
         self.framebuf.deinit();

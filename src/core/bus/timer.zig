@@ -128,6 +128,12 @@ fn Timer(comptime id: u2) type {
             };
         }
 
+        pub fn reset(self: *Self) void {
+            const scheduler = self.sched;
+
+            self.* = Self.init(scheduler);
+        }
+
         /// TIMCNT_L Getter
         pub fn timcntL(self: *const Self) u16 {
             if (self.cnt.cascade.read() or !self.cnt.enabled.read()) return self._counter;

@@ -2,8 +2,8 @@ const Bus = @import("../../Bus.zig");
 const Arm7tdmi = @import("../../cpu.zig").Arm7tdmi;
 const InstrFn = @import("../../cpu.zig").thumb.InstrFn;
 
-const rotr = @import("../../../util.zig").rotr;
-const sext = @import("../../../util.zig").sext;
+const rotr = @import("zba-util").rotr;
+const sext = @import("zba-util").sext;
 
 pub fn fmt6(comptime rd: u3) InstrFn {
     return struct {

@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bios);
 
-const rotr = @import("../../util.zig").rotr;
+const rotr = @import("zba-util").rotr;
 const forceAlign = @import("../Bus.zig").forceAlign;
 
 /// Size of the BIOS in bytes
@@ -75,6 +75,10 @@ pub fn init(allocator: Allocator, maybe_path: ?[]const u8) !Self {
     if (file_len != Self.size) log.err("Expected BIOS to be {}B, was {}B", .{ Self.size, file_len });
 
     return Self{ .buf = buf, .allocator = allocator };
+}
+
+pub fn reset(self: *Self) void {
+    self.addr_latch = 0;
 }
 
 pub fn deinit(self: *Self) void {

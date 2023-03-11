@@ -32,7 +32,7 @@ pub const Backup = struct {
     flash: Flash,
     eeprom: Eeprom,
 
-    const Kind = enum {
+    pub const Kind = enum {
         Eeprom,
         Sram,
         Flash,

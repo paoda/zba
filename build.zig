@@ -2,7 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
-const Gdbstub = @import("lib/zba-gdbstub/build.zig");
+const gdbstub = @import("lib/zba-gdbstub/build.zig");
+const zgui = @import("lib/zgui/build.zig");
+const nfd = @import("lib/nfd-zig/build.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Minimum Zig Version
@@ -31,7 +33,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.addAnonymousModule("datetime", .{ .source_file = .{ .path = "lib/zig-datetime/src/main.zig" } });
 
     // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
-    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/util/bitfield.zig" } });
+    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } });
 
     // Argument Parsing Library
     exe.addAnonymousModule("clap", .{ .source_file = .{ .path = "lib/zig-clap/clap.zig" } });
@@ -42,13 +44,24 @@ pub fn build(b: *std.build.Builder) void {
     // OpenGL 3.3 Bindings
     exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
 
+    // ZBA utility code
+    exe.addAnonymousModule("zba-util", .{ .source_file = .{ .path = "lib/zba-util/src/lib.zig" } });
+
     // gdbstub
-    Gdbstub.link(exe);
+    gdbstub.link(exe);
+    // NativeFileDialog(ue) Bindings
+    exe.linkLibrary(nfd.makeLib(b, target, optimize));
+    exe.addModule("nfd", nfd.getModule(b));
 
     // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
     sdk.link(exe, .dynamic);
     exe.addModule("sdl2", sdk.getNativeModule());
+
+    // Dear ImGui bindings
+    const zgui_pkg = zgui.package(b, .{ .options = .{ .backend = .sdl2_opengl3 } });
+    exe.addModule("zgui", zgui_pkg.module);
+    zgui.link(exe, zgui_pkg.options);
 
     exe.install();
 
