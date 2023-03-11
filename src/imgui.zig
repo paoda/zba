@@ -76,9 +76,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                         break :blk;
                     };
 
-                    // Ideally, state.title = cpu.bus.pak.title
-                    // since state.title is a [12:0]u8 and cpu.bus.pak.title is a [12]u8
-                    std.mem.copy(u8, &state.title, &cpu.bus.pak.title);
+                    state.title = cpu.bus.pak.title ++ [_:0]u8{};
                 }
             }
         }
