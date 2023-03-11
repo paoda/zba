@@ -15,14 +15,13 @@ This is a simple (read: incomplete) for-fun long-term project. I hope to get "mo
 - [x] Affine Sprites
 - [ ] Windowing (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/window))
 - [ ] Audio Resampler (Having issues with SDL2's)
-- [x] Immediate Mode GUI (see [this branch](https://git.musuka.dev/paoda/zba/src/branch/imgui))
 - [ ] Refactoring for easy-ish perf boosts
 
 ## Usage
 
 As it currently exists, ZBA is run from the terminal. In your console of choice, type `./zba --help` to see what you can do.
 
-I typically find myself typing `./zba -b ./bin/bios.bin ./bin/test/suite.gba` to see how badly my "cool new feature" broke everything else.
+I typically find myself typing `./zba -b ./bin/bios.bin` and then going to File -> Insert ROM to load the title of my choice.
 
 Need a BIOS? Why not try using the open-source [Cult-Of-GBA BIOS](https://github.com/Cult-of-GBA/BIOS) written by [fleroviux](https://github.com/fleroviux) and [DenSinH](https://github.com/DenSinH)?
 

@@ -139,7 +139,7 @@ pub fn main() void {
 
 fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
     const rom_path = romPath(result);
-    log.info("ROM path: {s}", .{rom_path});
+    log.info("ROM path: {?s}", .{rom_path});
 
     const bios_path = result.args.bios;
     if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.warn("No BIOS provided", .{});
@@ -188,10 +188,10 @@ fn ensureConfigDirExists(config_path: []const u8) !void {
     try dir.makePath("zba");
 }
 
-fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) []const u8 {
+fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) ?[]const u8 {
     return switch (result.positionals.len) {
+        0 => null,
         1 => result.positionals[0],
-        0 => exitln("ZBA requires a path to a GamePak ROM", .{}),
         else => exitln("ZBA received too many positional arguments.", .{}),
     };
 }

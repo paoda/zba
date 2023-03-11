@@ -179,23 +179,30 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
     }
 }
 
-pub fn init(allocator: Allocator, cpu: *Arm7tdmi, rom_path: []const u8, save_path: ?[]const u8) !Self {
-    const file = try std.fs.cwd().openFile(rom_path, .{});
-    defer file.close();
+pub fn init(allocator: Allocator, cpu: *Arm7tdmi, maybe_rom: ?[]const u8, maybe_save: ?[]const u8) !Self {
+    const Device = Gpio.Device;
 
-    const file_buf = try file.readToEndAlloc(allocator, try file.getEndPos());
-    const title = file_buf[0xA0..0xAC].*;
-    const kind = Backup.guess(file_buf);
-    const device = if (config.config().guest.force_rtc) .Rtc else guessDevice(file_buf);
+    const items: struct { []u8, [12]u8, Backup.Kind, Device.Kind } = if (maybe_rom) |file_path| blk: {
+        const file = try std.fs.cwd().openFile(file_path, .{});
+        defer file.close();
 
-    logHeader(file_buf, title);
+        const buffer = try file.readToEndAlloc(allocator, try file.getEndPos());
+        const title = buffer[0xA0..0xAC];
+        logHeader(buffer, title);
+
+        const device_kind = if (config.config().guest.force_rtc) .Rtc else guessDevice(buffer);
+
+        break :blk .{ buffer, title.*, Backup.guess(buffer), device_kind };
+    } else .{ try allocator.alloc(u8, 0), [_]u8{0} ** 12, .None, .None };
+
+    const title = items[1];
 
     return .{
-        .buf = file_buf,
+        .buf = items[0],
         .allocator = allocator,
         .title = title,
-        .backup = try Backup.init(allocator, kind, title, save_path),
-        .gpio = try Gpio.init(allocator, cpu, device),
+        .backup = try Backup.init(allocator, items[2], title, maybe_save),
+        .gpio = try Gpio.init(allocator, cpu, items[3]),
     };
 }
 
@@ -223,11 +230,11 @@ fn guessDevice(buf: []const u8) Gpio.Device.Kind {
     return .None;
 }
 
-fn logHeader(buf: []const u8, title: [12]u8) void {
-    const ver = buf[0xBC];
+fn logHeader(buf: []const u8, title: *const [12]u8) void {
+    const version = buf[0xBC];
 
     log.info("Title: {s}", .{title});
-    if (ver != 0) log.info("Version: {}", .{ver});
+    if (version != 0) log.info("Version: {}", .{version});
 
     log.info("Game Code: {s}", .{buf[0xAC..0xB0]});
     log.info("Maker Code: {s}", .{buf[0xB0..0xB2]});

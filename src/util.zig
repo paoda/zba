@@ -50,7 +50,7 @@ pub fn escape(title: [12]u8) [12]u8 {
 }
 
 pub const FilePaths = struct {
-    rom: []const u8,
+    rom: ?[]const u8,
     bios: ?[]const u8,
     save: ?[]const u8,
 };
