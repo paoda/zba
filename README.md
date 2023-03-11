@@ -2,6 +2,8 @@
 
 A Game Boy Advance Emulator written in Zig ⚡!
 
+![ZBA running リズム天国](assets/screenshot.png)
+
 ## Scope
 
 I'm hardly the first to write a Game Boy Advance Emulator nor will I be the last. This project isn't going to compete with the GOATs like [mGBA](https://github.com/mgba-emu) or [NanoBoyAdvance](https://github.com/nba-emu/NanoBoyAdvance). There aren't any interesting ideas either like in [DSHBA](https://github.com/DenSinH/DSHBA).
