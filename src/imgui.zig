@@ -26,25 +26,25 @@ const histogram_len = 0x400;
 
 /// Immediate-Mode GUI State
 pub const State = struct {
-    title: [:0]const u8,
+    title: [12:0]u8,
 
     fps_hist: RingBuffer(u32),
     should_quit: bool = false,
 
-    pub fn init(allocator: Allocator, title: [12]u8) !@This() {
+    pub fn init(allocator: Allocator) !@This() {
         const history = try allocator.alloc(u32, histogram_len);
-        const without_null = std.mem.sliceTo(&title, 0);
+
+        var title: [12:0]u8 = [_:0]u8{0} ** 12;
+        std.mem.copy(u8, &title, "[No Title]");
 
         return .{
-            .title = try allocator.dupeZ(u8, without_null),
+            .title = title,
             .fps_hist = RingBuffer(u32).init(history),
         };
     }
 
     pub fn deinit(self: *@This(), allocator: Allocator) void {
-        allocator.free(self.title);
         allocator.free(self.fps_hist.buf);
-
         self.* = undefined;
     }
 };
@@ -60,9 +60,10 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
             defer zgui.endMenu();
 
             if (zgui.menuItem("Quit", .{})) state.should_quit = true;
+
             if (zgui.menuItem("Insert ROM", .{})) blk: {
                 const maybe_path = nfd.openFileDialog("gba", null) catch |e| {
-                    log.err("failed to open file dialog: {?}", .{e});
+                    log.err("failed to open file dialog: {}", .{e});
                     break :blk;
                 };
 
@@ -74,6 +75,10 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                         log.err("failed to replace GamePak: {}", .{e});
                         break :blk;
                     };
+
+                    // Ideally, state.title = cpu.bus.pak.title
+                    // since state.title is a [12:0]u8 and cpu.bus.pak.title is a [12]u8
+                    std.mem.copy(u8, &state.title, &cpu.bus.pak.title);
                 }
             }
         }
@@ -91,7 +96,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         const w = @intToFloat(f32, gba_width * win_scale);
         const h = @intToFloat(f32, gba_height * win_scale);
 
-        const window_title = if (state.title.len != 0) state.title else "[No Title]";
+        const window_title = std.mem.sliceTo(&state.title, 0);
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 

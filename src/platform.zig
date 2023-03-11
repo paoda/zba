@@ -57,7 +57,7 @@ pub const Gui = struct {
     allocator: Allocator,
     program_id: gl.GLuint,
 
-    pub fn init(allocator: Allocator, title: [12]u8, apu: *Apu) !Self {
+    pub fn init(allocator: Allocator, apu: *Apu) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
@@ -91,7 +91,7 @@ pub const Gui = struct {
             .audio = Audio.init(apu),
 
             .allocator = allocator,
-            .state = try imgui.State.init(allocator, title),
+            .state = try imgui.State.init(allocator),
         };
     }
 
