@@ -37,10 +37,7 @@ pub const State = struct {
         var title: [12:0]u8 = [_:0]u8{0} ** 12;
         std.mem.copy(u8, &title, "[No Title]");
 
-        return .{
-            .title = title,
-            .fps_hist = RingBuffer(u32).init(history),
-        };
+        return .{ .title = title, .fps_hist = RingBuffer(u32).init(history) };
     }
 
     pub fn deinit(self: *@This(), allocator: Allocator) void {
@@ -67,17 +64,19 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                     break :blk;
                 };
 
-                if (maybe_path) |file_path| {
-                    defer nfd.freePath(file_path);
-                    log.info("user chose: \"{s}\"", .{file_path});
+                const file_path = maybe_path orelse {
+                    log.warn("did not receive a file path", .{});
+                    break :blk;
+                };
+                defer nfd.freePath(file_path);
 
-                    emu.replaceGamepak(cpu, file_path) catch |e| {
-                        log.err("failed to replace GamePak: {}", .{e});
-                        break :blk;
-                    };
+                log.info("user chose: \"{s}\"", .{file_path});
+                emu.replaceGamepak(cpu, file_path) catch |e| {
+                    log.err("failed to replace GamePak: {}", .{e});
+                    break :blk;
+                };
 
-                    state.title = cpu.bus.pak.title ++ [_:0]u8{};
-                }
+                state.title = cpu.bus.pak.title ++ [_:0]u8{};
             }
         }
 
