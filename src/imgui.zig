@@ -21,8 +21,8 @@ const gba_height = @import("core/ppu.zig").height;
 
 const log = std.log.scoped(.Imgui);
 
-// TODO: Document how I decided on this value (I forgot 😅)
-const histogram_len = 0x400;
+// two seconds worth of fps values into the past
+const histogram_len = 0x80;
 
 /// Immediate-Mode GUI State
 pub const State = struct {
@@ -130,7 +130,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         defer zgui.end();
 
         const tmp = blk: {
-            var buf: [0x400]u32 = undefined;
+            var buf: [histogram_len]u32 = undefined;
             const len = state.fps_hist.copy(&buf);
 
             break :blk .{ buf, len };
