@@ -8,7 +8,7 @@ const nfd = @import("lib/nfd-zig/build.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Minimum Zig Version
-    const min_ver = std.SemanticVersion.parse("0.11.0-dev.1580+a5b34a61a") catch return; // https://github.com/ziglang/zig/commit/a5b34a61a
+    const min_ver = std.SemanticVersion.parse("0.11.0-dev.2168+322ace70f") catch return; // https://github.com/ziglang/zig/commit/322ace70f
     if (builtin.zig_version.order(min_ver).compare(.lt)) {
         std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
         std.os.exit(1);
@@ -48,7 +48,8 @@ pub fn build(b: *std.build.Builder) void {
     exe.addAnonymousModule("zba-util", .{ .source_file = .{ .path = "lib/zba-util/src/lib.zig" } });
 
     // gdbstub
-    gdbstub.link(exe);
+    exe.addModule("gdbstub", gdbstub.getModule(b));
+
     // NativeFileDialog(ue) Bindings
     exe.linkLibrary(nfd.makeLib(b, target, optimize));
     exe.addModule("nfd", nfd.getModule(b));
@@ -59,9 +60,8 @@ pub fn build(b: *std.build.Builder) void {
     exe.addModule("sdl2", sdk.getNativeModule());
 
     // Dear ImGui bindings
-    const zgui_pkg = zgui.package(b, .{ .options = .{ .backend = .sdl2_opengl3 } });
-    exe.addModule("zgui", zgui_pkg.module);
-    zgui.link(exe, zgui_pkg.options);
+    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3 } });
+    zgui_pkg.link(exe);
 
     exe.install();
 
