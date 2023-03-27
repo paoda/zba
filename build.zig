@@ -60,7 +60,9 @@ pub fn build(b: *std.build.Builder) void {
     exe.addModule("sdl2", sdk.getNativeModule());
 
     // Dear ImGui bindings
-    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3 } });
+
+    // .shared option should stay in sync with SDL.zig call above where true == .dynamic, and false == .static
+    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3, .shared = true } });
     zgui_pkg.link(exe);
 
     exe.install();
