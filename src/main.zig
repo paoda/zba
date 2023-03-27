@@ -90,8 +90,10 @@ pub fn main() void {
         cpu.fastBoot();
     }
 
+    const title_ptr = if (paths.rom != null) &bus.pak.title else null;
+
     // TODO: Just copy the title instead of grabbing a pointer to it
-    var gui = Gui.init(allocator, &bus.apu) catch |e| exitln("failed to init gui: {}", .{e});
+    var gui = Gui.init(allocator, &bus.apu, title_ptr) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
     var quit = std.atomic.Atomic(bool).init(false);

@@ -31,12 +31,12 @@ pub const State = struct {
     fps_hist: RingBuffer(u32),
     should_quit: bool = false,
 
-    pub fn init(allocator: Allocator) !@This() {
+    /// if zba is initialized with a ROM already provided, this initializer should be called
+    /// with `title_opt` being non-null
+    pub fn init(allocator: Allocator, title_opt: ?*const [12]u8) !@This() {
         const history = try allocator.alloc(u32, histogram_len);
 
-        var title: [12:0]u8 = [_:0]u8{0} ** 12;
-        std.mem.copy(u8, &title, "[No Title]");
-
+        const title: [12:0]u8 = if (title_opt) |t| t.* ++ [_:0]u8{} else "[No Title]\x00\x00".*;
         return .{ .title = title, .fps_hist = RingBuffer(u32).init(history) };
     }
 
