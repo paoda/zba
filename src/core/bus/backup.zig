@@ -205,6 +205,10 @@ pub const Backup = struct {
         const file_path = try self.savePath(allocator, path);
         defer allocator.free(file_path);
 
+        // FIXME: communicate edge case to the user?
+        if (std.mem.eql(u8, &self.title, "ACE LIGHTNIN"))
+            return;
+
         switch (self.kind) {
             .Sram, .Flash, .Flash1M, .Eeprom => {
                 const file = try std.fs.createFileAbsolute(file_path, .{});
