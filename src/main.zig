@@ -86,7 +86,7 @@ pub fn main() void {
     bus.init(allocator, &scheduler, &cpu, paths) catch |e| exitln("failed to init zba bus: {}", .{e});
     defer bus.deinit();
 
-    if (config.config().guest.skip_bios or result.args.skip or paths.bios == null) {
+    if (config.config().guest.skip_bios or result.args.skip != 0 or paths.bios == null) {
         cpu.fastBoot();
     }
 
@@ -101,7 +101,7 @@ pub fn main() void {
     var items: [0x100]u8 = undefined;
     var channel = TwoWayChannel.init(&items);
 
-    if (result.args.gdb) {
+    if (result.args.gdb != 0) {
         const Server = @import("gdbstub").Server;
         const EmuThing = @import("core/emu.zig").EmuThing;
 
