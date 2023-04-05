@@ -38,6 +38,7 @@ pub const State = struct {
         show_regs: bool = false,
         show_schedule: bool = false,
         show_perf: bool = false,
+        show_palette: bool = false,
     };
 
     /// if zba is initialized with a ROM already provided, this initializer should be called
@@ -95,6 +96,9 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
 
             if (zgui.menuItem("Registers", .{ .selected = state.win_stat.show_regs }))
                 state.win_stat.show_regs = true;
+
+            if (zgui.menuItem("Palette", .{ .selected = state.win_stat.show_palette }))
+                state.win_stat.show_palette = true;
 
             if (zgui.menuItem("Schedule", .{ .selected = state.win_stat.show_schedule }))
                 state.win_stat.show_schedule = true;
@@ -281,12 +285,59 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         }
     }
 
-    // {
-    //     zgui.showDemoWindow(null);
-    // }
+    if (state.win_stat.show_palette) {
+        _ = zgui.begin("Palette", .{ .popen = &state.win_stat.show_palette });
+        defer zgui.end();
+
+        widgets.paletteGrid(.Background, cpu);
+
+        zgui.sameLine(.{ .spacing = 20.0 });
+
+        widgets.paletteGrid(.Object, cpu);
+    }
+
+    {
+        zgui.showDemoWindow(null);
+    }
 }
 
 const widgets = struct {
+    const PaletteKind = enum { Background, Object };
+
+    fn paletteGrid(comptime kind: PaletteKind, cpu: *const Arm7tdmi) void {
+        _ = zgui.beginGroup();
+        defer zgui.endGroup();
+
+        const address: u32 = switch (kind) {
+            .Background => 0x0500_0000,
+            .Object => 0x0500_0200,
+        };
+
+        for (0..0x100) |i| {
+            const offset = @truncate(u32, i);
+            const bgr555 = cpu.bus.dbgRead(u16, address + offset * @sizeOf(u16));
+            widgets.colourSquare(bgr555);
+
+            if ((i + 1) % 0x10 != 0) zgui.sameLine(.{});
+        }
+        zgui.text(@tagName(kind), .{});
+    }
+
+    fn colourSquare(bgr555: u16) void {
+        // FIXME: working with the packed struct enum is currently broken :pensive:
+        const ImguiColorEditFlags_NoInputs: u32 = 1 << 5;
+        const ImguiColorEditFlags_NoPicker: u32 = 1 << 2;
+        const flags = @bitCast(zgui.ColorEditFlags, ImguiColorEditFlags_NoInputs | ImguiColorEditFlags_NoPicker);
+
+        const b = @intToFloat(f32, bgr555 >> 10 & 0x1f);
+        const g = @intToFloat(f32, bgr555 >> 5 & 0x1F);
+        const r = @intToFloat(f32, bgr555 & 0x1F);
+
+        var col = [_]f32{ r / 31.0, g / 31.0, b / 31.0 };
+
+        _ = zgui.colorEdit3("", .{ .col = &col, .flags = flags });
+    }
+
     fn interrupts(comptime label: []const u8, int: anytype) void {
         const h = 15.0;
         const w = 9.0 * 2 + 3.5;
