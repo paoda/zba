@@ -31,6 +31,15 @@ pub const State = struct {
     fps_hist: RingBuffer(u32),
     should_quit: bool = false,
 
+    win_stat: WindowStatus = .{},
+
+    const WindowStatus = struct {
+        show_deps: bool = false,
+        show_regs: bool = false,
+        show_schedule: bool = false,
+        show_perf: bool = false,
+    };
+
     /// if zba is initialized with a ROM already provided, this initializer should be called
     /// with `title_opt` being non-null
     pub fn init(allocator: Allocator, title_opt: ?*const [12]u8) !@This() {
@@ -56,7 +65,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         if (zgui.beginMenu("File", true)) {
             defer zgui.endMenu();
 
-            if (zgui.menuItem("Quit", .{})) state.should_quit = true;
+            if (zgui.menuItem("Quit", .{}))
+                state.should_quit = true;
 
             if (zgui.menuItem("Insert ROM", .{})) blk: {
                 const maybe_path = nfd.openFileDialog("gba", null) catch |e| {
@@ -83,9 +93,28 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         if (zgui.beginMenu("Emulation", true)) {
             defer zgui.endMenu();
 
-            if (zgui.menuItem("Restart", .{})) {
+            if (zgui.menuItem("Registers", .{ .selected = state.win_stat.show_regs }))
+                state.win_stat.show_regs = true;
+
+            if (zgui.menuItem("Schedule", .{ .selected = state.win_stat.show_schedule }))
+                state.win_stat.show_schedule = true;
+
+            if (zgui.menuItem("Restart", .{}))
                 emu.reset(cpu);
-            }
+        }
+
+        if (zgui.beginMenu("Stats", true)) {
+            defer zgui.endMenu();
+
+            if (zgui.menuItem("Performance", .{ .selected = state.win_stat.show_perf }))
+                state.win_stat.show_perf = true;
+        }
+
+        if (zgui.beginMenu("Help", true)) {
+            defer zgui.endMenu();
+
+            if (zgui.menuItem("Dependencies", .{ .selected = state.win_stat.show_deps }))
+                state.win_stat.show_deps = true;
         }
     }
 
@@ -100,8 +129,51 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         zgui.image(@intToPtr(*anyopaque, tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
     }
 
-    {
-        _ = zgui.begin("Information", .{});
+    // TODO: Any other steps to respect the copyright of the libraries I use?
+    if (state.win_stat.show_deps) {
+        _ = zgui.begin("Dependencies", .{ .popen = &state.win_stat.show_deps });
+        defer zgui.end();
+
+        zgui.bulletText("SDL.zig by Felix Queißner", .{});
+        {
+            zgui.indent(.{});
+            defer zgui.unindent(.{});
+
+            zgui.bulletText("SDL by Sam Lantinga", .{});
+        }
+
+        zgui.bulletText("known-folders by ziglibs", .{});
+        zgui.bulletText("nfd-zig by Fabio Arnold", .{});
+        {
+            zgui.indent(.{});
+            defer zgui.unindent(.{});
+
+            zgui.bulletText("nativefiledialog by Michael Labbe", .{});
+        }
+        zgui.bulletText("zba-gdbstub by Rekai Musuka", .{});
+        zgui.bulletText("zba-util by Rekai Musuka", .{});
+        zgui.bulletText("zgui by Michal Ziulek", .{});
+        {
+            zgui.indent(.{});
+            defer zgui.unindent(.{});
+
+            zgui.bulletText("DearImGui by Omar Cornut", .{});
+        }
+        zgui.bulletText("zig-clap by Jimmi Holst Christensen", .{});
+        zgui.bulletText("zig-datetime by Jairus Martin", .{});
+        zgui.bulletText("zig-opengl by Felix Queißner", .{});
+        {
+            zgui.indent(.{});
+            defer zgui.unindent(.{});
+
+            zgui.bulletText("OpenGL-Registry by The Khronos Group", .{});
+        }
+        zgui.bulletText("zig-toml by Aeron Avery", .{});
+        zgui.bulletText("bitfield.zig by Hannes Bredberg and FlorenceOS contributors", .{});
+    }
+
+    if (state.win_stat.show_regs) {
+        _ = zgui.begin("Guest Registers", .{ .popen = &state.win_stat.show_regs });
         defer zgui.end();
 
         for (0..8) |i| {
@@ -124,8 +196,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         widgets.interrupts("IRQ", cpu.bus.io.irq);
     }
 
-    {
-        _ = zgui.begin("Performance", .{});
+    if (state.win_stat.show_perf) {
+        _ = zgui.begin("Performance", .{ .popen = &state.win_stat.show_perf });
         defer zgui.end();
 
         const tmp = blk: {
@@ -187,8 +259,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
     }
 
-    {
-        _ = zgui.begin("Scheduler", .{});
+    if (state.win_stat.show_schedule) {
+        _ = zgui.begin("Schedule", .{ .popen = &state.win_stat.show_schedule });
         defer zgui.end();
 
         const scheduler = cpu.sched;
