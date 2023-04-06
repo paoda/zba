@@ -46,8 +46,10 @@ pub const State = struct {
     pub fn init(allocator: Allocator, title_opt: ?*const [12]u8) !@This() {
         const history = try allocator.alloc(u32, histogram_len);
 
-        const title: [12:0]u8 = if (title_opt) |t| t.* ++ [_:0]u8{} else "[No Title]\x00\x00".*;
-        return .{ .title = title, .fps_hist = RingBuffer(u32).init(history) };
+        return .{
+            .title = handleTitle(title_opt),
+            .fps_hist = RingBuffer(u32).init(history),
+        };
     }
 
     pub fn deinit(self: *@This(), allocator: Allocator) void {
@@ -87,7 +89,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                     break :blk;
                 };
 
-                state.title = cpu.bus.pak.title ++ [_:0]u8{};
+                state.title = handleTitle(&cpu.bus.pak.title);
             }
         }
 
@@ -428,3 +430,13 @@ const widgets = struct {
         }.inner;
     }
 };
+
+fn handleTitle(title_opt: ?*const [12]u8) [12:0]u8 {
+    if (title_opt == null) return "[N/A Title]\x00".*; // No ROM present
+    const title = title_opt.?;
+
+    // ROM Title is an empty string (ImGui hates these)
+    if (title[0] == '\x00') return "[No Title]\x00\x00".*;
+
+    return title.* ++ [_:0]u8{};
+}
