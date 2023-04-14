@@ -39,7 +39,7 @@ pub const arm = struct {
     }
 
     fn populate() [0x1000]InstrFn {
-        comptime {
+        return comptime comptime_blk: {
             @setEvalBranchQuota(0xE000);
             var table = [_]InstrFn{und} ** 0x1000;
 
@@ -106,8 +106,8 @@ pub const arm = struct {
                 };
             }
 
-            return table;
-        }
+            break :comptime_blk table;
+        };
     }
 };
 
@@ -135,7 +135,7 @@ pub const thumb = struct {
     }
 
     fn populate() [0x400]InstrFn {
-        comptime {
+        return comptime comptime_blk: {
             @setEvalBranchQuota(5025); // This is exact
             var table = [_]InstrFn{und} ** 0x400;
 
@@ -228,8 +228,8 @@ pub const thumb = struct {
                 };
             }
 
-            return table;
-        }
+            break :comptime_blk table;
+        };
     }
 };
 
