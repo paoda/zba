@@ -33,29 +33,12 @@ pub const Gui = struct {
     const Self = @This();
     const log = std.log.scoped(.Gui);
 
-    // zig fmt: off
-    const vertices: [32]f32 = [_]f32{
-        // Positions        // Colours      // Texture Coords
-         1.0, -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
-         1.0,  1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
-        -1.0,  1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
-        -1.0, -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
-    };
-
-    const indices: [6]u32 = [_]u32{
-        0, 1, 3, // First Triangle
-        1, 2, 3, // Second Triangle
-    };
-    // zig fmt: on
-
     window: *SDL.SDL_Window,
     ctx: SDL_GLContext,
     audio: Audio,
 
     state: imgui.State,
-
     allocator: Allocator,
-    program_id: gl.GLuint,
 
     pub fn init(allocator: Allocator, apu: *Apu, title_opt: ?*const [12]u8) !Self {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
@@ -87,7 +70,6 @@ pub const Gui = struct {
         return Self{
             .window = window,
             .ctx = ctx,
-            .program_id = try compileShaders(),
             .audio = Audio.init(apu),
 
             .allocator = allocator,
@@ -103,143 +85,11 @@ pub const Gui = struct {
         zgui.plot.deinit();
         zgui.deinit();
 
-        gl.deleteProgram(self.program_id);
         SDL.SDL_GL_DeleteContext(self.ctx);
         SDL.SDL_DestroyWindow(self.window);
         SDL.SDL_Quit();
 
         self.* = undefined;
-    }
-
-    fn drawGbaTexture(self: *const Self, obj_ids: struct { GLuint, GLuint, GLuint }, tex_id: GLuint, buf: []const u8) void {
-        gl.bindTexture(gl.TEXTURE_2D, tex_id);
-        defer gl.bindTexture(gl.TEXTURE_2D, 0);
-
-        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
-
-        // Bind VAO, EBO. VBO not bound
-        gl.bindVertexArray(obj_ids[0]); // VAO
-        defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj_ids[2]); // EBO
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
-
-        // Use compiled frag + vertex shader
-        gl.useProgram(self.program_id);
-        defer gl.useProgram(0);
-
-        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
-    }
-
-    fn compileShaders() !GLuint {
-        const vert_shader = @embedFile("shader/pixelbuf.vert");
-        const frag_shader = @embedFile("shader/pixelbuf.frag");
-
-        const vs = gl.createShader(gl.VERTEX_SHADER);
-        defer gl.deleteShader(vs);
-
-        gl.shaderSource(vs, 1, &[_][*c]const u8{vert_shader}, 0);
-        gl.compileShader(vs);
-
-        if (!shader.didCompile(vs)) return error.VertexCompileError;
-
-        const fs = gl.createShader(gl.FRAGMENT_SHADER);
-        defer gl.deleteShader(fs);
-
-        gl.shaderSource(fs, 1, &[_][*c]const u8{frag_shader}, 0);
-        gl.compileShader(fs);
-
-        if (!shader.didCompile(fs)) return error.FragmentCompileError;
-
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-
-        return program;
-    }
-
-    // Returns the VAO ID since it's used in run()
-    fn genBufferObjects() struct { GLuint, GLuint, GLuint } {
-        var vao_id: GLuint = undefined;
-        var vbo_id: GLuint = undefined;
-        var ebo_id: GLuint = undefined;
-
-        gl.genVertexArrays(1, &vao_id);
-        gl.genBuffers(1, &vbo_id);
-        gl.genBuffers(1, &ebo_id);
-
-        gl.bindVertexArray(vao_id);
-        defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
-        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
-
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
-
-        // Position
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
-        gl.enableVertexAttribArray(0);
-        // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (3 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(1);
-        // Texture Coord
-        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (6 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(2);
-
-        return .{ vao_id, vbo_id, ebo_id };
-    }
-
-    fn genGbaTexture(buf: []const u8) GLuint {
-        var tex_id: GLuint = undefined;
-        gl.genTextures(1, &tex_id);
-
-        gl.bindTexture(gl.TEXTURE_2D, tex_id);
-        defer gl.bindTexture(gl.TEXTURE_2D, 0);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
-
-        return tex_id;
-    }
-
-    fn genOutTexture() GLuint {
-        var tex_id: GLuint = undefined;
-        gl.genTextures(1, &tex_id);
-
-        gl.bindTexture(gl.TEXTURE_2D, tex_id);
-        defer gl.bindTexture(gl.TEXTURE_2D, 0);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, null);
-
-        return tex_id;
-    }
-
-    fn genFrameBufObject(tex_id: c_uint) !GLuint {
-        var fbo_id: GLuint = undefined;
-        gl.genFramebuffers(1, &fbo_id);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
-        defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
-
-        gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
-
-        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
-        gl.drawBuffers(1, &draw_buffers);
-
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
-            return error.FrameBufferObejctInitFailed;
-
-        return fbo_id;
     }
 
     const RunOptions = struct {
@@ -254,15 +104,19 @@ pub const Gui = struct {
         const tracker = opt.tracker;
         const channel = opt.channel;
 
-        const obj_ids = Self.genBufferObjects();
-        defer gl.deleteBuffers(3, @as(*const [3]c_uint, &obj_ids));
+        const objects = opengl_impl.createObjects();
+        defer gl.deleteBuffers(3, @as(*const [3]GLuint, &.{ objects.vao, objects.vbo, objects.ebo }));
 
-        const emu_tex = Self.genGbaTexture(cpu.bus.ppu.framebuf.get(.Renderer));
-        const out_tex = Self.genOutTexture();
-        defer gl.deleteTextures(2, &[_]c_uint{ emu_tex, out_tex });
+        const emu_tex = opengl_impl.createScreenTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+        const out_tex = opengl_impl.createOutputTexture();
+        defer gl.deleteTextures(2, &[_]GLuint{ emu_tex, out_tex });
 
-        const fbo_id = try Self.genFrameBufObject(out_tex);
+        const fbo_id = try opengl_impl.createFrameBuffer(out_tex);
         defer gl.deleteFramebuffers(1, &fbo_id);
+
+        // TODO: Support dynamically switching shaders?
+        const prog_id = try opengl_impl.compileShaders();
+        defer gl.deleteProgram(prog_id);
 
         emu_loop: while (true) {
             // `quit` from RunOptions may be modified by the GDBSTUB thread,
@@ -346,12 +200,12 @@ pub const Gui = struct {
 
                     const buf = cpu.bus.ppu.framebuf.get(.Renderer);
                     gl.viewport(0, 0, gba_width, gba_height);
-                    self.drawGbaTexture(obj_ids, emu_tex, buf);
+                    opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
                 }
 
                 // Background Colour
                 const size = zgui.io.getDisplaySize();
-                gl.viewport(0, 0, @floatToInt(c_int, size[0]), @floatToInt(c_int, size[1]));
+                gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
                 gl.clearColor(0, 0, 0, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -415,29 +269,179 @@ const Audio = struct {
     }
 };
 
-const shader = struct {
-    const Kind = enum { vertex, fragment };
-    const log = std.log.scoped(.Shader);
-
-    fn didCompile(id: gl.GLuint) bool {
-        var success: gl.GLint = undefined;
-        gl.getShaderiv(id, gl.COMPILE_STATUS, &success);
-
-        if (success == 0) err(id);
-
-        return success == 1;
-    }
-
-    fn err(id: gl.GLuint) void {
-        const buf_len = 512;
-        var error_msg: [buf_len]u8 = undefined;
-
-        gl.getShaderInfoLog(id, buf_len, 0, &error_msg);
-        log.err("{s}", .{std.mem.sliceTo(&error_msg, 0)});
-    }
-};
-
 fn panic() noreturn {
     const str = @as(?[*:0]const u8, SDL.SDL_GetError()) orelse "unknown error";
     @panic(std.mem.sliceTo(str, 0));
 }
+
+const opengl_impl = struct {
+    // zig fmt: off
+    const vertices: [32]f32 = [_]f32{
+        // Positions        // Colours      // Texture Coords
+         1.0, -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
+         1.0,  1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
+        -1.0,  1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
+        -1.0, -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
+    };
+
+    const indices: [6]u32 = [_]u32{
+        0, 1, 3, // First Triangle
+        1, 2, 3, // Second Triangle
+    };
+    // zig fmt: on
+
+    const Objects = struct { vao: GLuint, vbo: GLuint, ebo: GLuint };
+
+    fn drawScreenTexture(tex_id: GLuint, prog_id: GLuint, ids: Objects, buf: []const u8) void {
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
+
+        // Bind VAO, EBO. VBO not bound
+        gl.bindVertexArray(ids.vao); // VAO
+        defer gl.bindVertexArray(0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ids.ebo); // EBO
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        // Use compiled frag + vertex shader
+        gl.useProgram(prog_id);
+        defer gl.useProgram(0);
+
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+    }
+
+    fn compileShaders() !GLuint {
+        const vert_shader = @embedFile("shader/pixelbuf.vert");
+        const frag_shader = @embedFile("shader/pixelbuf.frag");
+
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        defer gl.deleteShader(vs);
+
+        gl.shaderSource(vs, 1, &[_][*c]const u8{vert_shader}, 0);
+        gl.compileShader(vs);
+
+        if (!shader.didCompile(vs)) return error.VertexCompileError;
+
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        defer gl.deleteShader(fs);
+
+        gl.shaderSource(fs, 1, &[_][*c]const u8{frag_shader}, 0);
+        gl.compileShader(fs);
+
+        if (!shader.didCompile(fs)) return error.FragmentCompileError;
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+
+        return program;
+    }
+
+    // Returns the VAO ID since it's used in run()
+    fn createObjects() Objects {
+        var vao_id: GLuint = undefined;
+        var vbo_id: GLuint = undefined;
+        var ebo_id: GLuint = undefined;
+
+        gl.genVertexArrays(1, &vao_id);
+        gl.genBuffers(1, &vbo_id);
+        gl.genBuffers(1, &ebo_id);
+
+        gl.bindVertexArray(vao_id);
+        defer gl.bindVertexArray(0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
+        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
+        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
+
+        // Position
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
+        gl.enableVertexAttribArray(0);
+        // Colour
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (3 * @sizeOf(f32))));
+        gl.enableVertexAttribArray(1);
+        // Texture Coord
+        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (6 * @sizeOf(f32))));
+        gl.enableVertexAttribArray(2);
+
+        return .{ .vao = vao_id, .vbo = vbo_id, .ebo = ebo_id };
+    }
+
+    fn createScreenTexture(buf: []const u8) GLuint {
+        var tex_id: GLuint = undefined;
+        gl.genTextures(1, &tex_id);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
+
+        return tex_id;
+    }
+
+    fn createOutputTexture() GLuint {
+        var tex_id: GLuint = undefined;
+        gl.genTextures(1, &tex_id);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex_id);
+        defer gl.bindTexture(gl.TEXTURE_2D, 0);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gba_width, gba_height, 0, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, null);
+
+        return tex_id;
+    }
+
+    fn createFrameBuffer(tex_id: GLuint) !GLuint {
+        var fbo_id: GLuint = undefined;
+        gl.genFramebuffers(1, &fbo_id);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+        defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+        gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
+
+        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
+        gl.drawBuffers(1, &draw_buffers);
+
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+            return error.FrameBufferObejctInitFailed;
+
+        return fbo_id;
+    }
+
+    const shader = struct {
+        const Kind = enum { vertex, fragment };
+        const log = std.log.scoped(.Shader);
+
+        fn didCompile(id: gl.GLuint) bool {
+            var success: gl.GLint = undefined;
+            gl.getShaderiv(id, gl.COMPILE_STATUS, &success);
+
+            if (success == 0) err(id);
+
+            return success == 1;
+        }
+
+        fn err(id: gl.GLuint) void {
+            const buf_len = 512;
+            var error_msg: [buf_len]u8 = undefined;
+
+            gl.getShaderInfoLog(id, buf_len, 0, &error_msg);
+            log.err("{s}", .{std.mem.sliceTo(&error_msg, 0)});
+        }
+    };
+};
