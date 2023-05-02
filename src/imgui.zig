@@ -220,7 +220,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         const sorted = blk: {
             var buf: @TypeOf(values) = undefined;
 
-            std.mem.copy(u32, buf[0..len], values[0..len]);
+            @memcpy(buf[0..len], values[0..len]);
             std.sort.sort(u32, buf[0..len], {}, std.sort.asc(u32));
 
             break :blk buf;
@@ -279,7 +279,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
         var items: [20]Event = undefined;
         const len = scheduler.queue.len;
 
-        std.mem.copy(Event, &items, scheduler.queue.items);
+        @memcpy(&items, scheduler.queue.items);
         std.sort.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {

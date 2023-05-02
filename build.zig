@@ -8,7 +8,7 @@ const nfd = @import("lib/nfd-zig/build.zig");
 
 pub fn build(b: *std.Build) void {
     // Minimum Zig Version
-    const min_ver = std.SemanticVersion.parse("0.11.0-dev.2168+322ace70f") catch return; // https://github.com/ziglang/zig/commit/322ace70f
+    const min_ver = std.SemanticVersion.parse("0.11.0-dev.2934+1b432072b") catch return; // https://github.com/ziglang/zig/commit/1b432072b
     if (builtin.zig_version.order(min_ver).compare(.lt)) {
         std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
         std.os.exit(1);

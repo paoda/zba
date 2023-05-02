@@ -110,7 +110,7 @@ pub const Backup = struct {
         };
 
         const buf = try allocator.alloc(u8, buf_size);
-        std.mem.set(u8, buf, 0xFF);
+        @memset(buf, 0xFF);
 
         var backup = Self{
             .buf = buf,
@@ -163,7 +163,7 @@ pub const Backup = struct {
         switch (self.kind) {
             .Sram, .Flash, .Flash1M => {
                 if (self.buf.len == file_buf.len) {
-                    std.mem.copy(u8, self.buf, file_buf);
+                    @memcpy(self.buf, file_buf);
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
 
@@ -174,7 +174,7 @@ pub const Backup = struct {
                     self.eeprom.kind = if (file_buf.len == 0x200) .Small else .Large;
 
                     self.buf = try allocator.alloc(u8, file_buf.len);
-                    std.mem.copy(u8, self.buf, file_buf);
+                    @memcpy(self.buf, file_buf);
                     return log.info("Loaded Save from {s}", .{file_path});
                 }
 

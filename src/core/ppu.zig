@@ -266,7 +266,7 @@ pub const Ppu = struct {
         sched.push(.Draw, 240 * 4); // Add first PPU Event to Scheduler
 
         const sprites = try allocator.create([128]?Sprite);
-        std.mem.set(?Sprite, sprites, null);
+        @memset(sprites, null);
 
         return Self{
             .vram = try Vram.init(allocator),
@@ -307,7 +307,7 @@ pub const Ppu = struct {
         self.vcount = .{ .raw = 0x0000 };
 
         self.scanline.reset();
-        std.mem.set(?Sprite, self.scanline_sprites, null);
+        @memset(self.scanline_sprites, null);
     }
 
     pub fn deinit(self: *Self) void {
@@ -744,7 +744,7 @@ pub const Ppu = struct {
         // Reset Current Scanline Pixel Buffer and list of fetched sprites
         // in prep for next scanline
         self.scanline.reset();
-        std.mem.set(?Sprite, self.scanline_sprites, null);
+        @memset(self.scanline_sprites, null);
     }
 
     fn getBgr555(self: *Self, maybe_top: Scanline.Pixel, maybe_btm: Scanline.Pixel) u16 {
@@ -1554,7 +1554,7 @@ const Scanline = struct {
 
     fn init(allocator: Allocator) !Self {
         const buf = try allocator.alloc(Pixel, width * 2); // Top & Bottom Scanline
-        std.mem.set(Pixel, buf, .unset);
+        @memset(buf, .unset);
 
         return .{
             // Top & Bototm Layers
@@ -1565,7 +1565,7 @@ const Scanline = struct {
     }
 
     fn reset(self: *Self) void {
-        std.mem.set(Pixel, self.buf, .unset);
+        @memset(self.buf, .unset);
     }
 
     fn deinit(self: *Self) void {

@@ -27,7 +27,7 @@ pub fn write(self: *const Self, comptime T: type, address: usize, value: T) void
 
 pub fn init(allocator: Allocator) !Self {
     const buf = try allocator.alloc(u8, iwram_size);
-    std.mem.set(u8, buf, 0);
+    @memset(buf, 0);
 
     return Self{
         .buf = buf,
@@ -36,7 +36,7 @@ pub fn init(allocator: Allocator) !Self {
 }
 
 pub fn reset(self: *Self) void {
-    std.mem.set(u8, self.buf, 0);
+    @memset(self.buf, 0);
 }
 
 pub fn deinit(self: *Self) void {

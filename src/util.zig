@@ -260,7 +260,7 @@ pub const FrameBuffer = struct {
 
     pub fn init(allocator: Allocator, comptime len: comptime_int) !Self {
         const buf = try allocator.alloc(u8, len * 2);
-        std.mem.set(u8, buf, 0);
+        @memset(buf, 0);
 
         return .{
             // Front and Back Framebuffers
@@ -272,7 +272,7 @@ pub const FrameBuffer = struct {
     }
 
     pub fn reset(self: *Self) void {
-        std.mem.set(u8, self.buf, 0);
+        @memset(self.buf, 0);
         self.current = 0;
     }
 

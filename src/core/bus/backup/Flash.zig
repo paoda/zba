@@ -44,7 +44,7 @@ pub fn handleCommand(self: *Self, buf: []u8, byte: u8) void {
         0xB0 => self.set_bank = true,
         0x80 => self.prep_erase = true,
         0x10 => {
-            std.mem.set(u8, buf, 0xFF);
+            @memset(buf, 0xFF);
             self.prep_erase = false;
         },
         0xA0 => self.prep_write = true,
@@ -61,7 +61,7 @@ pub fn shouldEraseSector(self: *const Self, addr: usize, byte: u8) bool {
 pub fn erase(self: *Self, buf: []u8, sector: usize) void {
     const start = self.address() + (sector & 0xF000);
 
-    std.mem.set(u8, buf[start..][0..0x1000], 0xFF);
+    @memset(buf[start..][0..0x1000], 0xFF);
     self.prep_erase = false;
     self.state = .Ready;
 }

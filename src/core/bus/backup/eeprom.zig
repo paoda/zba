@@ -58,7 +58,9 @@ pub const Eeprom = struct {
                     log.err("Failed to resize EEPROM buf to {} bytes", .{len});
                     std.debug.panic("EEPROM entered irrecoverable state {}", .{e});
                 };
-                std.mem.set(u8, buf.*, 0xFF);
+
+                // FIXME: ptr to a slice?
+                @memset(buf.*, 0xFF);
             }
         }
 

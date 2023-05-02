@@ -40,13 +40,13 @@ pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address:
 
 pub fn init(allocator: Allocator) !Self {
     const buf = try allocator.alloc(u8, buf_len);
-    std.mem.set(u8, buf, 0);
+    @memset(buf, 0);
 
     return Self{ .buf = buf, .allocator = allocator };
 }
 
 pub fn reset(self: *Self) void {
-    std.mem.set(u8, self.buf, 0);
+    @memset(self.buf, 0);
 }
 
 pub fn deinit(self: *Self) void {
