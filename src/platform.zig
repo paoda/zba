@@ -21,8 +21,8 @@ const GLsizei = gl.GLsizei;
 const SDL_GLContext = *anyopaque;
 const Allocator = std.mem.Allocator;
 
-const width = 1280;
-const height = 720;
+const Dimensions = struct { width: u32, height: u32 };
+const default_dim: Dimensions = .{ .width = 1280, .height = 720 };
 
 pub const sample_rate = 1 << 15;
 pub const sample_format = SDL.AUDIO_U16;
@@ -50,9 +50,9 @@ pub const Gui = struct {
             window_title,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
-            width,
-            height,
-            SDL.SDL_WINDOW_OPENGL | SDL.SDL_WINDOW_SHOWN,
+            default_dim.width,
+            default_dim.height,
+            SDL.SDL_WINDOW_OPENGL | SDL.SDL_WINDOW_SHOWN | SDL.SDL_WINDOW_RESIZABLE,
         ) orelse panic();
 
         const ctx = SDL.SDL_GL_CreateContext(window) orelse panic();
@@ -118,6 +118,8 @@ pub const Gui = struct {
         const prog_id = try opengl_impl.compileShaders();
         defer gl.deleteProgram(prog_id);
 
+        var win_dim: Dimensions = default_dim;
+
         emu_loop: while (true) {
             // `quit` from RunOptions may be modified by the GDBSTUB thread,
             // so we want to recognize that it may change to `true` and exit the GUI thread
@@ -176,6 +178,14 @@ pub const Gui = struct {
 
                         cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
                     },
+                    SDL.SDL_WINDOWEVENT => {
+                        if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
+                            log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
+
+                            win_dim.width = @intCast(u32, event.window.data1);
+                            win_dim.height = @intCast(u32, event.window.data2);
+                        }
+                    },
                     else => {},
                 }
             }
@@ -209,7 +219,7 @@ pub const Gui = struct {
                 gl.clearColor(0, 0, 0, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
-                zgui.backend.newFrame(width, height);
+                zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
                 imgui.draw(&self.state, out_tex, cpu);
                 zgui.backend.draw();
             }
