@@ -99,7 +99,9 @@ pub const Gui = struct {
         scheduler: *Scheduler,
     };
 
-    pub fn run(self: *Self, opt: RunOptions) !void {
+    const RunMode = enum { Standard, Debug };
+
+    pub fn run(self: *Self, comptime mode: RunMode, opt: RunOptions) !void {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
         const channel = opt.channel;
@@ -121,13 +123,6 @@ pub const Gui = struct {
         var win_dim: Dimensions = default_dim;
 
         emu_loop: while (true) {
-            // `quit` from RunOptions may be modified by the GDBSTUB thread,
-            // so we want to recognize that it may change to `true` and exit the GUI thread
-            if (channel.gui.pop()) |event| switch (event) {
-                .Quit => break :emu_loop,
-                .Paused => @panic("TODO: We want to peek (and then pop if it's .Quit), not always pop"),
-            };
-
             // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
             // should exit, in which case we should also handle this
             if (self.state.should_quit) break :emu_loop;
@@ -190,39 +185,72 @@ pub const Gui = struct {
                 }
             }
 
-            {
-                channel.emu.push(.Pause);
-                defer channel.emu.push(.Resume);
+            zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
 
-                // Spin Loop until we know that the emu is paused
-                wait: while (true) switch (channel.gui.pop() orelse continue) {
-                    .Paused => break :wait,
-                    else => |any| std.debug.panic("[Gui/Channel]: Unhandled Event: {}", .{any}),
-                };
+            switch (self.state.emulation) {
+                .Transition => |inner| switch (inner) {
+                    .Active => {
+                        _ = channel.gui.pop();
 
-                // Add FPS count to the histogram
-                if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
+                        channel.emu.push(.Resume);
+                        self.state.emulation = .Active;
+                    },
+                    .Inactive => {
+                        // Assert that double pausing is impossible
+                        if (channel.gui.peek()) |value|
+                            std.debug.assert(value != .Paused);
 
-                // Draw GBA Screen to Texture
-                {
-                    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
-                    defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+                        channel.emu.push(.Pause);
+                        self.state.emulation = .Inactive;
+                    },
+                },
+                .Active => {
+                    const is_std = mode == .Standard;
 
-                    const buf = cpu.bus.ppu.framebuf.get(.Renderer);
-                    gl.viewport(0, 0, gba_width, gba_height);
-                    opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
-                }
+                    if (is_std) channel.emu.push(.Pause);
+                    defer if (is_std) channel.emu.push(.Resume);
 
-                // Background Colour
-                const size = zgui.io.getDisplaySize();
-                gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
-                gl.clearColor(0, 0, 0, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT);
+                    switch (mode) {
+                        .Standard => {
+                            // TODO: add timeout
+                            while (true) switch (channel.gui.pop() orelse continue) {
+                                .Paused => break,
+                                .Quit => unreachable, // only signaled in debug mode
+                            };
+                        },
+                        .Debug => blk: {
+                            switch (channel.gui.pop() orelse break :blk) {
+                                .Paused => unreachable, // only in standard mode
+                                .Quit => break :emu_loop, // FIXME: gdb side of emu is seriously out-of-date...
+                            }
+                        },
+                    }
 
-                zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
-                imgui.draw(&self.state, out_tex, cpu);
-                zgui.backend.draw();
+                    // Add FPS count to the histogram
+                    if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
+
+                    // Draw GBA Screen to Texture
+                    {
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
+                        defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+                        const buf = cpu.bus.ppu.framebuf.get(.Renderer);
+                        gl.viewport(0, 0, gba_width, gba_height);
+                        opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
+                    }
+
+                    imgui.draw(&self.state, out_tex, cpu);
+                },
+                .Inactive => imgui.draw(&self.state, out_tex, cpu),
             }
+
+            // Background Colour
+            const size = zgui.io.getDisplaySize();
+            gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
+            gl.clearColor(0, 0, 0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            zgui.backend.draw();
 
             SDL.SDL_GL_SwapWindow(self.window);
         }

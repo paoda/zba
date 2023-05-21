@@ -119,7 +119,7 @@ pub fn main() void {
         const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
         defer thread.join();
 
-        gui.run(.{
+        gui.run(.Debug, .{
             .cpu = &cpu,
             .scheduler = &scheduler,
             .channel = &channel,
@@ -127,10 +127,14 @@ pub fn main() void {
     } else {
         var tracker = FpsTracker.init();
 
+        // emu should start paused if there's no ROM to run
+        if (paths.rom == null)
+            channel.emu.push(.Pause);
+
         const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &channel }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
-        gui.run(.{
+        gui.run(.Standard, .{
             .cpu = &cpu,
             .scheduler = &scheduler,
             .channel = &channel,

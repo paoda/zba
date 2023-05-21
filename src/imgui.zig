@@ -30,6 +30,7 @@ pub const State = struct {
 
     fps_hist: RingBuffer(u32),
     should_quit: bool = false,
+    emulation: Emulation,
 
     win_stat: WindowStatus = .{},
 
@@ -41,6 +42,12 @@ pub const State = struct {
         show_palette: bool = false,
     };
 
+    const Emulation = union(enum) {
+        Active,
+        Inactive,
+        Transition: enum { Active, Inactive },
+    };
+
     /// if zba is initialized with a ROM already provided, this initializer should be called
     /// with `title_opt` being non-null
     pub fn init(allocator: Allocator, title_opt: ?*const [12]u8) !@This() {
@@ -48,6 +55,7 @@ pub const State = struct {
 
         return .{
             .title = handleTitle(title_opt),
+            .emulation = if (title_opt == null) .Inactive else .Active,
             .fps_hist = RingBuffer(u32).init(history),
         };
     }
@@ -90,6 +98,7 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
                 };
 
                 state.title = handleTitle(&cpu.bus.pak.title);
+                state.emulation = .{ .Transition = .Active };
             }
         }
 
@@ -104,6 +113,14 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
 
             if (zgui.menuItem("Schedule", .{ .selected = state.win_stat.show_schedule }))
                 state.win_stat.show_schedule = true;
+
+            if (zgui.menuItem("Paused", .{ .selected = state.emulation == .Inactive })) {
+                state.emulation = switch (state.emulation) {
+                    .Active => .{ .Transition = .Inactive },
+                    .Inactive => .{ .Transition = .Active },
+                    else => state.emulation,
+                };
+            }
 
             if (zgui.menuItem("Restart", .{}))
                 emu.reset(cpu);
