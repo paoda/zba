@@ -96,7 +96,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT", .{T}),
 
             // Keypad Input
-            0x0400_0130 => bus.io.keyinput.load(.Monotonic).raw,
+            0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
             // Serial Communication 2
             0x0400_0134 => util.io.read.todo(log, "Read {} from RCNT", .{T}),
@@ -366,7 +366,7 @@ const InterruptEnable = extern union {
 
 /// Read Only
 /// 0 = Pressed, 1 = Released
-const KeyInput = extern union {
+pub const KeyInput = extern union {
     a: Bit(u16, 0),
     b: Bit(u16, 1),
     select: Bit(u16, 2),
@@ -390,18 +390,19 @@ const AtomicKeyInput = struct {
         return .{ .inner = value };
     }
 
-    pub inline fn load(self: *const Self, comptime ordering: Ordering) KeyInput {
-        return .{ .raw = switch (ordering) {
+    pub inline fn load(self: *const Self, comptime ordering: Ordering) u16 {
+        return switch (ordering) {
             .AcqRel, .Release => @compileError("not supported for atomic loads"),
             else => @atomicLoad(u16, &self.inner.raw, ordering),
-        } };
+        };
     }
 
-    pub inline fn store(self: *Self, value: u16, comptime ordering: Ordering) void {
-        switch (ordering) {
-            .AcqRel, .Acquire => @compileError("not supported for atomic stores"),
-            else => @atomicStore(u16, &self.inner.raw, value, ordering),
-        }
+    pub inline fn fetchOr(self: *Self, value: u16, comptime ordering: Ordering) void {
+        _ = @atomicRmw(u16, &self.inner.raw, .Or, value, ordering);
+    }
+
+    pub inline fn fetchAnd(self: *Self, value: u16, comptime ordering: Ordering) void {
+        _ = @atomicRmw(u16, &self.inner.raw, .And, value, ordering);
     }
 };
 

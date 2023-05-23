@@ -12,6 +12,7 @@ const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
 const TwoWayChannel = @import("zba-util").TwoWayChannel;
+const KeyInput = @import("core/bus/io.zig").KeyInput;
 
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
@@ -136,28 +137,7 @@ pub const Gui = struct {
                     SDL.SDL_KEYDOWN => {
                         // TODO: Make use of compare_and_xor?
                         const key_code = event.key.keysym.sym;
-                        var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
-
-                        switch (key_code) {
-                            SDL.SDLK_UP => keyinput.up.unset(),
-                            SDL.SDLK_DOWN => keyinput.down.unset(),
-                            SDL.SDLK_LEFT => keyinput.left.unset(),
-                            SDL.SDLK_RIGHT => keyinput.right.unset(),
-                            SDL.SDLK_x => keyinput.a.unset(),
-                            SDL.SDLK_z => keyinput.b.unset(),
-                            SDL.SDLK_a => keyinput.shoulder_l.unset(),
-                            SDL.SDLK_s => keyinput.shoulder_r.unset(),
-                            SDL.SDLK_RETURN => keyinput.start.unset(),
-                            SDL.SDLK_RSHIFT => keyinput.select.unset(),
-                            else => {},
-                        }
-
-                        cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
-                    },
-                    SDL.SDL_KEYUP => {
-                        // TODO: Make use of compare_and_xor?
-                        const key_code = event.key.keysym.sym;
-                        var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
+                        var keyinput: KeyInput = .{ .raw = 0x0000 };
 
                         switch (key_code) {
                             SDL.SDLK_UP => keyinput.up.set(),
@@ -173,7 +153,28 @@ pub const Gui = struct {
                             else => {},
                         }
 
-                        cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
+                        cpu.bus.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                    },
+                    SDL.SDL_KEYUP => {
+                        // TODO: Make use of compare_and_xor?
+                        const key_code = event.key.keysym.sym;
+                        var keyinput: KeyInput = .{ .raw = 0x0000 };
+
+                        switch (key_code) {
+                            SDL.SDLK_UP => keyinput.up.set(),
+                            SDL.SDLK_DOWN => keyinput.down.set(),
+                            SDL.SDLK_LEFT => keyinput.left.set(),
+                            SDL.SDLK_RIGHT => keyinput.right.set(),
+                            SDL.SDLK_x => keyinput.a.set(),
+                            SDL.SDLK_z => keyinput.b.set(),
+                            SDL.SDLK_a => keyinput.shoulder_l.set(),
+                            SDL.SDLK_s => keyinput.shoulder_r.set(),
+                            SDL.SDLK_RETURN => keyinput.start.set(),
+                            SDL.SDLK_RSHIFT => keyinput.select.set(),
+                            else => {},
+                        }
+
+                        cpu.bus.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_WINDOWEVENT => {
                         if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
