@@ -134,6 +134,7 @@ pub const Gui = struct {
                 switch (event.type) {
                     SDL.SDL_QUIT => break :emu_loop,
                     SDL.SDL_KEYDOWN => {
+                        // TODO: Make use of compare_and_xor?
                         const key_code = event.key.keysym.sym;
                         var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
 
@@ -154,6 +155,7 @@ pub const Gui = struct {
                         cpu.bus.io.keyinput.store(keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_KEYUP => {
+                        // TODO: Make use of compare_and_xor?
                         const key_code = event.key.keysym.sym;
                         var keyinput = cpu.bus.io.keyinput.load(.Monotonic);
 
@@ -204,19 +206,27 @@ pub const Gui = struct {
                         self.state.emulation = .Inactive;
                     },
                 },
-                .Active => {
+                .Active => skip_draw: {
                     const is_std = mode == .Standard;
 
                     if (is_std) channel.emu.push(.Pause);
                     defer if (is_std) channel.emu.push(.Resume);
 
                     switch (mode) {
-                        .Standard => {
-                            // TODO: add timeout
-                            while (true) switch (channel.gui.pop() orelse continue) {
-                                .Paused => break,
-                                .Quit => unreachable, // only signaled in debug mode
-                            };
+                        .Standard => blk: {
+                            const limit = 15; // TODO: What should this be?
+
+                            for (0..limit) |_| {
+                                const message = channel.gui.pop() orelse continue;
+
+                                switch (message) {
+                                    .Paused => break :blk,
+                                    .Quit => unreachable,
+                                }
+                            }
+
+                            log.info("timed out waiting for emu thread to pause (limit: {})", .{limit});
+                            break :skip_draw;
                         },
                         .Debug => blk: {
                             switch (channel.gui.pop() orelse break :blk) {
