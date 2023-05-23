@@ -140,6 +140,10 @@ fn audioSync(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bo
     // If Busy is false, there's no need to sync here
     if (!still_full) return;
 
+    // TODO: Refactor!!!!
+    // while (SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1)
+    //     std.atomic.spinLoopHint();
+
     while (true) {
         still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
         if (!audio_sync or !still_full) break;
@@ -184,7 +188,8 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
 }
 
 fn spinLoop(timer: *Timer, wake_time: u64) void {
-    while (true) if (timer.read() > wake_time) break;
+    while (timer.read() < wake_time)
+        std.atomic.spinLoopHint();
 }
 
 pub const EmuThing = struct {

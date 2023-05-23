@@ -216,6 +216,7 @@ pub const Gui = struct {
                         .Standard => blk: {
                             const limit = 15; // TODO: What should this be?
 
+                            // TODO: learn more about std.atomic.spinLoopHint();
                             for (0..limit) |_| {
                                 const message = channel.gui.pop() orelse continue;
 
