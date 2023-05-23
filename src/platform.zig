@@ -21,7 +21,7 @@ const GLsizei = gl.GLsizei;
 const SDL_GLContext = *anyopaque;
 const Allocator = std.mem.Allocator;
 
-const Dimensions = struct { width: u32, height: u32 };
+pub const Dimensions = struct { width: u32, height: u32 };
 const default_dim: Dimensions = .{ .width = 1280, .height = 720 };
 
 pub const sample_rate = 1 << 15;
@@ -187,7 +187,7 @@ pub const Gui = struct {
                 }
             }
 
-            zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
+            var zgui_redraw: bool = false;
 
             switch (self.state.emulation) {
                 .Transition => |inner| switch (inner) {
@@ -249,18 +249,20 @@ pub const Gui = struct {
                         opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
                     }
 
-                    imgui.draw(&self.state, out_tex, cpu);
+                    zgui_redraw = imgui.draw(&self.state, win_dim, out_tex, cpu);
                 },
-                .Inactive => imgui.draw(&self.state, out_tex, cpu),
+                .Inactive => zgui_redraw = imgui.draw(&self.state, win_dim, out_tex, cpu),
             }
 
-            // Background Colour
-            const size = zgui.io.getDisplaySize();
-            gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
-            gl.clearColor(0, 0, 0, 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            if (zgui_redraw) {
+                // Background Colour
+                const size = zgui.io.getDisplaySize();
+                gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
+                gl.clearColor(0, 0, 0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
 
-            zgui.backend.draw();
+                zgui.backend.draw();
+            }
 
             SDL.SDL_GL_SwapWindow(self.window);
         }

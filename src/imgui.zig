@@ -12,6 +12,7 @@ const emu = @import("core/emu.zig");
 const Gui = @import("platform.zig").Gui;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const RingBuffer = @import("zba-util").RingBuffer;
+const Dimensions = @import("platform.zig").Dimensions;
 
 const Allocator = std.mem.Allocator;
 const GLuint = gl.GLuint;
@@ -66,8 +67,10 @@ pub const State = struct {
     }
 };
 
-pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
-    const win_scale = config.config().host.win_scale;
+pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) bool {
+    const scn_scale = config.config().host.win_scale;
+
+    zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
 
     {
         _ = zgui.beginMainMenuBar();
@@ -142,8 +145,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
     }
 
     {
-        const w = @intToFloat(f32, gba_width * win_scale);
-        const h = @intToFloat(f32, gba_height * win_scale);
+        const w = @intToFloat(f32, gba_width * scn_scale);
+        const h = @intToFloat(f32, gba_height * scn_scale);
 
         const window_title = std.mem.sliceTo(&state.title, 0);
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
@@ -318,6 +321,8 @@ pub fn draw(state: *State, tex_id: GLuint, cpu: *Arm7tdmi) void {
     {
         zgui.showDemoWindow(null);
     }
+
+    return true; // request redraw
 }
 
 const widgets = struct {
