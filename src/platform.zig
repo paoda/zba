@@ -196,6 +196,8 @@ pub const Gui = struct {
                         _ = channel.gui.pop();
 
                         channel.emu.push(.Resume);
+                        SDL.SDL_PauseAudioDevice(self.audio.device, 0);
+
                         self.state.emulation = .Active;
                     },
                     .Inactive => {
@@ -203,7 +205,9 @@ pub const Gui = struct {
                         if (channel.gui.peek()) |value|
                             std.debug.assert(value != .Paused);
 
+                        SDL.SDL_PauseAudioDevice(self.audio.device, 1);
                         channel.emu.push(.Pause);
+
                         self.state.emulation = .Inactive;
                     },
                 },
@@ -250,6 +254,12 @@ pub const Gui = struct {
                         gl.viewport(0, 0, gba_width, gba_height);
                         opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
                     }
+
+                    // FIXME: We only really care about locking the audio device (and therefore writing silence)
+                    // since if nfd-zig is used the emu may be paused for way too long. Perhaps we should try and limit
+                    // spurious calls to SDL_LockAudioDevice?
+                    SDL.SDL_LockAudioDevice(self.audio.device);
+                    defer SDL.SDL_UnlockAudioDevice(self.audio.device);
 
                     zgui_redraw = imgui.draw(&self.state, win_dim, out_tex, cpu);
                 },
