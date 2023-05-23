@@ -56,7 +56,7 @@ pub const State = struct {
 
         return .{
             .title = handleTitle(title_opt),
-            .emulation = if (title_opt == null) .Inactive else .Active,
+            .emulation = if (title_opt == null) .Inactive else .{ .Transition = .Active },
             .fps_hist = RingBuffer(u32).init(history),
         };
     }

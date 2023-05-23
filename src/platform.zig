@@ -196,7 +196,7 @@ pub const Gui = struct {
                         _ = channel.gui.pop();
 
                         channel.emu.push(.Resume);
-                        SDL.SDL_PauseAudioDevice(self.audio.device, 0);
+                        if (!config.config().host.mute) SDL.SDL_PauseAudioDevice(self.audio.device, 0);
 
                         self.state.emulation = .Active;
                     },
@@ -309,11 +309,6 @@ const Audio = struct {
 
         const device = SDL.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
         if (device == 0) panic();
-
-        if (!config.config().host.mute) {
-            SDL.SDL_PauseAudioDevice(device, 0); // Unpause Audio
-            log.info("Unpaused Device", .{});
-        }
 
         return .{ .device = device };
     }
