@@ -5,7 +5,9 @@ const config = @import("../config.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
 const Tracker = @import("../util.zig").FpsTracker;
-const TwoWayChannel = @import("zba-util").TwoWayChannel;
+const Channel = @import("zba-util").Channel(Message, 0x100);
+
+pub const Message = enum { Pause, Resume, Quit };
 
 const Timer = std.time.Timer;
 
@@ -35,18 +37,18 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, channel: *TwoWayChannel) void {
+pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, rx: Channel.Receiver) void {
     const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     if (config.config().guest.video_sync) {
-        inner(.LimitedFPS, audio_sync, cpu, scheduler, tracker, channel);
+        inner(.LimitedFPS, audio_sync, cpu, scheduler, tracker, rx);
     } else {
-        inner(.UnlimitedFPS, audio_sync, cpu, scheduler, tracker, channel);
+        inner(.UnlimitedFPS, audio_sync, cpu, scheduler, tracker, rx);
     }
 }
 
-fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, channel: *TwoWayChannel) void {
+fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, rx: Channel.Receiver) void {
     if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
         std.debug.assert(tracker != null);
         log.info("FPS tracking enabled", .{});
@@ -59,13 +61,9 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             log.info("Emulation w/out video sync", .{});
 
             while (true) {
-                if (channel.emu.pop()) |e| switch (e) {
+                if (rx.recv()) |m| switch (m) {
                     .Quit => break,
-                    .Resume => paused = false,
-                    .Pause => {
-                        paused = true;
-                        channel.gui.push(.Paused);
-                    },
+                    .Resume, .Pause => paused = m == .Pause,
                 };
 
                 if (paused) continue;
@@ -82,13 +80,9 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             var wake_time: u64 = frame_period;
 
             while (true) {
-                if (channel.emu.pop()) |e| switch (e) {
+                if (rx.recv()) |m| switch (m) {
                     .Quit => break,
-                    .Resume => paused = false,
-                    .Pause => {
-                        paused = true;
-                        channel.gui.push(.Paused);
-                    },
+                    .Resume, .Pause => paused = m == .Pause,
                 };
 
                 if (paused) continue;

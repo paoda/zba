@@ -6,7 +6,7 @@ const clap = @import("clap");
 const config = @import("config.zig");
 const emu = @import("core/emu.zig");
 
-const TwoWayChannel = @import("zba-util").TwoWayChannel;
+const Channel = @import("zba-util").Channel(emu.Message, 0x100);
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
@@ -98,8 +98,8 @@ pub fn main() void {
 
     var quit = std.atomic.Atomic(bool).init(false);
 
-    var items: [0x100]u8 = undefined;
-    var channel = TwoWayChannel.init(&items);
+    var ch = Channel.init(allocator) catch |e| exitln("failed to initialize ui -> emu thread message channel: {}", .{e});
+    defer ch.deinit(allocator);
 
     if (result.args.gdb != 0) {
         const Server = @import("gdbstub").Server;
@@ -122,22 +122,22 @@ pub fn main() void {
         gui.run(.Debug, .{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .channel = &channel,
+            .ch = ch.tx,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
 
         // emu should start paused if there's no ROM to run
         if (paths.rom == null)
-            channel.emu.push(.Pause);
+            ch.tx.send(.Pause);
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &channel }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, ch.rx }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
         gui.run(.Standard, .{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .channel = &channel,
+            .ch = ch.tx,
             .tracker = &tracker,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }

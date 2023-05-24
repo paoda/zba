@@ -11,7 +11,7 @@ const Apu = @import("core/apu.zig").Apu;
 const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
-const TwoWayChannel = @import("zba-util").TwoWayChannel;
+const Channel = @import("zba-util").Channel(emu.Message, 0x100);
 const KeyInput = @import("core/bus/io.zig").KeyInput;
 
 const gba_width = @import("core/ppu.zig").width;
@@ -94,7 +94,7 @@ pub const Gui = struct {
     }
 
     const RunOptions = struct {
-        channel: *TwoWayChannel,
+        ch: Channel.Sender,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
@@ -105,7 +105,7 @@ pub const Gui = struct {
     pub fn run(self: *Self, comptime mode: RunMode, opt: RunOptions) !void {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
-        const channel = opt.channel;
+        const ch = opt.ch;
 
         const objects = opengl_impl.createObjects();
         defer gl.deleteBuffers(3, @as(*const [3]GLuint, &.{ objects.vao, objects.vbo, objects.ebo }));
@@ -193,54 +193,50 @@ pub const Gui = struct {
             switch (self.state.emulation) {
                 .Transition => |inner| switch (inner) {
                     .Active => {
-                        _ = channel.gui.pop();
-
-                        channel.emu.push(.Resume);
+                        ch.send(.Resume);
                         if (!config.config().host.mute) SDL.SDL_PauseAudioDevice(self.audio.device, 0);
 
                         self.state.emulation = .Active;
                     },
                     .Inactive => {
                         // Assert that double pausing is impossible
-                        if (channel.gui.peek()) |value|
-                            std.debug.assert(value != .Paused);
 
                         SDL.SDL_PauseAudioDevice(self.audio.device, 1);
-                        channel.emu.push(.Pause);
+                        ch.send(.Pause);
 
                         self.state.emulation = .Inactive;
                     },
                 },
-                .Active => skip_draw: {
+                .Active => {
                     const is_std = mode == .Standard;
 
-                    if (is_std) channel.emu.push(.Pause);
-                    defer if (is_std) channel.emu.push(.Resume);
+                    if (is_std) ch.send(.Pause);
+                    defer if (is_std) ch.send(.Resume);
 
-                    switch (mode) {
-                        .Standard => blk: {
-                            const limit = 15; // TODO: What should this be?
+                    // switch (mode) {
+                    //     .Standard => blk: {
+                    //         const limit = 15; // TODO: What should this be?
 
-                            // TODO: learn more about std.atomic.spinLoopHint();
-                            for (0..limit) |_| {
-                                const message = channel.gui.pop() orelse continue;
+                    //         // TODO: learn more about std.atomic.spinLoopHint();
+                    //         for (0..limit) |_| {
+                    //             const message = channel.gui.pop() orelse continue;
 
-                                switch (message) {
-                                    .Paused => break :blk,
-                                    .Quit => unreachable,
-                                }
-                            }
+                    //             switch (message) {
+                    //                 .Paused => break :blk,
+                    //                 .Quit => unreachable,
+                    //             }
+                    //         }
 
-                            log.info("timed out waiting for emu thread to pause (limit: {})", .{limit});
-                            break :skip_draw;
-                        },
-                        .Debug => blk: {
-                            switch (channel.gui.pop() orelse break :blk) {
-                                .Paused => unreachable, // only in standard mode
-                                .Quit => break :emu_loop, // FIXME: gdb side of emu is seriously out-of-date...
-                            }
-                        },
-                    }
+                    //         log.info("timed out waiting for emu thread to pause (limit: {})", .{limit});
+                    //         break :skip_draw;
+                    //     },
+                    //     .Debug => blk: {
+                    //         switch (channel.gui.pop() orelse break :blk) {
+                    //             .Paused => unreachable, // only in standard mode
+                    //             .Quit => break :emu_loop, // FIXME: gdb side of emu is seriously out-of-date...
+                    //         }
+                    //     },
+                    // }
 
                     // Add FPS count to the histogram
                     if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
@@ -279,7 +275,7 @@ pub const Gui = struct {
             SDL.SDL_GL_SwapWindow(self.window);
         }
 
-        channel.emu.push(.Quit);
+        ch.send(.Quit);
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
