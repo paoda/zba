@@ -241,7 +241,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
             var buf: @TypeOf(values) = undefined;
 
             @memcpy(buf[0..len], values[0..len]);
-            std.sort.sort(u32, buf[0..len], {}, std.sort.asc(u32));
+            std.mem.sort(u32, buf[0..len], {}, std.sort.asc(u32));
 
             break :blk buf;
         };
@@ -300,7 +300,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
         const len = scheduler.queue.len;
 
         @memcpy(&items, scheduler.queue.items);
-        std.sort.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
+        std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {
             zgui.text("{X:0>16} | {?}", .{ event.tick, event.kind });
