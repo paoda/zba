@@ -1,27 +1,9 @@
 [submodule "lib/SDL.zig"]
 	path = lib/SDL.zig
 	url = https://github.com/MasterQ32/SDL.zig
-[submodule "lib/zig-clap"]
-	path = lib/zig-clap
-	url = https://github.com/Hejsil/zig-clap
-[submodule "lib/known-folders"]
-	path = lib/known-folders
-	url = https://github.com/ziglibs/known-folders
-[submodule "lib/zig-datetime"]
-	path = lib/zig-datetime
-	url = https://github.com/frmdstryr/zig-datetime
 [submodule "lib/zig-toml"]
 	path = lib/zig-toml
 	url = https://github.com/aeronavery/zig-toml
-[submodule "lib/zba-gdbstub"]
-	path = lib/zba-gdbstub
-	url = https://git.musuka.dev/paoda/zba-gdbstub
 [submodule "lib/zgui"]
 	path = lib/zgui
 	url = https://git.musuka.dev/paoda/zgui
-[submodule "lib/nfd-zig"]
-	path = lib/nfd-zig
-	url = https://github.com/fabioarnold/nfd-zig
-[submodule "lib/zba-util"]
-	path = lib/zba-util
-	url = https://git.musuka.dev/paoda/zba-util.git

@@ -2,9 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
-const gdbstub = @import("lib/zba-gdbstub/build.zig");
 const zgui = @import("lib/zgui/build.zig");
-const nfd = @import("lib/nfd-zig/build.zig");
 
 pub fn build(b: *std.Build) void {
     // Minimum Zig Version
@@ -26,44 +24,30 @@ pub fn build(b: *std.Build) void {
 
     exe.setMainPkgPath("."); // Necessary so that src/main.zig can embed example.toml
 
-    // Known Folders (%APPDATA%, XDG, etc.)
-    exe.addAnonymousModule("known_folders", .{ .source_file = .{ .path = "lib/known-folders/known-folders.zig" } });
+    exe.addModule("known_folders", b.dependency("known-folders", .{}).module("known-folders")); // https://github.com/ziglibs/known-folders
+    exe.addModule("datetime", b.dependency("zig-datetime", .{}).module("zig-datetime")); // https://github.com/frmdstryr/zig-datetime
+    exe.addModule("clap", b.dependency("zig-clap", .{}).module("clap")); // https://github.com/Hejsil/zig-clap
+    exe.addModule("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub")); // https://git.musuka.dev/paoda/zba-gdbstub
+    exe.addModule("zba-util", b.dependency("zba-util", .{}).module("zba-util")); // https://git.musuka.dev/paoda/zba-util
 
-    // DateTime Library
-    exe.addAnonymousModule("datetime", .{ .source_file = .{ .path = "lib/zig-datetime/src/main.zig" } });
+    // https://github.com/fabioarnold/nfd-zig
+    const nfd_dep = b.dependency("nfd", .{ .target = target, .optimize = optimize });
+    exe.linkLibrary(nfd_dep.artifact("nfd"));
+    exe.addModule("nfd", nfd_dep.module("nfd"));
 
-    // Bitfield type from FlorenceOS: https://github.com/FlorenceOS/
-    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } });
-
-    // Argument Parsing Library
-    exe.addAnonymousModule("clap", .{ .source_file = .{ .path = "lib/zig-clap/clap.zig" } });
-
-    // TOML Library
-    exe.addAnonymousModule("toml", .{ .source_file = .{ .path = "lib/zig-toml/src/toml.zig" } });
-
-    // OpenGL 3.3 Bindings
-    exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } });
-
-    // ZBA utility code
-    exe.addAnonymousModule("zba-util", .{ .source_file = .{ .path = "lib/zba-util/src/lib.zig" } });
-
-    // gdbstub
-    exe.addModule("gdbstub", gdbstub.getModule(b));
-
-    // NativeFileDialog(ue) Bindings
-    exe.linkLibrary(nfd.makeLib(b, target, optimize));
-    exe.addModule("nfd", nfd.getModule(b));
-
-    // Zig SDL Bindings: https://github.com/MasterQ32/SDL.zig
+    // https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
     sdk.link(exe, .dynamic);
     exe.addModule("sdl2", sdk.getNativeModule());
 
-    // Dear ImGui bindings
-
+    // https://git.musuka.dev/paoda/zgui
     // .shared option should stay in sync with SDL.zig call above where true == .dynamic, and false == .static
     const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3, .shared = true } });
     zgui_pkg.link(exe);
+
+    exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/
+    exe.addAnonymousModule("toml", .{ .source_file = .{ .path = "lib/zig-toml/src/toml.zig" } }); // https://github.com/aeronavery/zig-toml
+    exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } }); // https://github.com/MasterQ32/zig-opengl
 
     b.installArtifact(exe);
 
