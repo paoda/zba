@@ -63,18 +63,23 @@ pub fn write(_: *Self, comptime T: type, addr: u32, value: T) void {
 
 pub fn init(allocator: Allocator, maybe_path: ?[]const u8) !Self {
     if (maybe_path == null) return .{ .buf = null, .allocator = allocator };
-    const path = maybe_path.?;
+    const file_path = maybe_path.?;
 
     const buf = try allocator.alloc(u8, Self.size);
     errdefer allocator.free(buf);
 
-    const file = try std.fs.cwd().openFile(path, .{});
+    var self: Self = .{ .buf = buf, .allocator = allocator };
+    try self.load(file_path);
+
+    return self;
+}
+
+pub fn load(self: *Self, file_path: []const u8) !void {
+    const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
-    const file_len = try file.readAll(buf);
-    if (file_len != Self.size) log.err("Expected BIOS to be {}B, was {}B", .{ Self.size, file_len });
-
-    return Self{ .buf = buf, .allocator = allocator };
+    const len = try file.readAll(self.buf orelse return error.UnallocatedBuffer);
+    if (len != Self.size) log.err("Expected BIOS to be {}B, was {}B", .{ Self.size, len });
 }
 
 pub fn reset(self: *Self) void {

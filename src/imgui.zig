@@ -103,6 +103,25 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
                 state.title = handleTitle(&cpu.bus.pak.title);
                 state.emulation = .{ .Transition = .Active };
             }
+
+            if (zgui.menuItem("Load BIOS", .{})) blk: {
+                const maybe_path = nfd.openFileDialog("bin", null) catch |e| {
+                    log.err("failed to open file dialog: {}", .{e});
+                    break :blk;
+                };
+
+                const file_path = maybe_path orelse {
+                    log.warn("did not receive a file path", .{});
+                    break :blk;
+                };
+                defer nfd.freePath(file_path);
+
+                log.info("user chose: \"{s}\"", .{file_path});
+                emu.replaceBios(cpu, file_path) catch |e| {
+                    log.err("failed to replace BIOS: {}", .{e});
+                    break :blk;
+                };
+            }
         }
 
         if (zgui.beginMenu("Emulation", true)) {

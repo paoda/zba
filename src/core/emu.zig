@@ -253,3 +253,11 @@ pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
     try cpu.bus.replaceGamepak(file_path);
     reset(cpu);
 }
+
+pub fn replaceBios(cpu: *Arm7tdmi, file_path: []const u8) !void {
+    const allocator = cpu.bus.bios.allocator;
+    const bios_len = 0x4000;
+
+    cpu.bus.bios.buf = try allocator.alloc(u8, bios_len);
+    try cpu.bus.bios.load(file_path);
+}
