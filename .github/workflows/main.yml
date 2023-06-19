@@ -41,6 +41,9 @@ jobs:
           submodules: recursive
       - name: build 
         run: zig build -Doptimize=ReleaseSafe -Dcpu=baseline
+      - name: prepare-executable
+        run: |
+            mv zig-out/lib/* zig-out/bin
       - name: upload
         uses: actions/upload-artifact@v3
         with:
