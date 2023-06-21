@@ -1,5 +1,5 @@
 const std = @import("std");
-const toml = @import("toml");
+const tomlz = @import("tomlz");
 
 const Allocator = std.mem.Allocator;
 
@@ -7,6 +7,7 @@ const log = std.log.scoped(.Config);
 var state: Config = .{};
 
 const Config = struct {
+    // FIXME: tomlz expects these to be case sensitive
     host: Host = .{},
     guest: Guest = .{},
     debug: Debug = .{},
@@ -58,29 +59,5 @@ pub fn load(allocator: Allocator, file_path: []const u8) !void {
     const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
     defer allocator.free(contents);
 
-    var parser = try toml.parseFile(allocator, file_path);
-    defer parser.deinit();
-
-    const table = try parser.parse();
-    defer table.deinit();
-
-    // TODO: Report unknown config options
-
-    if (table.keys.get("Host")) |host| {
-        if (host.Table.keys.get("win_scale")) |scale| state.host.win_scale = scale.Integer;
-        if (host.Table.keys.get("vsync")) |vsync| state.host.vsync = vsync.Boolean;
-        if (host.Table.keys.get("mute")) |mute| state.host.mute = mute.Boolean;
-    }
-
-    if (table.keys.get("Guest")) |guest| {
-        if (guest.Table.keys.get("audio_sync")) |sync| state.guest.audio_sync = sync.Boolean;
-        if (guest.Table.keys.get("video_sync")) |sync| state.guest.video_sync = sync.Boolean;
-        if (guest.Table.keys.get("force_rtc")) |forced| state.guest.force_rtc = forced.Boolean;
-        if (guest.Table.keys.get("skip_bios")) |skip| state.guest.skip_bios = skip.Boolean;
-    }
-
-    if (table.keys.get("Debug")) |debug| {
-        if (debug.Table.keys.get("cpu_trace")) |trace| state.debug.cpu_trace = trace.Boolean;
-        if (debug.Table.keys.get("unhandled_io")) |unhandled| state.debug.unhandled_io = unhandled.Boolean;
-    }
+    state = try tomlz.parser.decode(Config, allocator, contents);
 }

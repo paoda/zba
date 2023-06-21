@@ -1,4 +1,4 @@
-[Host]
+[host]
 # Using nearest-neighbour scaling, how many times the native resolution 
 # of the game bow should the screen be?
 win_scale = 3
@@ -7,7 +7,7 @@ vsync = true
 # Mute ZBA
 mute = false
 
-[Guest]
+[guest]
 # Sync Emulation to Audio 
 audio_sync = true
 # Sync Emulation to Video
@@ -17,7 +17,7 @@ force_rtc = false
 # Skip BIOS
 skip_bios = false
 
-[Debug]
+[debug]
 # Enable detailed CPU logs
 cpu_trace = false
 # When false and builtin.mode == .Debug, ZBA will panic

@@ -179,14 +179,6 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
         _ = zgui.begin("Dependencies", .{ .popen = &state.win_stat.show_deps });
         defer zgui.end();
 
-        zgui.bulletText("SDL.zig by Felix Queißner", .{});
-        {
-            zgui.indent(.{});
-            defer zgui.unindent(.{});
-
-            zgui.bulletText("SDL by Sam Lantinga", .{});
-        }
-
         zgui.bulletText("known-folders by ziglibs", .{});
         zgui.bulletText("nfd-zig by Fabio Arnold", .{});
         {
@@ -195,6 +187,16 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
 
             zgui.bulletText("nativefiledialog by Michael Labbe", .{});
         }
+
+        zgui.bulletText("SDL.zig by Felix Queißner", .{});
+        {
+            zgui.indent(.{});
+            defer zgui.unindent(.{});
+
+            zgui.bulletText("SDL by Sam Lantinga", .{});
+        }
+
+        zgui.bulletText("tomlz by Matthew Hall", .{});
         zgui.bulletText("zba-gdbstub by Rekai Musuka", .{});
         zgui.bulletText("zba-util by Rekai Musuka", .{});
         zgui.bulletText("zgui by Michal Ziulek", .{});
@@ -206,6 +208,9 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
         }
         zgui.bulletText("zig-clap by Jimmi Holst Christensen", .{});
         zgui.bulletText("zig-datetime by Jairus Martin", .{});
+
+        zgui.newLine();
+        zgui.bulletText("bitfield.zig by Hannes Bredberg and FlorenceOS contributors", .{});
         zgui.bulletText("zig-opengl by Felix Queißner", .{});
         {
             zgui.indent(.{});
@@ -213,8 +218,6 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
 
             zgui.bulletText("OpenGL-Registry by The Khronos Group", .{});
         }
-        zgui.bulletText("zig-toml by Aeron Avery", .{});
-        zgui.bulletText("bitfield.zig by Hannes Bredberg and FlorenceOS contributors", .{});
     }
 
     if (state.win_stat.show_regs) {

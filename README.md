@@ -84,14 +84,16 @@ Most recently built on Zig [v0.11.0-dev.3299+34865d693](https://github.com/zigla
 
 Dependency | Source
 --- | ---
-SDL.zig | <https://github.com/MasterQ32/SDL.zig>
 known-folders | <https://github.com/ziglibs/known-folders>
 nfd-zig | <https://github.com/fabioarnold/nfd-zig>
+SDL.zig | <https://github.com/MasterQ32/SDL.zig>
+tomlz | <https://github.com/mattyhall/tomlz>
+zba-gdbstub | <https://github.com/paoda/zba-gdbstub>
+zba-util | <https://git.musuka.dev/paoda/zba-util>
 zgui | <https://github.com/michal-z/zig-gamedev/tree/main/libs/zgui>
 zig-clap | <https://github.com/Hejsil/zig-clap>
 zig-datetime | <https://github.com/frmdstryr/zig-datetime>
-zig-toml | <https://github.com/aeronavery/zig-toml>
-`bitfields.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
+`bitfield.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
 `gl.zig` | <https://github.com/MasterQ32/zig-opengl>
 
 Use `git submodule update --init` from the project root to pull the git relevant git submodules

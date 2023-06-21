@@ -26,5 +26,9 @@
             .url = "https://git.musuka.dev/paoda/zba-util/archive/e616cf09e53f5c402c8f040d14baa211683e70e3.tar.gz",
             .hash = "1220b80b2c0989dcc47275ab9d7d70da4858ef3c1fe1f934e8d838e65028127f6ef3",
         },
+        .tomlz = .{
+            .url = "https://github.com/mattyhall/tomlz/archive/4928d38e9bb682a9966ffe7f41230435d0111b1e.tar.gz",
+            .hash = "12202b57d7b46fff8d16a17371c4f9b711a56b866f0cd11844e4243c09343a2c4c6d",
+        },
     },
 }

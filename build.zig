@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     exe.addModule("clap", b.dependency("zig-clap", .{}).module("clap")); // https://github.com/Hejsil/zig-clap
     exe.addModule("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub")); // https://git.musuka.dev/paoda/zba-gdbstub
     exe.addModule("zba-util", b.dependency("zba-util", .{}).module("zba-util")); // https://git.musuka.dev/paoda/zba-util
+    exe.addModule("tomlz", b.dependency("tomlz", .{}).module("tomlz")); // https://github.com/mattyhall/tomlz
 
     // https://github.com/fabioarnold/nfd-zig
     const nfd_dep = b.dependency("nfd", .{ .target = target, .optimize = optimize });
@@ -46,7 +47,6 @@ pub fn build(b: *std.Build) void {
     zgui_pkg.link(exe);
 
     exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/
-    exe.addAnonymousModule("toml", .{ .source_file = .{ .path = "lib/zig-toml/src/toml.zig" } }); // https://github.com/aeronavery/zig-toml
     exe.addAnonymousModule("gl", .{ .source_file = .{ .path = "lib/gl.zig" } }); // https://github.com/MasterQ32/zig-opengl
 
     b.installArtifact(exe);
