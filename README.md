@@ -19,66 +19,15 @@ This is a simple (read: incomplete) for-fun long-term project. I hope to get "mo
 
 ## Usage
 
-As it currently exists, ZBA is run from the terminal. In your console of choice, type `./zba --help` to see what you can do.
+ZBA supports both a CLI and a GUI. If running from the terminal, try using `zba --help` to see what you can do. If you want to use the GUI, feel free to just run `zba` without any arguments.
 
-I typically find myself typing `./zba -b ./bin/bios.bin` and then going to File -> Insert ROM to load the title of my choice.
-
-Need a BIOS? Why not try using the open-source [Cult-Of-GBA BIOS](https://github.com/Cult-of-GBA/BIOS) written by [fleroviux](https://github.com/fleroviux) and [DenSinH](https://github.com/DenSinH)?
+ZBA does not feature any BIOS HLE, so providing one will be necessary if a ROM makes use of it. Need one? Why not try using the open-source [Cult-Of-GBA BIOS](https://github.com/Cult-of-GBA/BIOS) written by [fleroviux](https://github.com/fleroviux) and [DenSinH](https://github.com/DenSinH)?
 
 Finally it's worth noting that ZBA uses a TOML config file it'll store in your OS's data directory. See `example.toml` to learn about the defaults and what exactly you can mess around with.
 
-## Tests
-
-GBA Tests | [jsmolka](https://github.com/jsmolka/)
---- | ---
-`arm.gba`,  `thumb.gba` | PASS
-`memory.gba`, `bios.gba` | PASS
-`flash64.gba`, `flash128.gba` | PASS
-`sram.gba` | PASS
-`none.gba` | PASS
-`hello.gba`, `shades.gba`, `stripes.gba` | PASS
-`nes.gba` | PASS
-
-GBARoms | [DenSinH](https://github.com/DenSinH/)
---- | ---
-`eeprom-test`, `flash-test` | PASS
-`midikey2freq` | PASS
-`swi-tests-random` | FAIL
-
-gba_tests | [destoer](https://github.com/destoer/)
---- | ---
-`cond_invalid.gba` | PASS
-`dma_priority.gba` | PASS
-`hello_world.gba` | PASS
-`if_ack.gba` | PASS
-`line_timing.gba` | FAIL
-`lyc_midline.gba` | FAIL
-`window_midframe.gba` | FAIL
-
-GBA Test Collection | [ladystarbreeze](https://github.com/ladystarbreeze)
---- | ---
-`retAddr.gba` | PASS
-`helloWorld.gba` | PASS
-`helloAudio.gba` | PASS
-
-FuzzARM | [DenSinH](https://github.com/DenSinH/)
---- | ---
-`main.gba` | PASS
-
-arm7wrestler GBA Fixed | [destoer](https://github.com/destoer)
---- | ---
-`armwrestler-gba-fixed.gba` | PASS
-
-## Resources
-
-- [GBATEK](https://problemkaputt.de/gbatek.htm)
-- [TONC](https://coranac.com/tonc/text/toc.htm)
-- [ARM Architecture Reference Manual](https://www.intel.com/content/dam/www/programmable/us/en/pdfs/literature/third-party/ddi0100e_arm_arm.pdf)
-- [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)
-
 ## Compiling
 
-Most recently built on Zig [v0.11.0-dev.3299+34865d693](https://github.com/ziglang/zig/tree/34865d693)
+Most recently built on Zig [v0.11.0-dev.3395+1e7dcaa3a](https://github.com/ziglang/zig/tree/1e7dcaa3a)
 
 ### Dependencies
 
@@ -106,16 +55,42 @@ Be sure to provide SDL2 using:
 
 `SDL.zig` will provide a helpful compile error if the zig compiler is unable to find SDL2.
 
-Once you've got all the dependencies, execute `zig build -Doptimize=ReleaseSafe`. The executable is located at `zig-out/bin/`.
+Once you've got all the dependencies, execute `zig build -Doptimize=ReleaseSafe`. The executable will be under `zig-out/bin` and the shared libraries (if enabled) under `zig-out/lib`. If working with shared libraries on windows, be sure to add all artifacts to the same directory. On Unix, you'll want to make use of `LD_PRELOAD`.
 
 ## Controls
 
-Key | Button
---- | ---
-<kbd>X</kbd> | A
-<kbd>Z</kbd> | B
-<kbd>A</kbd> | L
-<kbd>S</kbd> | R
-<kbd>Return</kbd> | Start
-<kbd>RShift</kbd> | Select
+Key | Button | | Key | Button
+--- | --- | --- | --- | ---
+<kbd>A</kbd> | L | | <kbd>S</kbd> | R
+<kbd>X</kbd> | A | | <kbd>Z</kbd> | B
+<kbd>Return</kbd> | Start | | <kbd>RShift</kbd> | Select
 Arrow Keys | D-Pad
+
+## Tests
+
+GBA Tests | [jsmolka](https://github.com/jsmolka/) | gba_tests | [destoer](https://github.com/destoer/)
+--- | --- | --- | ---
+`arm.gba`,  `thumb.gba` | PASS | `cond_invalid.gba` | PASS
+`memory.gba`, `bios.gba` | PASS | `dma_priority.gba` | PASS
+`flash64.gba`, `flash128.gba` | PASS | `hello_world.gba` | PASS
+`sram.gba` | PASS | `if_ack.gba` | PASS
+`none.gba` | PASS | `line_timing.gba` | FAIL
+`hello.gba`, `shades.gba`, `stripes.gba` | PASS | `lyc_midline.gba` | FAIL
+`nes.gba` | PASS | `window_midframe.gba` | FAIL
+
+GBARoms | [DenSinH](https://github.com/DenSinH/) | GBA Test Collection | [ladystarbreeze](https://github.com/ladystarbreeze)
+--- | --- | --- | ---
+`eeprom-test`, `flash-test` | PASS | `retAddr.gba` | PASS
+`midikey2freq` | PASS | `helloWorld.gba` | PASS
+`swi-tests-random` | FAIL | `helloAudio.gba` | PASS
+
+FuzzARM | [DenSinH](https://github.com/DenSinH/) |  arm7wrestler GBA Fixed | [destoer](https://github.com/destoer)
+--- | --- | --- | ---
+`main.gba` | PASS | `armwrestler-gba-fixed.gba` | PASS
+
+## Resources
+
+- [GBATEK](https://problemkaputt.de/gbatek.htm)
+- [TONC](https://coranac.com/tonc/text/toc.htm)
+- [ARM Architecture Reference Manual](https://www.intel.com/content/dam/www/programmable/us/en/pdfs/literature/third-party/ddi0100e_arm_arm.pdf)
+- [ARM7TDMI Data Sheet](https://www.dca.fee.unicamp.br/cursos/EA871/references/ARM/ARM7TDMIDataSheet.pdf)

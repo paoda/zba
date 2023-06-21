@@ -6,7 +6,7 @@ const zgui = @import("lib/zgui/build.zig");
 
 pub fn build(b: *std.Build) void {
     // Minimum Zig Version
-    const min_ver = std.SemanticVersion.parse("0.11.0-dev.3299+34865d693") catch return; // https://github.com/ziglang/zig/commit/34865d693
+    const min_ver = std.SemanticVersion.parse("0.11.0-dev.3395+1e7dcaa3a") catch return; // https://github.com/ziglang/zig/commit/34865d693
     if (builtin.zig_version.order(min_ver).compare(.lt)) {
         std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
         std.os.exit(1);
