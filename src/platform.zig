@@ -8,7 +8,8 @@ const config = @import("config.zig");
 const imgui = @import("imgui.zig");
 
 const Apu = @import("core/apu.zig").Apu;
-const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("core/Bus.zig");
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
 const Channel = @import("zba-util").Channel(emu.Message, 0x100);
@@ -107,10 +108,12 @@ pub const Gui = struct {
         const tracker = opt.tracker;
         const ch = opt.ch;
 
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
         const objects = opengl_impl.createObjects();
         defer gl.deleteBuffers(3, @as(*const [3]GLuint, &.{ objects.vao, objects.vbo, objects.ebo }));
 
-        const emu_tex = opengl_impl.createScreenTexture(cpu.bus.ppu.framebuf.get(.Renderer));
+        const emu_tex = opengl_impl.createScreenTexture(bus_ptr.ppu.framebuf.get(.Renderer));
         const out_tex = opengl_impl.createOutputTexture();
         defer gl.deleteTextures(2, &[_]GLuint{ emu_tex, out_tex });
 
@@ -153,7 +156,7 @@ pub const Gui = struct {
                             else => {},
                         }
 
-                        cpu.bus.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                        bus_ptr.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_KEYUP => {
                         // TODO: Make use of compare_and_xor?
@@ -174,7 +177,7 @@ pub const Gui = struct {
                             else => {},
                         }
 
-                        cpu.bus.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
+                        bus_ptr.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_WINDOWEVENT => {
                         if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
@@ -246,7 +249,7 @@ pub const Gui = struct {
                         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
                         defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
-                        const buf = cpu.bus.ppu.framebuf.get(.Renderer);
+                        const buf = bus_ptr.ppu.framebuf.get(.Renderer);
                         gl.viewport(0, 0, gba_width, gba_height);
                         opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
                     }

@@ -3,7 +3,10 @@ const util = @import("../../util.zig");
 
 const TimerControl = @import("io.zig").TimerControl;
 const Scheduler = @import("../scheduler.zig").Scheduler;
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("../Bus.zig");
+
+const handleInterrupt = @import("../cpu_util.zig").handleInterrupt;
 
 pub const TimerTuple = struct { Timer(0), Timer(1), Timer(2), Timer(3) };
 const log = std.log.scoped(.Timer);
@@ -191,7 +194,9 @@ fn Timer(comptime id: u2) type {
 
         pub fn onTimerExpire(self: *Self, cpu: *Arm7tdmi, late: u64) void {
             // Fire IRQ if enabled
-            const io = &cpu.bus.io;
+            const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
+            const io = &bus_ptr.io;
 
             if (self.cnt.irq.read()) {
                 switch (id) {
@@ -201,12 +206,12 @@ fn Timer(comptime id: u2) type {
                     3 => io.irq.tim3.set(),
                 }
 
-                cpu.handleInterrupt();
+                handleInterrupt(cpu);
             }
 
             // DMA Sound Things
             if (id == 0 or id == 1) {
-                cpu.bus.apu.onDmaAudioSampleRequest(cpu, id);
+                bus_ptr.apu.onDmaAudioSampleRequest(cpu, id);
             }
 
             // Perform Cascade Behaviour
@@ -214,9 +219,9 @@ fn Timer(comptime id: u2) type {
                 inline 0, 1, 2 => |idx| {
                     const next = idx + 1;
 
-                    if (cpu.bus.tim[next].cnt.cascade.read()) {
-                        cpu.bus.tim[next]._counter +%= 1;
-                        if (cpu.bus.tim[next]._counter == 0) cpu.bus.tim[next].onTimerExpire(cpu, late);
+                    if (bus_ptr.tim[next].cnt.cascade.read()) {
+                        bus_ptr.tim[next]._counter +%= 1;
+                        if (bus_ptr.tim[next]._counter == 0) bus_ptr.tim[next].onTimerExpire(cpu, late);
                     }
                 },
                 3 => {}, // THere is no timer for TIM3 to cascade to

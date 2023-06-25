@@ -3,11 +3,15 @@ const SDL = @import("sdl2");
 const config = @import("../config.zig");
 
 const Scheduler = @import("scheduler.zig").Scheduler;
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("Bus.zig");
 const Tracker = @import("../util.zig").FpsTracker;
 const Channel = @import("zba-util").Channel(Message, 0x100);
 
 pub const Message = enum { Pause, Resume, Quit };
+
+const stepDmaTransfer = @import("cpu_util.zig").stepDmaTransfer;
+const isHalted = @import("cpu_util.zig").isHalted;
 
 const Timer = std.time.Timer;
 
@@ -54,6 +58,8 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
         log.info("FPS tracking enabled", .{});
     }
 
+    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
     var paused: bool = false;
 
     switch (kind) {
@@ -69,7 +75,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
                 if (paused) continue;
 
                 runFrame(scheduler, cpu);
-                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+                audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
 
                 if (kind == .UnlimitedFPS) tracker.?.tick();
             }
@@ -95,7 +101,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
                 // the amount of time needed for audio to catch up rather than
                 // our expected wake-up time
 
-                audioSync(audio_sync, cpu.bus.apu.stream, &cpu.bus.apu.is_buffer_full);
+                audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
                 if (!audio_sync) spinLoop(&timer, wake_time);
                 wake_time = new_wake_time;
 
@@ -109,8 +115,8 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
     while (sched.tick < frame_end) {
-        if (!cpu.stepDmaTransfer()) {
-            if (cpu.isHalted()) {
+        if (!stepDmaTransfer(cpu)) {
+            if (isHalted(cpu)) {
                 // Fast-forward to next Event
                 sched.tick = sched.nextTimestamp();
             } else {
@@ -227,8 +233,8 @@ pub const EmuThing = struct {
 
         // TODO: How can I make it easier to keep this in lock-step with runFrame?
         while (!did_step) {
-            if (!cpu.stepDmaTransfer()) {
-                if (cpu.isHalted()) {
+            if (!stepDmaTransfer(cpu)) {
+                if (isHalted(cpu)) {
                     // Fast-forward to next Event
                     sched.tick = sched.queue.peek().?.tick;
                 } else {
@@ -250,14 +256,18 @@ pub fn reset(cpu: *Arm7tdmi) void {
 }
 
 pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
-    try cpu.bus.replaceGamepak(file_path);
+    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
+    try bus_ptr.replaceGamepak(file_path);
     reset(cpu);
 }
 
 pub fn replaceBios(cpu: *Arm7tdmi, file_path: []const u8) !void {
-    const allocator = cpu.bus.bios.allocator;
+    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
+    const allocator = bus_ptr.bios.allocator;
     const bios_len = 0x4000;
 
-    cpu.bus.bios.buf = try allocator.alloc(u8, bios_len);
-    try cpu.bus.bios.load(file_path);
+    bus_ptr.bios.buf = try allocator.alloc(u8, bios_len);
+    try bus_ptr.bios.load(file_path);
 }

@@ -10,7 +10,10 @@ const config = @import("config.zig");
 const emu = @import("core/emu.zig");
 
 const Gui = @import("platform.zig").Gui;
-const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Scheduler = @import("core/scheduler.zig").Scheduler;
+const Bus = @import("core/Bus.zig");
+
 const RingBuffer = @import("zba-util").RingBuffer;
 const Dimensions = @import("platform.zig").Dimensions;
 
@@ -69,6 +72,7 @@ pub const State = struct {
 
 pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) bool {
     const scn_scale = config.config().host.win_scale;
+    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
 
     zgui.backend.newFrame(@intToFloat(f32, win_dim.width), @intToFloat(f32, win_dim.height));
 
@@ -100,7 +104,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
                     break :blk;
                 };
 
-                state.title = handleTitle(&cpu.bus.pak.title);
+                state.title = handleTitle(&bus_ptr.pak.title);
                 state.emulation = .{ .Transition = .Active };
             }
 
@@ -240,8 +244,8 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
 
         zgui.separator();
 
-        widgets.interrupts(" IE", cpu.bus.io.ie);
-        widgets.interrupts("IRQ", cpu.bus.io.irq);
+        widgets.interrupts(" IE", bus_ptr.io.ie);
+        widgets.interrupts("IRQ", bus_ptr.io.irq);
     }
 
     if (state.win_stat.show_perf) {
@@ -313,15 +317,16 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
 
         const scheduler = cpu.sched;
 
-        zgui.text("tick: {X:0>16}", .{scheduler.tick});
+        zgui.text("tick: {X:0>16}", .{scheduler.now()});
         zgui.separator();
 
-        const Event = std.meta.Child(@TypeOf(scheduler.queue.items));
+        const sched_ptr = @ptrCast(*Scheduler, @alignCast(@alignOf(Scheduler), cpu.sched.ptr));
+        const Event = std.meta.Child(@TypeOf(sched_ptr.queue.items));
 
         var items: [20]Event = undefined;
-        const len = scheduler.queue.len;
+        const len = sched_ptr.queue.len;
 
-        @memcpy(&items, scheduler.queue.items);
+        @memcpy(&items, sched_ptr.queue.items);
         std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {
@@ -441,7 +446,7 @@ const widgets = struct {
     }
 
     fn psr(comptime label: []const u8, register: anytype) void {
-        const Mode = @import("core/cpu.zig").Mode;
+        const Mode = @import("arm32").arm.Mode;
 
         const maybe_mode = std.meta.intToEnum(Mode, register.mode.read()) catch null;
         const mode = if (maybe_mode) |mode| mode.toString() else "???";

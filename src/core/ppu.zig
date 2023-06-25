@@ -10,7 +10,8 @@ const Oam = @import("ppu/Oam.zig");
 const Palette = @import("ppu/Palette.zig");
 const Vram = @import("ppu/Vram.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("Bus.zig");
 const FrameBuffer = @import("../util.zig").FrameBuffer;
 
 const Allocator = std.mem.Allocator;
@@ -19,6 +20,8 @@ const log = std.log.scoped(.PPU);
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const setQuart = util.setQuart;
+
+const handleInterrupt = @import("cpu_util.zig").handleInterrupt;
 
 pub const width = 240;
 pub const height = 160;
@@ -1000,21 +1003,25 @@ pub const Ppu = struct {
     }
 
     pub fn onHdrawEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
         // Transitioning to a Hblank
         if (self.dispstat.hblank_irq.read()) {
-            cpu.bus.io.irq.hblank.set();
-            cpu.handleInterrupt();
+            bus_ptr.io.irq.hblank.set();
+            handleInterrupt(cpu);
         }
 
         // If we're not also in VBlank, attempt to run any pending DMA Reqs
         if (!self.dispstat.vblank.read())
-            dma.onBlanking(cpu.bus, .HBlank);
+            dma.onBlanking(bus_ptr, .HBlank);
 
         self.dispstat.hblank.set();
         self.sched.push(.HBlank, 68 * 4 -| late);
     }
 
     pub fn onHblankEnd(self: *Self, cpu: *Arm7tdmi, late: u64) void {
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
         // The End of a Hblank (During Draw or Vblank)
         const old_scanline = self.vcount.scanline.read();
         const scanline = (old_scanline + 1) % 228;
@@ -1027,8 +1034,8 @@ pub const Ppu = struct {
         self.dispstat.coincidence.write(coincidence);
 
         if (coincidence and self.dispstat.vcount_irq.read()) {
-            cpu.bus.io.irq.coincidence.set();
-            cpu.handleInterrupt();
+            bus_ptr.io.irq.coincidence.set();
+            handleInterrupt(cpu);
         }
 
         if (scanline < 160) {
@@ -1042,15 +1049,15 @@ pub const Ppu = struct {
                 self.dispstat.vblank.set();
 
                 if (self.dispstat.vblank_irq.read()) {
-                    cpu.bus.io.irq.vblank.set();
-                    cpu.handleInterrupt();
+                    bus_ptr.io.irq.vblank.set();
+                    handleInterrupt(cpu);
                 }
 
                 self.aff_bg[0].latchRefPoints();
                 self.aff_bg[1].latchRefPoints();
 
                 // See if Vblank DMA is present and not enabled
-                dma.onBlanking(cpu.bus, .VBlank);
+                dma.onBlanking(bus_ptr, .VBlank);
             }
 
             if (scanline == 227) self.dispstat.vblank.unset();

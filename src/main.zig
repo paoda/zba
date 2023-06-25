@@ -9,11 +9,14 @@ const emu = @import("core/emu.zig");
 const Channel = @import("zba-util").Channel(emu.Message, 0x100);
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
-const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FilePaths = @import("util.zig").FilePaths;
 const FpsTracker = @import("util.zig").FpsTracker;
 const Allocator = std.mem.Allocator;
+
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const IBus = @import("arm32").Bus;
+const IScheduler = @import("arm32").Scheduler;
 
 const log = std.log.scoped(.Cli);
 pub const log_level = if (builtin.mode != .Debug) .info else std.log.default_level;
@@ -81,13 +84,17 @@ pub fn main() void {
     defer scheduler.deinit();
 
     var bus: Bus = undefined;
-    var cpu = Arm7tdmi.init(&scheduler, &bus, log_file);
+
+    var ischeduler = IScheduler.init(&scheduler);
+    var ibus = IBus.init(&bus);
+
+    var cpu = Arm7tdmi.init(ischeduler, ibus);
 
     bus.init(allocator, &scheduler, &cpu, paths) catch |e| exitln("failed to init zba bus: {}", .{e});
     defer bus.deinit();
 
     if (config.config().guest.skip_bios or result.args.skip != 0 or paths.bios == null) {
-        cpu.fastBoot();
+        @import("core/cpu_util.zig").fastBoot(&cpu);
     }
 
     const title_ptr = if (paths.rom != null) &bus.pak.title else null;

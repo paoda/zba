@@ -1,7 +1,7 @@
 const std = @import("std");
 const config = @import("../../config.zig");
 
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Backup = @import("backup.zig").Backup;
 const Gpio = @import("gpio.zig").Gpio;
 const Allocator = std.mem.Allocator;

@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
     exe.addModule("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub")); // https://git.musuka.dev/paoda/zba-gdbstub
     exe.addModule("zba-util", b.dependency("zba-util", .{}).module("zba-util")); // https://git.musuka.dev/paoda/zba-util
     exe.addModule("tomlz", b.dependency("tomlz", .{}).module("tomlz")); // https://github.com/mattyhall/tomlz
+    exe.addModule("arm32", b.dependency("arm32", .{}).module("arm32")); // https://git.musuka.dev/paoda/arm32
 
     // https://github.com/fabioarnold/nfd-zig
     const nfd_dep = b.dependency("nfd", .{ .target = target, .optimize = optimize });

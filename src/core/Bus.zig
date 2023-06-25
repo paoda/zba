@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Bios = @import("bus/Bios.zig");
 const Ewram = @import("bus/Ewram.zig");
 const GamePak = @import("bus/GamePak.zig");

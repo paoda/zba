@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const config = @import("config.zig");
 
 const Log2Int = std.math.Log2Int;
-const Arm7tdmi = @import("core/cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
 
 const Allocator = std.mem.Allocator;
 

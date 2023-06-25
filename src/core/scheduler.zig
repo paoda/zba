@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("Bus.zig");
 const Clock = @import("bus/gpio.zig").Clock;
 
 const Order = std.math.Order;
@@ -45,6 +46,8 @@ pub const Scheduler = struct {
         const event = self.queue.remove();
         const late = self.tick - event.tick;
 
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
         switch (event.kind) {
             .HeatDeath => {
                 log.err("u64 overflow. This *actually* should never happen.", .{});
@@ -52,33 +55,33 @@ pub const Scheduler = struct {
             },
             .Draw => {
                 // The end of a VDraw
-                cpu.bus.ppu.drawScanline();
-                cpu.bus.ppu.onHdrawEnd(cpu, late);
+                bus_ptr.ppu.drawScanline();
+                bus_ptr.ppu.onHdrawEnd(cpu, late);
             },
             .TimerOverflow => |id| {
                 switch (id) {
-                    inline 0...3 => |idx| cpu.bus.tim[idx].onTimerExpire(cpu, late),
+                    inline 0...3 => |idx| bus_ptr.tim[idx].onTimerExpire(cpu, late),
                 }
             },
             .ApuChannel => |id| {
                 switch (id) {
-                    0 => cpu.bus.apu.ch1.onToneSweepEvent(late),
-                    1 => cpu.bus.apu.ch2.onToneEvent(late),
-                    2 => cpu.bus.apu.ch3.onWaveEvent(late),
-                    3 => cpu.bus.apu.ch4.onNoiseEvent(late),
+                    0 => bus_ptr.apu.ch1.onToneSweepEvent(late),
+                    1 => bus_ptr.apu.ch2.onToneEvent(late),
+                    2 => bus_ptr.apu.ch3.onWaveEvent(late),
+                    3 => bus_ptr.apu.ch4.onNoiseEvent(late),
                 }
             },
             .RealTimeClock => {
-                const device = &cpu.bus.pak.gpio.device;
+                const device = &bus_ptr.pak.gpio.device;
                 if (device.kind != .Rtc or device.ptr == null) return;
 
                 const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
                 clock.onClockUpdate(late);
             },
-            .FrameSequencer => cpu.bus.apu.onSequencerTick(late),
-            .SampleAudio => cpu.bus.apu.sampleAudio(late),
-            .HBlank => cpu.bus.ppu.onHblankEnd(cpu, late), // The end of a HBlank
-            .VBlank => cpu.bus.ppu.onHdrawEnd(cpu, late), // The end of a VBlank
+            .FrameSequencer => bus_ptr.apu.onSequencerTick(late),
+            .SampleAudio => bus_ptr.apu.sampleAudio(late),
+            .HBlank => bus_ptr.ppu.onHblankEnd(cpu, late), // The end of a HBlank
+            .VBlank => bus_ptr.ppu.onHdrawEnd(cpu, late), // The end of a VBlank
         }
     }
 

@@ -30,5 +30,9 @@
             .url = "https://github.com/mattyhall/tomlz/archive/4928d38e9bb682a9966ffe7f41230435d0111b1e.tar.gz",
             .hash = "12202b57d7b46fff8d16a17371c4f9b711a56b866f0cd11844e4243c09343a2c4c6d",
         },
+        .arm32 = .{
+            .url = "https://git.musuka.dev/paoda/arm32/archive/3c8a87c14dfa2501bd0a7f2236259e2d8d0fbcd9.tar.gz",
+            .hash = "12202a06a5d20d0da9ab6596a04821431d261c9900c7916a87148619dcb77c745044",
+        },
     },
 }

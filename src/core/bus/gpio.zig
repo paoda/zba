@@ -2,8 +2,12 @@ const std = @import("std");
 const Bit = @import("bitfield").Bit;
 const DateTime = @import("datetime").datetime.Datetime;
 
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("../Bus.zig");
+const Scheduler = @import("../scheduler.zig").Scheduler;
 const Allocator = std.mem.Allocator;
+
+const handleInterrupt = @import("../cpu_util.zig").handleInterrupt;
 
 /// GPIO Register Implementation
 pub const Gpio = struct {
@@ -286,11 +290,13 @@ pub const Clock = struct {
             .gpio = gpio, // Can't use Arm7tdmi ptr b/c not initialized yet
         };
 
-        cpu.sched.push(.RealTimeClock, 1 << 24); // Every Second
+        const sched_ptr = @ptrCast(*Scheduler, @alignCast(@alignOf(Scheduler), cpu.sched.ptr));
+        sched_ptr.push(.RealTimeClock, 1 << 24); // Every Second
     }
 
     pub fn onClockUpdate(self: *Self, late: u64) void {
-        self.cpu.sched.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
+        const sched_ptr = @ptrCast(*Scheduler, @alignCast(@alignOf(Scheduler), self.cpu.sched.ptr));
+        sched_ptr.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
 
         const now = DateTime.now();
         self.year = bcd(@intCast(u8, now.date.year - 2000));
@@ -397,11 +403,13 @@ pub const Clock = struct {
     }
 
     fn irq(self: *Self) void {
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), self.cpu.bus.ptr));
+
         // TODO: Confirm that this is the right behaviour
         log.debug("Force GamePak IRQ", .{});
 
-        self.cpu.bus.io.irq.game_pak.set();
-        self.cpu.handleInterrupt();
+        bus_ptr.io.irq.game_pak.set();
+        handleInterrupt(self.cpu);
     }
 
     fn processCommand(self: *Self, raw_command: u8) State {

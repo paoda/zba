@@ -3,7 +3,8 @@ const SDL = @import("sdl2");
 const io = @import("bus/io.zig");
 const util = @import("../util.zig");
 
-const Arm7tdmi = @import("cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
+const Bus = @import("Bus.zig");
 const Scheduler = @import("scheduler.zig").Scheduler;
 const ToneSweep = @import("apu/ToneSweep.zig");
 const Tone = @import("apu/Tone.zig");
@@ -520,18 +521,20 @@ pub const Apu = struct {
     pub fn onDmaAudioSampleRequest(self: *Self, cpu: *Arm7tdmi, tim_id: u3) void {
         if (!self.cnt.apu_enable.read()) return;
 
+        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
         if (@boolToInt(self.dma_cnt.chA_timer.read()) == tim_id) {
             if (!self.chA.enabled) return;
 
             self.chA.updateSample();
-            if (self.chA.len() <= 15) cpu.bus.dma[1].requestAudio(0x0400_00A0);
+            if (self.chA.len() <= 15) bus_ptr.dma[1].requestAudio(0x0400_00A0);
         }
 
         if (@boolToInt(self.dma_cnt.chB_timer.read()) == tim_id) {
             if (!self.chB.enabled) return;
 
             self.chB.updateSample();
-            if (self.chB.len() <= 15) cpu.bus.dma[2].requestAudio(0x0400_00A4);
+            if (self.chB.len() <= 15) bus_ptr.dma[2].requestAudio(0x0400_00A4);
         }
     }
 };

@@ -3,7 +3,7 @@ const util = @import("../../util.zig");
 
 const DmaControl = @import("io.zig").DmaControl;
 const Bus = @import("../Bus.zig");
-const Arm7tdmi = @import("../cpu.zig").Arm7tdmi;
+const Arm7tdmi = @import("arm32").Arm7tdmi;
 
 pub const DmaTuple = struct { DmaController(0), DmaController(1), DmaController(2), DmaController(3) };
 const log = std.log.scoped(.DmaTransfer);
@@ -11,6 +11,7 @@ const log = std.log.scoped(.DmaTransfer);
 const getHalf = util.getHalf;
 const setHalf = util.setHalf;
 const setQuart = util.setQuart;
+const handleInterrupt = @import("../cpu_util.zig").handleInterrupt;
 
 const rotr = @import("zba-util").rotr;
 
@@ -237,6 +238,8 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn step(self: *Self, cpu: *Arm7tdmi) void {
+            const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+
             const is_fifo = (id == 1 or id == 2) and self.cnt.start_timing.read() == 0b11;
             const sad_adj = @intToEnum(Adjustment, self.cnt.sad_adj.read());
             const dad_adj = if (is_fifo) .Fixed else @intToEnum(Adjustment, self.cnt.dad_adj.read());
@@ -283,13 +286,13 @@ fn DmaController(comptime id: u2) type {
             if (self._word_count == 0) {
                 if (self.cnt.irq.read()) {
                     switch (id) {
-                        0 => cpu.bus.io.irq.dma0.set(),
-                        1 => cpu.bus.io.irq.dma1.set(),
-                        2 => cpu.bus.io.irq.dma2.set(),
-                        3 => cpu.bus.io.irq.dma3.set(),
+                        0 => bus_ptr.io.irq.dma0.set(),
+                        1 => bus_ptr.io.irq.dma1.set(),
+                        2 => bus_ptr.io.irq.dma2.set(),
+                        3 => bus_ptr.io.irq.dma3.set(),
                     }
 
-                    cpu.handleInterrupt();
+                    handleInterrupt(cpu);
                 }
 
                 // If we're not repeating, Fire the IRQs and disable the DMA
