@@ -19,7 +19,7 @@ pub fn create(sched: *Scheduler) TimerTuple {
 }
 
 pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
-    const nybble_addr = @truncate(u4, addr);
+    const nybble_addr = @as(u4, @truncate(addr));
 
     return switch (T) {
         u32 => switch (nybble_addr) {
@@ -44,24 +44,24 @@ pub fn read(comptime T: type, tim: *const TimerTuple, addr: u32) ?T {
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (nybble_addr) {
-            0x0, 0x1 => @truncate(T, tim.*[0].timcntL() >> getHalf(nybble_addr)),
-            0x2, 0x3 => @truncate(T, tim.*[0].cnt.raw >> getHalf(nybble_addr)),
+            0x0, 0x1 => @as(T, @truncate(tim.*[0].timcntL() >> getHalf(nybble_addr))),
+            0x2, 0x3 => @as(T, @truncate(tim.*[0].cnt.raw >> getHalf(nybble_addr))),
 
-            0x4, 0x5 => @truncate(T, tim.*[1].timcntL() >> getHalf(nybble_addr)),
-            0x6, 0x7 => @truncate(T, tim.*[1].cnt.raw >> getHalf(nybble_addr)),
+            0x4, 0x5 => @as(T, @truncate(tim.*[1].timcntL() >> getHalf(nybble_addr))),
+            0x6, 0x7 => @as(T, @truncate(tim.*[1].cnt.raw >> getHalf(nybble_addr))),
 
-            0x8, 0x9 => @truncate(T, tim.*[2].timcntL() >> getHalf(nybble_addr)),
-            0xA, 0xB => @truncate(T, tim.*[2].cnt.raw >> getHalf(nybble_addr)),
+            0x8, 0x9 => @as(T, @truncate(tim.*[2].timcntL() >> getHalf(nybble_addr))),
+            0xA, 0xB => @as(T, @truncate(tim.*[2].cnt.raw >> getHalf(nybble_addr))),
 
-            0xC, 0xD => @truncate(T, tim.*[3].timcntL() >> getHalf(nybble_addr)),
-            0xE, 0xF => @truncate(T, tim.*[3].cnt.raw >> getHalf(nybble_addr)),
+            0xC, 0xD => @as(T, @truncate(tim.*[3].timcntL() >> getHalf(nybble_addr))),
+            0xE, 0xF => @as(T, @truncate(tim.*[3].cnt.raw >> getHalf(nybble_addr))),
         },
         else => @compileError("TIM: Unsupported read width"),
     };
 }
 
 pub fn write(comptime T: type, tim: *TimerTuple, addr: u32, value: T) void {
-    const nybble_addr = @truncate(u4, addr);
+    const nybble_addr = @as(u4, @truncate(addr));
 
     return switch (T) {
         u32 => switch (nybble_addr) {
@@ -141,7 +141,7 @@ fn Timer(comptime id: u2) type {
         pub fn timcntL(self: *const Self) u16 {
             if (self.cnt.cascade.read() or !self.cnt.enabled.read()) return self._counter;
 
-            return self._counter +% @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
+            return self._counter +% @as(u16, @truncate((self.sched.now() - self._start_timestamp) / self.frequency()));
         }
 
         /// TIMCNT_L Setter
@@ -151,8 +151,8 @@ fn Timer(comptime id: u2) type {
 
         /// TIMCNT_L & TIMCNT_H
         pub fn setTimcnt(self: *Self, word: u32) void {
-            self.setTimcntL(@truncate(u16, word));
-            self.setTimcntH(@truncate(u16, word >> 16));
+            self.setTimcntL(@as(u16, @truncate(word)));
+            self.setTimcntH(@as(u16, @truncate(word >> 16)));
         }
 
         /// TIMCNT_H
@@ -167,7 +167,7 @@ fn Timer(comptime id: u2) type {
                     self.sched.removeScheduledEvent(.{ .TimerOverflow = id });
 
                     // Counter should hold the value it stopped at meaning we have to calculate it now
-                    self._counter +%= @truncate(u16, (self.sched.now() - self._start_timestamp) / self.frequency());
+                    self._counter +%= @as(u16, @truncate((self.sched.now() - self._start_timestamp) / self.frequency()));
                 }
 
                 // the timer has always been enabled, but the cascade bit which was blocking the timer has been unset
@@ -194,7 +194,7 @@ fn Timer(comptime id: u2) type {
 
         pub fn onTimerExpire(self: *Self, cpu: *Arm7tdmi, late: u64) void {
             // Fire IRQ if enabled
-            const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+            const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
             const io = &bus_ptr.io;
 

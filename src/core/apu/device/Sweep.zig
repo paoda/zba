@@ -28,8 +28,8 @@ pub fn tick(self: *Self, ch1: *ToneSweep) void {
             const new_freq = self.calculate(ch1.sweep, &ch1.enabled);
 
             if (new_freq <= 0x7FF and ch1.sweep.shift.read() != 0) {
-                ch1.freq.frequency.write(@truncate(u11, new_freq));
-                self.shadow = @truncate(u11, new_freq);
+                ch1.freq.frequency.write(@as(u11, @truncate(new_freq)));
+                self.shadow = @as(u11, @truncate(new_freq));
 
                 _ = self.calculate(ch1.sweep, &ch1.enabled);
             }

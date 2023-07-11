@@ -5,13 +5,13 @@ const Bank = @import("arm32").Arm7tdmi.Bank;
 const Bus = @import("Bus.zig");
 
 pub inline fn isHalted(cpu: *const Arm7tdmi) bool {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     return bus_ptr.io.haltcnt == .Halt;
 }
 
 pub fn stepDmaTransfer(cpu: *Arm7tdmi) bool {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     inline for (0..4) |i| {
         if (bus_ptr.dma[i].in_progress) {
@@ -24,7 +24,7 @@ pub fn stepDmaTransfer(cpu: *Arm7tdmi) bool {
 }
 
 pub fn handleInterrupt(cpu: *Arm7tdmi) void {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
     const should_handle = bus_ptr.io.ie.raw & bus_ptr.io.irq.raw;
 
     // Return if IME is disabled, CPSR I is set or there is nothing to handle
@@ -57,7 +57,7 @@ pub fn handleInterrupt(cpu: *Arm7tdmi) void {
 ///
 /// TODO: Make above notice impossible to do in code
 pub fn fastBoot(cpu: *Arm7tdmi) void {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
     cpu.r = std.mem.zeroes([16]u32);
 
     // cpu.r[0] = 0x08000000;

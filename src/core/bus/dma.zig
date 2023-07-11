@@ -20,7 +20,7 @@ pub fn create() DmaTuple {
 }
 
 pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
-    const byte_addr = @truncate(u8, addr);
+    const byte_addr = @as(u8, @truncate(addr));
 
     return switch (T) {
         u32 => switch (byte_addr) {
@@ -55,19 +55,19 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
         u8 => switch (byte_addr) {
             0xB0...0xB7 => null, // DMA0SAD, DMA0DAD
             0xB8, 0xB9 => 0x00, // DMA0CNT_L
-            0xBA, 0xBB => @truncate(T, dma.*[0].dmacntH() >> getHalf(byte_addr)),
+            0xBA, 0xBB => @as(T, @truncate(dma.*[0].dmacntH() >> getHalf(byte_addr))),
 
             0xBC...0xC3 => null, // DMA1SAD, DMA1DAD
             0xC4, 0xC5 => 0x00, // DMA1CNT_L
-            0xC6, 0xC7 => @truncate(T, dma.*[1].dmacntH() >> getHalf(byte_addr)),
+            0xC6, 0xC7 => @as(T, @truncate(dma.*[1].dmacntH() >> getHalf(byte_addr))),
 
             0xC8...0xCF => null, // DMA2SAD, DMA2DAD
             0xD0, 0xD1 => 0x00, // DMA2CNT_L
-            0xD2, 0xD3 => @truncate(T, dma.*[2].dmacntH() >> getHalf(byte_addr)),
+            0xD2, 0xD3 => @as(T, @truncate(dma.*[2].dmacntH() >> getHalf(byte_addr))),
 
             0xD4...0xDB => null, // DMA3SAD, DMA3DAD
             0xDC, 0xDD => 0x00, // DMA3CNT_L
-            0xDE, 0xDF => @truncate(T, dma.*[3].dmacntH() >> getHalf(byte_addr)),
+            0xDE, 0xDF => @as(T, @truncate(dma.*[3].dmacntH() >> getHalf(byte_addr))),
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
         else => @compileError("DMA: Unsupported read width"),
@@ -75,7 +75,7 @@ pub fn read(comptime T: type, dma: *const DmaTuple, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, dma: *DmaTuple, addr: u32, value: T) void {
-    const byte_addr = @truncate(u8, addr);
+    const byte_addr = @as(u8, @truncate(addr));
 
     switch (T) {
         u32 => switch (byte_addr) {
@@ -209,7 +209,7 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn setDmacntL(self: *Self, halfword: u16) void {
-            self.word_count = @truncate(@TypeOf(self.word_count), halfword);
+            self.word_count = @as(@TypeOf(self.word_count), @truncate(halfword));
         }
 
         pub fn dmacntH(self: *const Self) u16 {
@@ -233,16 +233,16 @@ fn DmaController(comptime id: u2) type {
         }
 
         pub fn setDmacnt(self: *Self, word: u32) void {
-            self.setDmacntL(@truncate(u16, word));
-            self.setDmacntH(@truncate(u16, word >> 16));
+            self.setDmacntL(@as(u16, @truncate(word)));
+            self.setDmacntH(@as(u16, @truncate(word >> 16)));
         }
 
         pub fn step(self: *Self, cpu: *Arm7tdmi) void {
-            const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+            const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
             const is_fifo = (id == 1 or id == 2) and self.cnt.start_timing.read() == 0b11;
-            const sad_adj = @intToEnum(Adjustment, self.cnt.sad_adj.read());
-            const dad_adj = if (is_fifo) .Fixed else @intToEnum(Adjustment, self.cnt.dad_adj.read());
+            const sad_adj = @as(Adjustment, @enumFromInt(self.cnt.sad_adj.read()));
+            const dad_adj = if (is_fifo) .Fixed else @as(Adjustment, @enumFromInt(self.cnt.dad_adj.read()));
 
             const transfer_type = is_fifo or self.cnt.transfer_type.read();
             const offset: u32 = if (transfer_type) @sizeOf(u32) else @sizeOf(u16);
@@ -260,10 +260,10 @@ fn DmaController(comptime id: u2) type {
                     self.data_latch = value << 16 | value;
                 }
 
-                cpu.bus.write(u16, dad_addr, @truncate(u16, rotr(u32, self.data_latch, 8 * (dad_addr & 3))));
+                cpu.bus.write(u16, dad_addr, @as(u16, @truncate(rotr(u32, self.data_latch, 8 * (dad_addr & 3)))));
             }
 
-            switch (@truncate(u8, sad_addr >> 24)) {
+            switch (@as(u8, @truncate(sad_addr >> 24))) {
                 // according to fleroviux, DMAs with a source address in ROM misbehave
                 // the resultant behaviour is that the source address will increment despite what DMAXCNT says
                 0x08...0x0D => self.sad_latch +%= offset, // obscure behaviour
@@ -321,7 +321,7 @@ fn DmaController(comptime id: u2) type {
             // Reload internal DAD latch if we are in IncrementRelaod
             if (self.in_progress) {
                 self._word_count = if (self.word_count == 0) std.math.maxInt(@TypeOf(self._word_count)) else self.word_count;
-                if (@intToEnum(Adjustment, self.cnt.dad_adj.read()) == .IncrementReload) self.dad_latch = self.dad;
+                if (@as(Adjustment, @enumFromInt(self.cnt.dad_adj.read())) == .IncrementReload) self.dad_latch = self.dad;
             }
         }
 

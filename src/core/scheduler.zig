@@ -46,7 +46,7 @@ pub const Scheduler = struct {
         const event = self.queue.remove();
         const late = self.tick - event.tick;
 
-        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+        const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
         switch (event.kind) {
             .HeatDeath => {
@@ -75,7 +75,7 @@ pub const Scheduler = struct {
                 const device = &bus_ptr.pak.gpio.device;
                 if (device.kind != .Rtc or device.ptr == null) return;
 
-                const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), device.ptr.?));
+                const clock: *Clock = @ptrCast(@alignCast(device.ptr.?));
                 clock.onClockUpdate(late);
             },
             .FrameSequencer => bus_ptr.apu.onSequencerTick(late),

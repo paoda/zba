@@ -64,8 +64,8 @@ pub fn tick(self: *Self, comptime kind: Tick) void {
 
 /// NR30, NR31, NR32
 pub fn setSound3Cnt(self: *Self, value: u32) void {
-    self.setSound3CntL(@truncate(u8, value));
-    self.setSound3CntH(@truncate(u16, value >> 16));
+    self.setSound3CntL(@as(u8, @truncate(value)));
+    self.setSound3CntH(@as(u16, @truncate(value >> 16)));
 }
 
 /// NR30
@@ -86,8 +86,8 @@ pub fn sound3CntH(self: *const Self) u16 {
 
 /// NR31, NR32
 pub fn setSound3CntH(self: *Self, value: u16) void {
-    self.setNr31(@truncate(u8, value));
-    self.vol.raw = (@truncate(u8, value >> 8));
+    self.setNr31(@as(u8, @truncate(value)));
+    self.vol.raw = (@as(u8, @truncate(value >> 8)));
 }
 
 /// NR31
@@ -98,8 +98,8 @@ pub fn setNr31(self: *Self, len: u8) void {
 
 /// NR33, NR34
 pub fn setSound3CntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
-    self.setNr33(@truncate(u8, value));
-    self.setNr34(fs, @truncate(u8, value >> 8));
+    self.setNr33(@as(u8, @truncate(value)));
+    self.setNr34(fs, @as(u8, @truncate(value >> 8)));
 }
 
 /// NR33, NR34

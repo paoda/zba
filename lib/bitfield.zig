@@ -26,13 +26,13 @@ fn BitType(comptime FieldType: type, comptime ValueType: type, comptime shamt: u
         }
 
         pub fn read(self: anytype) ValueType {
-            return @bitCast(ValueType, @truncate(u1, self.bits.field().* >> shamt));
+            return @as(ValueType, @bitCast(@as(u1, @truncate(self.bits.field().* >> shamt))));
         }
 
         // Since these are mostly used with MMIO, I want to avoid
         // reading the memory just to write it again, also races
         pub fn write(self: anytype, val: ValueType) void {
-            if (@bitCast(bool, val)) {
+            if (@as(bool, @bitCast(val))) {
                 self.set();
             } else {
                 self.unset();
@@ -67,17 +67,17 @@ pub fn Bitfield(comptime FieldType: type, comptime shamt: usize, comptime num_bi
         dummy: FieldType,
 
         fn field(self: anytype) PtrCastPreserveCV(@This(), @TypeOf(self), FieldType) {
-            return @ptrCast(PtrCastPreserveCV(@This(), @TypeOf(self), FieldType), self);
+            return @as(PtrCastPreserveCV(@This(), @TypeOf(self), FieldType), @ptrCast(self));
         }
 
         pub fn write(self: anytype, val: ValueType) void {
             self.field().* &= ~self_mask;
-            self.field().* |= @intCast(FieldType, val) << shamt;
+            self.field().* |= @as(FieldType, @intCast(val)) << shamt;
         }
 
         pub fn read(self: anytype) ValueType {
             const val: FieldType = self.field().*;
-            return @intCast(ValueType, (val & self_mask) >> shamt);
+            return @as(ValueType, @intCast((val & self_mask) >> shamt));
         }
     };
 }

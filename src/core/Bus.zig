@@ -98,7 +98,7 @@ pub fn deinit(self: *Self) void {
     // This is so I can deallocate the original `allocator.alloc`. I have to re-make the type
     // since I'm not keeping it around, This is very jank and bad though
     // FIXME: please figure out another way
-    self.allocator.free(@ptrCast([*]const ?*anyopaque, self.read_table[0..])[0 .. 3 * table_len]);
+    self.allocator.free(@as([*]const ?*anyopaque, @ptrCast(self.read_table[0..]))[0 .. 3 * table_len]);
     self.* = undefined;
 }
 
@@ -147,7 +147,7 @@ fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table, 0..) |*ptr, i| {
-        const addr = @intCast(u32, page_size * i);
+        const addr = @as(u32, @intCast(page_size * i));
 
         ptr.* = switch (addr) {
             // General Internal Memory
@@ -174,7 +174,7 @@ fn fillWriteTable(self: *Self, comptime T: type, table: *[table_len]?*const anyo
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table, 0..) |*ptr, i| {
-        const addr = @intCast(u32, page_size * i);
+        const addr = @as(u32, @intCast(page_size * i));
 
         ptr.* = switch (addr) {
             // General Internal Memory
@@ -227,7 +227,7 @@ fn fillReadTableExternal(self: *Self, addr: u32) ?*anyopaque {
             // We are using a "small" EEPROM which means that if the below check is true
             // (that is, we're in the 0xD address page) then we must handle at least one
             // address in this page in slowmem
-            if (@truncate(u4, addr >> 24) == 0xD) return null;
+            if (@as(u4, @truncate(addr >> 24)) == 0xD) return null;
         }
     }
 
@@ -257,7 +257,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         // the most recently fetched instruction by the pipeline
         if (!self.cpu.cpsr.t.read()) break :blk self.cpu.pipe.stage[1].?;
 
-        const page = @truncate(u8, r15 >> 24);
+        const page = @as(u8, @truncate(r15 >> 24));
 
         // PC + 2 = stage[0]
         // PC + 4 = stage[1]
@@ -266,7 +266,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         switch (page) {
             // EWRAM, PALRAM, VRAM, and Game ROM (16-bit)
             0x02, 0x05, 0x06, 0x08...0x0D => {
-                const halfword: u32 = @truncate(u16, self.cpu.pipe.stage[1].?);
+                const halfword: u32 = @as(u16, @truncate(self.cpu.pipe.stage[1].?));
                 break :blk halfword << 16 | halfword;
             },
 
@@ -277,8 +277,8 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
                 const aligned = address & 3 == 0b00;
 
                 // TODO: What to do on PC + 6?
-                const high: u32 = if (aligned) self.dbgRead(u16, r15 + 4) else @truncate(u16, self.cpu.pipe.stage[1].?);
-                const low: u32 = @truncate(u16, self.cpu.pipe.stage[@boolToInt(aligned)].?);
+                const high: u32 = if (aligned) self.dbgRead(u16, r15 + 4) else @as(u16, @truncate(self.cpu.pipe.stage[1].?));
+                const low: u32 = @as(u16, @truncate(self.cpu.pipe.stage[@intFromBool(aligned)].?));
 
                 break :blk high << 16 | low;
             },
@@ -289,8 +289,8 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
                 // Unaligned: (PC + 4) | (PC + 2)
                 const aligned = address & 3 == 0b00;
 
-                const high: u32 = @truncate(u16, self.cpu.pipe.stage[1 - @boolToInt(aligned)].?);
-                const low: u32 = @truncate(u16, self.cpu.pipe.stage[@boolToInt(aligned)].?);
+                const high: u32 = @as(u16, @truncate(self.cpu.pipe.stage[1 - @intFromBool(aligned)].?));
+                const low: u32 = @as(u16, @truncate(self.cpu.pipe.stage[@intFromBool(aligned)].?));
 
                 break :blk high << 16 | low;
             },
@@ -301,7 +301,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         }
     };
 
-    return @truncate(T, word);
+    return @as(T, @truncate(word));
 }
 
 pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
@@ -310,15 +310,14 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
     const offset = unaligned_address & (page_size - 1);
 
     // whether or not we do this in slowmem or fastmem, we should advance the scheduler
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
+    self.sched.tick += timings[@intFromBool(T == u32)][@as(u4, @truncate(unaligned_address >> 24))];
 
     // We're doing some serious out-of-bounds open-bus reads
     if (page >= table_len) return self.openBus(T, unaligned_address);
 
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
-        const Ptr = [*]const T;
-        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+        const ptr: [*]const T = @ptrCast(@alignCast(some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
@@ -338,8 +337,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
 
     if (self.read_table[page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
-        const Ptr = [*]const T;
-        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+        const ptr: [*]const T = @ptrCast(@alignCast(some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
@@ -352,7 +350,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
 fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
     @setCold(true);
 
-    const page = @truncate(u8, unaligned_address >> 24);
+    const page = @as(u8, @truncate(unaligned_address >> 24));
     const address = forceAlign(T, unaligned_address);
 
     return switch (page) {
@@ -380,7 +378,7 @@ fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
 }
 
 fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const page = @truncate(u8, unaligned_address >> 24);
+    const page = @as(u8, @truncate(unaligned_address >> 24));
     const address = forceAlign(T, unaligned_address);
 
     return switch (page) {
@@ -426,22 +424,21 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
     const offset = unaligned_address & (page_size - 1);
 
     // whether or not we do this in slowmem or fastmem, we should advance the scheduler
-    self.sched.tick += timings[@boolToInt(T == u32)][@truncate(u4, unaligned_address >> 24)];
+    self.sched.tick += timings[@intFromBool(T == u32)][@as(u4, @truncate(unaligned_address >> 24))];
 
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
     if (page >= table_len) return;
 
-    if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
+    if (self.write_tables[@intFromBool(T == u8)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
-        const Ptr = [*]T;
-        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+        const ptr: [*]T = @ptrCast(@alignCast(some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
         ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
     } else {
         // we can return early if this is an 8-bit OAM write
-        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
+        if (T == u8 and @as(u8, @truncate(unaligned_address >> 24)) == 0x07) return;
 
         self.slowWrite(T, unaligned_address, value);
     }
@@ -456,17 +453,16 @@ pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T)
     // We're doing some serious out-of-bounds open-bus writes, they do nothing though
     if (page >= table_len) return;
 
-    if (self.write_tables[@boolToInt(T == u8)][page]) |some_ptr| {
+    if (self.write_tables[@intFromBool(T == u8)][page]) |some_ptr| {
         // We have a pointer to a page, cast the pointer to it's underlying type
-        const Ptr = [*]T;
-        const ptr = @ptrCast(Ptr, @alignCast(@alignOf(std.meta.Child(Ptr)), some_ptr));
+        const ptr: [*]T = @ptrCast(@alignCast(some_ptr));
 
         // Note: We don't check array length, since we force align the
         // lower bits of the address as the GBA would
         ptr[forceAlign(T, offset) / @sizeOf(T)] = value;
     } else {
         // we can return early if this is an 8-bit OAM write
-        if (T == u8 and @truncate(u8, unaligned_address >> 24) == 0x07) return;
+        if (T == u8 and @as(u8, @truncate(unaligned_address >> 24)) == 0x07) return;
 
         self.dbgSlowWrite(T, unaligned_address, value);
     }
@@ -475,7 +471,7 @@ pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T)
 fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
     @setCold(true);
 
-    const page = @truncate(u8, unaligned_address >> 24);
+    const page = @as(u8, @truncate(unaligned_address >> 24));
     const address = forceAlign(T, unaligned_address);
 
     switch (page) {
@@ -492,7 +488,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),
-        0x0E...0x0F => self.pak.backup.write(unaligned_address, @truncate(u8, rotr(T, value, 8 * rotateBy(T, unaligned_address)))),
+        0x0E...0x0F => self.pak.backup.write(unaligned_address, @as(u8, @truncate(rotr(T, value, 8 * rotateBy(T, unaligned_address))))),
         else => {},
     }
 }
@@ -500,7 +496,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 fn dbgSlowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
     @setCold(true);
 
-    const page = @truncate(u8, unaligned_address >> 24);
+    const page = @as(u8, @truncate(unaligned_address >> 24));
     const address = forceAlign(T, unaligned_address);
 
     switch (page) {

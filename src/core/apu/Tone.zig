@@ -77,14 +77,14 @@ pub fn sound2CntL(self: *const Self) u16 {
 
 /// NR21, NR22
 pub fn setSound2CntL(self: *Self, value: u16) void {
-    self.setNr21(@truncate(u8, value));
-    self.setNr22(@truncate(u8, value >> 8));
+    self.setNr21(@as(u8, @truncate(value)));
+    self.setNr22(@as(u8, @truncate(value >> 8)));
 }
 
 /// NR21
 pub fn setNr21(self: *Self, value: u8) void {
     self.duty.raw = value;
-    self.len_dev.timer = @as(u7, 64) - @truncate(u6, value);
+    self.len_dev.timer = @as(u7, 64) - @as(u6, @truncate(value));
 }
 
 /// NR22
@@ -100,8 +100,8 @@ pub fn sound2CntH(self: *const Self) u16 {
 
 /// NR23, NR24
 pub fn setSound2CntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
-    self.setNr23(@truncate(u8, value));
-    self.setNr24(fs, @truncate(u8, value >> 8));
+    self.setNr23(@as(u8, @truncate(value)));
+    self.setNr24(fs, @as(u8, @truncate(value >> 8)));
 }
 
 /// NR23

@@ -61,7 +61,7 @@ pub const Gui = struct {
         if (SDL.SDL_GL_MakeCurrent(window, ctx) < 0) panic();
 
         gl.load(ctx, Self.glGetProcAddress) catch {};
-        if (SDL.SDL_GL_SetSwapInterval(@boolToInt(config.config().host.vsync)) < 0) panic();
+        if (SDL.SDL_GL_SetSwapInterval(@intFromBool(config.config().host.vsync)) < 0) panic();
 
         zgui.init(allocator);
         zgui.plot.init();
@@ -108,7 +108,7 @@ pub const Gui = struct {
         const tracker = opt.tracker;
         const ch = opt.ch;
 
-        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+        const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
         const objects = opengl_impl.createObjects();
         defer gl.deleteBuffers(3, @as(*const [3]GLuint, &.{ objects.vao, objects.vbo, objects.ebo }));
@@ -183,8 +183,8 @@ pub const Gui = struct {
                         if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
                             log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
 
-                            win_dim.width = @intCast(u32, event.window.data1);
-                            win_dim.height = @intCast(u32, event.window.data2);
+                            win_dim.width = @as(u32, @intCast(event.window.data1));
+                            win_dim.height = @as(u32, @intCast(event.window.data2));
                         }
                     },
                     else => {},
@@ -268,7 +268,7 @@ pub const Gui = struct {
             if (zgui_redraw) {
                 // Background Colour
                 const size = zgui.io.getDisplaySize();
-                gl.viewport(0, 0, @floatToInt(GLsizei, size[0]), @floatToInt(GLsizei, size[1]));
+                gl.viewport(0, 0, @as(GLsizei, @intFromFloat(size[0])), @as(GLsizei, @intFromFloat(size[1])));
                 gl.clearColor(0, 0, 0, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -318,8 +318,7 @@ const Audio = struct {
     }
 
     export fn callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) void {
-        const T = *Apu;
-        const apu = @ptrCast(T, @alignCast(@alignOf(T), userdata));
+        const apu: *Apu = @ptrCast(@alignCast(userdata));
 
         _ = SDL.SDL_AudioStreamGet(apu.stream, stream, len);
     }
@@ -422,10 +421,10 @@ const opengl_impl = struct {
         gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
         gl.enableVertexAttribArray(0);
         // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (3 * @sizeOf(f32))));
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @as(?*anyopaque, @ptrFromInt((3 * @sizeOf(f32)))));
         gl.enableVertexAttribArray(1);
         // Texture Coord
-        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @intToPtr(?*anyopaque, (6 * @sizeOf(f32))));
+        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @as(?*anyopaque, @ptrFromInt((6 * @sizeOf(f32)))));
         gl.enableVertexAttribArray(2);
 
         return .{ .vao = vao_id, .vbo = vbo_id, .ebo = ebo_id };

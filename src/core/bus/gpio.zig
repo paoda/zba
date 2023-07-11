@@ -31,7 +31,7 @@ pub const Gpio = struct {
         fn step(self: *Device, value: u4) u4 {
             return switch (self.kind) {
                 .Rtc => blk: {
-                    const clock = @ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.ptr.?));
+                    const clock: *Clock = @ptrCast(@alignCast(self.ptr.?));
                     break :blk clock.step(Clock.Data{ .raw = value });
                 },
                 .None => value,
@@ -94,7 +94,7 @@ pub const Gpio = struct {
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
         switch (self.device.kind) {
-            .Rtc => allocator.destroy(@ptrCast(*Clock, @alignCast(@alignOf(*Clock), self.device.ptr.?))),
+            .Rtc => allocator.destroy(@as(*Clock, @ptrCast(@alignCast(self.device.ptr.?)))),
             .None => {},
         }
 
@@ -146,16 +146,16 @@ pub const Clock = struct {
         /// 2. A `count`, which keeps track of which byte is currently being read
         /// 3. An index, which keeps track of which bit of the byte determined by `count` is being read
         fn read(self: *Reader, clock: *const Clock, register: Register) u1 {
-            const idx = @intCast(u3, self.i);
+            const idx = @as(u3, @intCast(self.i));
             defer self.i += 1;
 
             // FIXME: What do I do about the unused bits?
             return switch (register) {
-                .Control => @truncate(u1, switch (self.count) {
+                .Control => @as(u1, @truncate(switch (self.count) {
                     0 => clock.cnt.raw >> idx,
                     else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 1 byte)", .{ self.count, register }),
-                }),
-                .DateTime => @truncate(u1, switch (self.count) {
+                })),
+                .DateTime => @as(u1, @truncate(switch (self.count) {
                     // Date
                     0 => clock.year >> idx,
                     1 => @as(u8, clock.month) >> idx,
@@ -167,13 +167,13 @@ pub const Clock = struct {
                     5 => @as(u8, clock.minute) >> idx,
                     6 => @as(u8, clock.second) >> idx,
                     else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 7 bytes)", .{ self.count, register }),
-                }),
-                .Time => @truncate(u1, switch (self.count) {
+                })),
+                .Time => @as(u1, @truncate(switch (self.count) {
                     0 => @as(u8, clock.hour) >> idx,
                     1 => @as(u8, clock.minute) >> idx,
                     2 => @as(u8, clock.second) >> idx,
                     else => std.debug.panic("Tried to read from byte #{} of {} (hint: there's only 3 bytes)", .{ self.count, register }),
-                }),
+                })),
             };
         }
 
@@ -207,7 +207,7 @@ pub const Clock = struct {
 
         /// Append a bit to the internal bit buffer (aka an integer)
         fn push(self: *Writer, value: u1) void {
-            const idx = @intCast(u3, self.i);
+            const idx = @as(u3, @intCast(self.i));
             self.buf = (self.buf & ~(@as(u8, 1) << idx)) | @as(u8, value) << idx;
             self.i += 1;
         }
@@ -290,22 +290,22 @@ pub const Clock = struct {
             .gpio = gpio, // Can't use Arm7tdmi ptr b/c not initialized yet
         };
 
-        const sched_ptr = @ptrCast(*Scheduler, @alignCast(@alignOf(Scheduler), cpu.sched.ptr));
+        const sched_ptr: *Scheduler = @ptrCast(@alignCast(cpu.sched.ptr));
         sched_ptr.push(.RealTimeClock, 1 << 24); // Every Second
     }
 
     pub fn onClockUpdate(self: *Self, late: u64) void {
-        const sched_ptr = @ptrCast(*Scheduler, @alignCast(@alignOf(Scheduler), self.cpu.sched.ptr));
+        const sched_ptr: *Scheduler = @ptrCast(@alignCast(self.cpu.sched.ptr));
         sched_ptr.push(.RealTimeClock, (1 << 24) -| late); // Reschedule
 
         const now = DateTime.now();
-        self.year = bcd(@intCast(u8, now.date.year - 2000));
-        self.month = @truncate(u5, bcd(now.date.month));
-        self.day = @truncate(u6, bcd(now.date.day));
-        self.weekday = @truncate(u3, bcd((now.date.weekday() + 1) % 7)); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
-        self.hour = @truncate(u6, bcd(now.time.hour));
-        self.minute = @truncate(u7, bcd(now.time.minute));
-        self.second = @truncate(u7, bcd(now.time.second));
+        self.year = bcd(@as(u8, @intCast(now.date.year - 2000)));
+        self.month = @as(u5, @truncate(bcd(now.date.month)));
+        self.day = @as(u6, @truncate(bcd(now.date.day)));
+        self.weekday = @as(u3, @truncate(bcd((now.date.weekday() + 1) % 7))); // API is Monday = 0, Sunday = 6. We want Sunday = 0, Saturday = 6
+        self.hour = @as(u6, @truncate(bcd(now.time.hour)));
+        self.minute = @as(u7, @truncate(bcd(now.time.minute)));
+        self.second = @as(u7, @truncate(bcd(now.time.second)));
     }
 
     fn step(self: *Self, value: Data) u4 {
@@ -321,14 +321,14 @@ pub const Clock = struct {
                     }
                 }
 
-                break :blk @truncate(u4, value.raw);
+                break :blk @as(u4, @truncate(value.raw));
             },
             .Command => blk: {
                 if (!value.cs.read()) log.err("Expected CS to be set during {}, however CS was cleared", .{self.state});
 
                 // If SCK rises, sample SIO
                 if (!cache.sck.read() and value.sck.read()) {
-                    self.writer.push(@boolToInt(value.sio.read()));
+                    self.writer.push(@intFromBool(value.sio.read()));
 
                     if (self.writer.finished()) {
                         self.state = self.processCommand(self.writer.buf);
@@ -338,14 +338,14 @@ pub const Clock = struct {
                     }
                 }
 
-                break :blk @truncate(u4, value.raw);
+                break :blk @as(u4, @truncate(value.raw));
             },
             .Write => |register| blk: {
                 if (!value.cs.read()) log.err("Expected CS to be set during {}, however CS was cleared", .{self.state});
 
                 // If SCK rises, sample SIO
                 if (!cache.sck.read() and value.sck.read()) {
-                    self.writer.push(@boolToInt(value.sio.read()));
+                    self.writer.push(@intFromBool(value.sio.read()));
 
                     const register_width: u32 = switch (register) {
                         .Control => 1,
@@ -364,7 +364,7 @@ pub const Clock = struct {
                     }
                 }
 
-                break :blk @truncate(u4, value.raw);
+                break :blk @as(u4, @truncate(value.raw));
             },
             .Read => |register| blk: {
                 if (!value.cs.read()) log.err("Expected CS to be set during {}, however CS was cleared", .{self.state});
@@ -390,7 +390,7 @@ pub const Clock = struct {
                     }
                 }
 
-                break :blk @truncate(u4, ret.raw);
+                break :blk @as(u4, @truncate(ret.raw));
             },
         };
     }
@@ -403,7 +403,7 @@ pub const Clock = struct {
     }
 
     fn irq(self: *Self) void {
-        const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), self.cpu.bus.ptr));
+        const bus_ptr: *Bus = @ptrCast(@alignCast(self.cpu.bus.ptr));
 
         // TODO: Confirm that this is the right behaviour
         log.debug("Force GamePak IRQ", .{});
@@ -429,7 +429,7 @@ pub const Clock = struct {
         log.debug("Handling Command 0x{X:0>2} [0b{b:0>8}]", .{ command, command });
 
         const is_write = command & 1 == 0;
-        const rtc_register = @truncate(u3, command >> 1 & 0x7);
+        const rtc_register = @as(u3, @truncate(command >> 1 & 0x7));
 
         if (is_write) {
             return switch (rtc_register) {

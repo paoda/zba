@@ -30,7 +30,7 @@ const frame_period = (std.time.ns_per_s * cycles_per_frame) / clock_rate;
 
 /// Exact Value:  59.7275005696Hz
 /// The inverse of the frame period
-pub const frame_rate: f64 = @intToFloat(f64, clock_rate) / cycles_per_frame;
+pub const frame_rate: f64 = @as(f64, @floatFromInt(clock_rate)) / cycles_per_frame;
 
 const log = std.log.scoped(.Emulation);
 
@@ -58,7 +58,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
         log.info("FPS tracking enabled", .{});
     }
 
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     var paused: bool = false;
 
@@ -256,14 +256,14 @@ pub fn reset(cpu: *Arm7tdmi) void {
 }
 
 pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     try bus_ptr.replaceGamepak(file_path);
     reset(cpu);
 }
 
 pub fn replaceBios(cpu: *Arm7tdmi, file_path: []const u8) !void {
-    const bus_ptr = @ptrCast(*Bus, @alignCast(@alignOf(Bus), cpu.bus.ptr));
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     const allocator = bus_ptr.bios.allocator;
     const bios_len = 0x4000;

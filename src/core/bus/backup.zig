@@ -77,7 +77,7 @@ pub const Backup = struct {
 
                 switch (addr) {
                     0x0000 => if (self.kind == .Flash1M and self.flash.set_bank) {
-                        self.flash.bank = @truncate(u1, byte);
+                        self.flash.bank = @as(u1, @truncate(byte));
                     },
                     0x5555 => {
                         if (self.flash.state == .Command) {

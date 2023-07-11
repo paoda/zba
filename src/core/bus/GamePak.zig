@@ -30,7 +30,7 @@ pub fn read(self: *Self, comptime T: type, address: u32) T {
             // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
             // * Backup type is EEPROM
             // * Small ROM (less than 16MB)
-            if (@truncate(u8, address >> 24) == 0x0D)
+            if (@as(u8, @truncate(address >> 24)) == 0x0D)
                 return self.backup.eeprom.read();
         }
     }
@@ -77,7 +77,7 @@ inline fn get(self: *const Self, i: u32) u8 {
     if (i < self.buf.len) return self.buf[i];
 
     const lhs = i >> 1 & 0xFFFF;
-    return @truncate(u8, lhs >> 8 * @truncate(u5, i & 1));
+    return @as(u8, @truncate(lhs >> 8 * @as(u5, @truncate(i & 1))));
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
@@ -94,7 +94,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
             // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
             // * Backup type is EEPROM
             // * Small ROM (less than 16MB)
-            if (@truncate(u8, address >> 24) == 0x0D)
+            if (@as(u8, @truncate(address >> 24)) == 0x0D)
                 return self.backup.eeprom.dbgRead();
         }
     }
@@ -139,7 +139,7 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
     const addr = address & 0x1FF_FFFF;
 
     if (self.backup.kind == .Eeprom) {
-        const bit = @truncate(u1, value);
+        const bit = @as(u1, @truncate(value));
 
         if (self.buf.len > 0x100_0000) { // Large
             // Addresses 0x1FF_FF00 to 0x1FF_FFFF are reserved from EEPROM accesses if
@@ -151,7 +151,7 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
             // Addresses 0x0D00_0000 to 0x0DFF_FFFF are reserved for EEPROM accesses if
             // * Backup type is EEPROM
             // * Small ROM (less than 16MB)
-            if (@truncate(u8, address >> 24) == 0x0D)
+            if (@as(u8, @truncate(address >> 24)) == 0x0D)
                 return self.backup.eeprom.write(word_count, &self.backup.buf, bit);
         }
     }
@@ -159,19 +159,19 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
     switch (T) {
         u32 => switch (address) {
             0x0800_00C4 => {
-                self.gpio.write(.Data, @truncate(u4, value));
-                self.gpio.write(.Direction, @truncate(u4, value >> 16));
+                self.gpio.write(.Data, @as(u4, @truncate(value)));
+                self.gpio.write(.Direction, @as(u4, @truncate(value >> 16)));
             },
             0x0800_00C6 => {
-                self.gpio.write(.Direction, @truncate(u4, value));
-                self.gpio.write(.Control, @truncate(u1, value >> 16));
+                self.gpio.write(.Direction, @as(u4, @truncate(value)));
+                self.gpio.write(.Control, @as(u1, @truncate(value >> 16)));
             },
             else => log.err("Wrote {} 0x{X:0>8} to 0x{X:0>8}, Unhandled", .{ T, value, address }),
         },
         u16 => switch (address) {
-            0x0800_00C4 => self.gpio.write(.Data, @truncate(u4, value)),
-            0x0800_00C6 => self.gpio.write(.Direction, @truncate(u4, value)),
-            0x0800_00C8 => self.gpio.write(.Control, @truncate(u1, value)),
+            0x0800_00C4 => self.gpio.write(.Data, @as(u4, @truncate(value))),
+            0x0800_00C6 => self.gpio.write(.Direction, @as(u4, @truncate(value))),
+            0x0800_00C8 => self.gpio.write(.Control, @as(u1, @truncate(value))),
             else => log.err("Wrote {} 0x{X:0>4} to 0x{X:0>8}, Unhandled", .{ T, value, address }),
         },
         u8 => log.debug("Wrote {} 0x{X:0>2} to 0x{X:0>8}, Ignored.", .{ T, value, address }),
