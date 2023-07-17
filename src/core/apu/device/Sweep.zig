@@ -29,7 +29,7 @@ pub fn tick(self: *Self, ch1: *ToneSweep) void {
 
             if (new_freq <= 0x7FF and ch1.sweep.shift.read() != 0) {
                 ch1.freq.frequency.write(@as(u11, @truncate(new_freq)));
-                self.shadow = @as(u11, @truncate(new_freq));
+                self.shadow = @truncate(new_freq);
 
                 _ = self.calculate(ch1.sweep, &ch1.enabled);
             }

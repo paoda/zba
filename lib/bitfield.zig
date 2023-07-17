@@ -26,7 +26,7 @@ fn BitType(comptime FieldType: type, comptime ValueType: type, comptime shamt: u
         }
 
         pub fn read(self: anytype) ValueType {
-            return @as(ValueType, @bitCast(@as(u1, @truncate(self.bits.field().* >> shamt))));
+            return @bitCast(@as(u1, @truncate(self.bits.field().* >> shamt)));
         }
 
         // Since these are mostly used with MMIO, I want to avoid
@@ -67,7 +67,7 @@ pub fn Bitfield(comptime FieldType: type, comptime shamt: usize, comptime num_bi
         dummy: FieldType,
 
         fn field(self: anytype) PtrCastPreserveCV(@This(), @TypeOf(self), FieldType) {
-            return @as(PtrCastPreserveCV(@This(), @TypeOf(self), FieldType), @ptrCast(self));
+            return @ptrCast(self);
         }
 
         pub fn write(self: anytype, val: ValueType) void {
@@ -77,7 +77,7 @@ pub fn Bitfield(comptime FieldType: type, comptime shamt: usize, comptime num_bi
 
         pub fn read(self: anytype) ValueType {
             const val: FieldType = self.field().*;
-            return @as(ValueType, @intCast((val & self_mask) >> shamt));
+            return @intCast((val & self_mask) >> shamt);
         }
     };
 }

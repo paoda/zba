@@ -27,7 +27,7 @@ pub fn read(self: *Self, comptime T: type, r15: u32, address: u32) T {
     log.warn("Open Bus! Read from 0x{X:0>8}, but PC was 0x{X:0>8}", .{ address, r15 });
     const value = self._read(u32, self.addr_latch);
 
-    return @as(T, @truncate(rotr(u32, value, 8 * rotateBy(T, address))));
+    return @truncate(rotr(u32, value, 8 * rotateBy(T, address)));
 }
 
 fn rotateBy(comptime T: type, address: u32) u32 {
@@ -43,7 +43,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, r15: u32, address: u32) T {
     if (r15 < Self.size) return self._read(T, forceAlign(T, address));
 
     const value = self._read(u32, self.addr_latch);
-    return @as(T, @truncate(rotr(u32, value, 8 * rotateBy(T, address))));
+    return @truncate(rotr(u32, value, 8 * rotateBy(T, address)));
 }
 
 /// Read without the GBA safety checks

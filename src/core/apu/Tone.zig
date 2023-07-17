@@ -77,8 +77,8 @@ pub fn sound2CntL(self: *const Self) u16 {
 
 /// NR21, NR22
 pub fn setSound2CntL(self: *Self, value: u16) void {
-    self.setNr21(@as(u8, @truncate(value)));
-    self.setNr22(@as(u8, @truncate(value >> 8)));
+    self.setNr21(@truncate(value));
+    self.setNr22(@truncate(value >> 8));
 }
 
 /// NR21
@@ -100,8 +100,8 @@ pub fn sound2CntH(self: *const Self) u16 {
 
 /// NR23, NR24
 pub fn setSound2CntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
-    self.setNr23(@as(u8, @truncate(value)));
-    self.setNr24(fs, @as(u8, @truncate(value >> 8)));
+    self.setNr23(@truncate(value));
+    self.setNr24(fs, @truncate(value >> 8));
 }
 
 /// NR23

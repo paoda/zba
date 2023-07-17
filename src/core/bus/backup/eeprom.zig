@@ -108,7 +108,7 @@ pub const Eeprom = struct {
         switch (self.state) {
             .Ready => {
                 if (self.writer.len() == 2) {
-                    const req = @as(u2, @intCast(self.writer.finish()));
+                    const req: u2 = @intCast(self.writer.finish());
                     switch (req) {
                         0b11 => self.state = .Read,
                         0b10 => self.state = .Write,
@@ -120,7 +120,7 @@ pub const Eeprom = struct {
                 switch (self.kind) {
                     .Large => {
                         if (self.writer.len() == 14) {
-                            const addr = @as(u10, @intCast(self.writer.finish()));
+                            const addr: u10 = @intCast(self.writer.finish());
                             const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
 
                             self.reader.configure(value);
@@ -130,7 +130,7 @@ pub const Eeprom = struct {
                     .Small => {
                         if (self.writer.len() == 6) {
                             // FIXME: Duplicated code from above
-                            const addr = @as(u6, @intCast(self.writer.finish()));
+                            const addr: u6 = @intCast(self.writer.finish());
                             const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
 
                             self.reader.configure(value);
@@ -186,11 +186,9 @@ const Reader = struct {
     fn read(self: *Self) u1 {
         if (!self.enabled) return 1;
 
-        const bit = if (self.i < 4) blk: {
-            break :blk 0;
-        } else blk: {
-            const idx = @as(u6, @intCast(63 - (self.i - 4)));
-            break :blk @as(u1, @truncate(self.data >> idx));
+        const bit: u1 = if (self.i < 4) 0 else blk: {
+            const idx: u6 = @intCast(63 - (self.i - 4));
+            break :blk @truncate(self.data >> idx);
         };
 
         self.i = (self.i + 1) % (64 + 4);
@@ -202,11 +200,11 @@ const Reader = struct {
     fn dbgRead(self: *const Self) u1 {
         if (!self.enabled) return 1;
 
-        const bit = if (self.i < 4) blk: {
+        const bit: u1 = if (self.i < 4) blk: {
             break :blk 0;
         } else blk: {
-            const idx = @as(u6, @intCast(63 - (self.i - 4)));
-            break :blk @as(u1, @truncate(self.data >> idx));
+            const idx: u6 = @intCast(63 - (self.i - 4));
+            break :blk @truncate(self.data >> idx);
         };
 
         return bit;
@@ -230,7 +228,7 @@ const Writer = struct {
     }
 
     fn requestWrite(self: *Self, bit: u1) void {
-        const idx = @as(u1, @intCast(1 - self.i));
+        const idx: u1 = @intCast(1 - self.i);
         self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
         self.i += 1;
     }
@@ -244,13 +242,13 @@ const Writer = struct {
             .Unknown => unreachable,
         };
 
-        const idx = @as(u4, @intCast(size - self.i));
+        const idx: u4 = @intCast(size - self.i);
         self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
         self.i += 1;
     }
 
     fn dataWrite(self: *Self, bit: u1) void {
-        const idx = @as(u6, @intCast(63 - self.i));
+        const idx: u6 = @intCast(63 - self.i);
         self.data = (self.data & ~(@as(u64, 1) << idx)) | (@as(u64, bit) << idx);
         self.i += 1;
     }

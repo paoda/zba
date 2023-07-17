@@ -77,7 +77,7 @@ inline fn get(self: *const Self, i: u32) u8 {
     if (i < self.buf.len) return self.buf[i];
 
     const lhs = i >> 1 & 0xFFFF;
-    return @as(u8, @truncate(lhs >> 8 * @as(u5, @truncate(i & 1))));
+    return @truncate(lhs >> 8 * @as(u5, @truncate(i & 1)));
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, address: u32) T {
@@ -139,7 +139,7 @@ pub fn write(self: *Self, comptime T: type, word_count: u16, address: u32, value
     const addr = address & 0x1FF_FFFF;
 
     if (self.backup.kind == .Eeprom) {
-        const bit = @as(u1, @truncate(value));
+        const bit: u1 = @truncate(value);
 
         if (self.buf.len > 0x100_0000) { // Large
             // Addresses 0x1FF_FF00 to 0x1FF_FFFF are reserved from EEPROM accesses if

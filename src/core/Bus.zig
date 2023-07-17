@@ -147,7 +147,7 @@ fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table, 0..) |*ptr, i| {
-        const addr = @as(u32, @intCast(page_size * i));
+        const addr: u32 = @intCast(page_size * i);
 
         ptr.* = switch (addr) {
             // General Internal Memory
@@ -174,7 +174,7 @@ fn fillWriteTable(self: *Self, comptime T: type, table: *[table_len]?*const anyo
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
     for (table, 0..) |*ptr, i| {
-        const addr = @as(u32, @intCast(page_size * i));
+        const addr: u32 = @intCast(page_size * i);
 
         ptr.* = switch (addr) {
             // General Internal Memory
@@ -257,7 +257,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         // the most recently fetched instruction by the pipeline
         if (!self.cpu.cpsr.t.read()) break :blk self.cpu.pipe.stage[1].?;
 
-        const page = @as(u8, @truncate(r15 >> 24));
+        const page: u8 = @truncate(r15 >> 24);
 
         // PC + 2 = stage[0]
         // PC + 4 = stage[1]
@@ -301,7 +301,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
         }
     };
 
-    return @as(T, @truncate(word));
+    return @truncate(word);
 }
 
 pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
@@ -350,7 +350,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
 fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
     @setCold(true);
 
-    const page = @as(u8, @truncate(unaligned_address >> 24));
+    const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
     return switch (page) {
@@ -378,7 +378,7 @@ fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
 }
 
 fn dbgSlowRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const page = @as(u8, @truncate(unaligned_address >> 24));
+    const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
     return switch (page) {
@@ -471,7 +471,7 @@ pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T)
 fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
     @setCold(true);
 
-    const page = @as(u8, @truncate(unaligned_address >> 24));
+    const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
     switch (page) {
@@ -488,7 +488,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 
         // External Memory (Game Pak)
         0x08...0x0D => self.pak.write(T, self.dma[3].word_count, address, value),
-        0x0E...0x0F => self.pak.backup.write(unaligned_address, @as(u8, @truncate(rotr(T, value, 8 * rotateBy(T, unaligned_address))))),
+        0x0E...0x0F => self.pak.backup.write(unaligned_address, @truncate(rotr(T, value, 8 * rotateBy(T, unaligned_address)))),
         else => {},
     }
 }
@@ -496,7 +496,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 fn dbgSlowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
     @setCold(true);
 
-    const page = @as(u8, @truncate(unaligned_address >> 24));
+    const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
 
     switch (page) {

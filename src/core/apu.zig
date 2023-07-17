@@ -22,7 +22,7 @@ pub const host_rate = @import("../platform.zig").sample_rate;
 pub const host_format = @import("../platform.zig").sample_format;
 
 pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
-    const byte_addr = @as(u8, @truncate(addr));
+    const byte_addr: u8 = @truncate(addr);
 
     return switch (T) {
         u32 => switch (byte_addr) {
@@ -73,27 +73,27 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte_addr) {
-            0x60, 0x61 => @as(T, @truncate(@as(u16, apu.ch1.sound1CntL()) >> getHalf(byte_addr))),
-            0x62, 0x63 => @as(T, @truncate(apu.ch1.sound1CntH() >> getHalf(byte_addr))),
-            0x64, 0x65 => @as(T, @truncate(apu.ch1.sound1CntX() >> getHalf(byte_addr))),
+            0x60, 0x61 => @truncate(@as(u16, apu.ch1.sound1CntL()) >> getHalf(byte_addr)),
+            0x62, 0x63 => @truncate(apu.ch1.sound1CntH() >> getHalf(byte_addr)),
+            0x64, 0x65 => @truncate(apu.ch1.sound1CntX() >> getHalf(byte_addr)),
             0x66, 0x67 => 0x00, // assuming behaviour is identical to that of 16-bit reads
-            0x68, 0x69 => @as(T, @truncate(apu.ch2.sound2CntL() >> getHalf(byte_addr))),
+            0x68, 0x69 => @truncate(apu.ch2.sound2CntL() >> getHalf(byte_addr)),
             0x6A, 0x6B => 0x00,
-            0x6C, 0x6D => @as(T, @truncate(apu.ch2.sound2CntH() >> getHalf(byte_addr))),
+            0x6C, 0x6D => @truncate(apu.ch2.sound2CntH() >> getHalf(byte_addr)),
             0x6E, 0x6F => 0x00,
-            0x70, 0x71 => @as(T, @truncate(@as(u16, apu.ch3.sound3CntL()) >> getHalf(byte_addr))), // SOUND3CNT_L
-            0x72, 0x73 => @as(T, @truncate(apu.ch3.sound3CntH() >> getHalf(byte_addr))),
-            0x74, 0x75 => @as(T, @truncate(apu.ch3.sound3CntX() >> getHalf(byte_addr))), // SOUND3CNT_L
+            0x70, 0x71 => @truncate(@as(u16, apu.ch3.sound3CntL()) >> getHalf(byte_addr)), // SOUND3CNT_L
+            0x72, 0x73 => @truncate(apu.ch3.sound3CntH() >> getHalf(byte_addr)),
+            0x74, 0x75 => @truncate(apu.ch3.sound3CntX() >> getHalf(byte_addr)), // SOUND3CNT_L
             0x76, 0x77 => 0x00,
-            0x78, 0x79 => @as(T, @truncate(apu.ch4.sound4CntL() >> getHalf(byte_addr))),
+            0x78, 0x79 => @truncate(apu.ch4.sound4CntL() >> getHalf(byte_addr)),
             0x7A, 0x7B => 0x00,
-            0x7C, 0x7D => @as(T, @truncate(apu.ch4.sound4CntH() >> getHalf(byte_addr))),
+            0x7C, 0x7D => @truncate(apu.ch4.sound4CntH() >> getHalf(byte_addr)),
             0x7E, 0x7F => 0x00,
-            0x80, 0x81 => @as(T, @truncate(apu.soundCntL() >> getHalf(byte_addr))), // SOUNDCNT_L
-            0x82, 0x83 => @as(T, @truncate(apu.soundCntH() >> getHalf(byte_addr))), // SOUNDCNT_H
-            0x84, 0x85 => @as(T, @truncate(@as(u16, apu.soundCntX()) >> getHalf(byte_addr))),
+            0x80, 0x81 => @truncate(apu.soundCntL() >> getHalf(byte_addr)), // SOUNDCNT_L
+            0x82, 0x83 => @truncate(apu.soundCntH() >> getHalf(byte_addr)), // SOUNDCNT_H
+            0x84, 0x85 => @truncate(@as(u16, apu.soundCntX()) >> getHalf(byte_addr)),
             0x86, 0x87 => 0x00,
-            0x88, 0x89 => @as(T, @truncate(apu.bias.raw >> getHalf(byte_addr))), // SOUNDBIAS
+            0x88, 0x89 => @truncate(apu.bias.raw >> getHalf(byte_addr)), // SOUNDBIAS
             0x8A, 0x8B => 0x00,
             0x8C...0x8F => null,
             0x90...0x9F => apu.ch3.wave_dev.read(T, apu.ch3.select, addr),
@@ -106,7 +106,7 @@ pub fn read(comptime T: type, apu: *const Apu, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
-    const byte_addr = @as(u8, @truncate(addr));
+    const byte_addr: u8 = @truncate(addr);
 
     if (byte_addr <= 0x81 and !apu.cnt.apu_enable.read()) return;
 
@@ -117,20 +117,20 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
 
             switch (byte_addr) {
                 0x60 => apu.ch1.setSound1Cnt(value),
-                0x64 => apu.ch1.setSound1CntX(&apu.fs, @as(u16, @truncate(value))),
+                0x64 => apu.ch1.setSound1CntX(&apu.fs, @truncate(value)),
 
-                0x68 => apu.ch2.setSound2CntL(@as(u16, @truncate(value))),
-                0x6C => apu.ch2.setSound2CntH(&apu.fs, @as(u16, @truncate(value))),
+                0x68 => apu.ch2.setSound2CntL(@truncate(value)),
+                0x6C => apu.ch2.setSound2CntH(&apu.fs, @truncate(value)),
 
                 0x70 => apu.ch3.setSound3Cnt(value),
-                0x74 => apu.ch3.setSound3CntX(&apu.fs, @as(u16, @truncate(value))),
+                0x74 => apu.ch3.setSound3CntX(&apu.fs, @truncate(value)),
 
-                0x78 => apu.ch4.setSound4CntL(@as(u16, @truncate(value))),
-                0x7C => apu.ch4.setSound4CntH(&apu.fs, @as(u16, @truncate(value))),
+                0x78 => apu.ch4.setSound4CntL(@truncate(value)),
+                0x7C => apu.ch4.setSound4CntH(&apu.fs, @truncate(value)),
 
                 0x80 => apu.setSoundCnt(value),
                 0x84 => apu.setSoundCntX(value >> 7 & 1 == 1),
-                0x88 => apu.bias.raw = @as(u16, @truncate(value)),
+                0x88 => apu.bias.raw = @truncate(value),
                 0x8C => {},
 
                 0x90, 0x94, 0x98, 0x9C => apu.ch3.wave_dev.write(T, apu.ch3.select, addr, value),
@@ -143,7 +143,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
             if (byte_addr <= 0x81 and !apu.cnt.apu_enable.read()) return;
 
             switch (byte_addr) {
-                0x60 => apu.ch1.setSound1CntL(@as(u8, @truncate(value))), // SOUND1CNT_L
+                0x60 => apu.ch1.setSound1CntL(@truncate(value)), // SOUND1CNT_L
                 0x62 => apu.ch1.setSound1CntH(value),
                 0x64 => apu.ch1.setSound1CntX(&apu.fs, value),
                 0x66 => {},
@@ -153,7 +153,7 @@ pub fn write(comptime T: type, apu: *Apu, addr: u32, value: T) void {
                 0x6C => apu.ch2.setSound2CntH(&apu.fs, value),
                 0x6E => {},
 
-                0x70 => apu.ch3.setSound3CntL(@as(u8, @truncate(value))),
+                0x70 => apu.ch3.setSound3CntL(@truncate(value)),
                 0x72 => apu.ch3.setSound3CntH(value),
                 0x74 => apu.ch3.setSound3CntX(&apu.fs, value),
                 0x76 => {},
@@ -330,8 +330,8 @@ pub const Apu = struct {
 
     /// SOUNDCNT
     fn setSoundCnt(self: *Self, value: u32) void {
-        if (self.cnt.apu_enable.read()) self.setSoundCntL(@as(u16, @truncate(value)));
-        self.setSoundCntH(@as(u16, @truncate(value >> 16)));
+        if (self.cnt.apu_enable.read()) self.setSoundCntL(@truncate(value));
+        self.setSoundCntH(@truncate(value >> 16));
     }
 
     /// SOUNDCNT_L
@@ -450,8 +450,8 @@ pub const Apu = struct {
         left += bias;
         right += bias;
 
-        const clamped_left = std.math.clamp(@as(u16, @bitCast(left)), std.math.minInt(u11), std.math.maxInt(u11));
-        const clamped_right = std.math.clamp(@as(u16, @bitCast(right)), std.math.minInt(u11), std.math.maxInt(u11));
+        const clamped_left = std.math.clamp(@as(u16, @bitCast(left)), 0, std.math.maxInt(u11));
+        const clamped_right = std.math.clamp(@as(u16, @bitCast(right)), 0, std.math.maxInt(u11));
 
         // Extend to 16-bit signed audio samples
         const ext_left = (clamped_left << 5) | (clamped_left >> 6);
@@ -473,7 +473,7 @@ pub const Apu = struct {
         defer SDL.SDL_FreeAudioStream(old_stream);
 
         self.sampling_cycle = self.bias.sampling_cycle.read();
-        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @as(c_int, @intCast(sample_rate)), host_format, 2, host_rate).?;
+        self.stream = SDL.SDL_NewAudioStream(SDL.AUDIO_U16, 2, @intCast(sample_rate), host_format, 2, host_rate).?;
     }
 
     fn interval(self: *const Self) u64 {
@@ -578,11 +578,11 @@ pub fn DmaSound(comptime kind: DmaSoundKind) type {
         }
 
         pub fn updateSample(self: *Self) void {
-            if (self.fifo.readItem()) |sample| self.sample = @as(i8, @bitCast(sample));
+            if (self.fifo.readItem()) |sample| self.sample = @bitCast(sample);
         }
 
         pub fn amplitude(self: *const Self) i16 {
-            return @as(i16, self.sample);
+            return self.sample;
         }
     };
 }

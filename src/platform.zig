@@ -183,8 +183,8 @@ pub const Gui = struct {
                         if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
                             log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
 
-                            win_dim.width = @as(u32, @intCast(event.window.data1));
-                            win_dim.height = @as(u32, @intCast(event.window.data2));
+                            win_dim.width = @intCast(event.window.data1);
+                            win_dim.height = @intCast(event.window.data2);
                         }
                     },
                     else => {},
@@ -268,7 +268,7 @@ pub const Gui = struct {
             if (zgui_redraw) {
                 // Background Colour
                 const size = zgui.io.getDisplaySize();
-                gl.viewport(0, 0, @as(GLsizei, @intFromFloat(size[0])), @as(GLsizei, @intFromFloat(size[1])));
+                gl.viewport(0, 0, @intFromFloat(size[0]), @intFromFloat(size[1]));
                 gl.clearColor(0, 0, 0, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -421,10 +421,10 @@ const opengl_impl = struct {
         gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
         gl.enableVertexAttribArray(0);
         // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @as(?*anyopaque, @ptrFromInt((3 * @sizeOf(f32)))));
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((3 * @sizeOf(f32))));
         gl.enableVertexAttribArray(1);
         // Texture Coord
-        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @as(?*anyopaque, @ptrFromInt((6 * @sizeOf(f32)))));
+        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((6 * @sizeOf(f32))));
         gl.enableVertexAttribArray(2);
 
         return .{ .vao = vao_id, .vbo = vbo_id, .ebo = ebo_id };

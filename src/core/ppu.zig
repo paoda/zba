@@ -28,7 +28,7 @@ pub const height = 160;
 pub const framebuf_pitch = width * @sizeOf(u32);
 
 pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
-    const byte_addr = @as(u8, @truncate(addr));
+    const byte_addr: u8 = @truncate(addr);
 
     return switch (T) {
         u32 => switch (byte_addr) {
@@ -69,24 +69,24 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
             else => util.io.read.err(T, log, "unaligned {} read from 0x{X:0>8}", .{ T, addr }),
         },
         u8 => switch (byte_addr) {
-            0x00, 0x01 => @as(T, @truncate(ppu.dispcnt.raw >> getHalf(byte_addr))),
+            0x00, 0x01 => @truncate(ppu.dispcnt.raw >> getHalf(byte_addr)),
             0x02, 0x03 => null,
-            0x04, 0x05 => @as(T, @truncate(ppu.dispstat.raw >> getHalf(byte_addr))),
-            0x06, 0x07 => @as(T, @truncate(ppu.vcount.raw >> getHalf(byte_addr))),
-            0x08, 0x09 => @as(T, @truncate(ppu.bg[0].bg0Cnt() >> getHalf(byte_addr))),
-            0x0A, 0x0B => @as(T, @truncate(ppu.bg[1].bg1Cnt() >> getHalf(byte_addr))),
-            0x0C, 0x0D => @as(T, @truncate(ppu.bg[2].cnt.raw >> getHalf(byte_addr))),
-            0x0E, 0x0F => @as(T, @truncate(ppu.bg[3].cnt.raw >> getHalf(byte_addr))),
+            0x04, 0x05 => @truncate(ppu.dispstat.raw >> getHalf(byte_addr)),
+            0x06, 0x07 => @truncate(ppu.vcount.raw >> getHalf(byte_addr)),
+            0x08, 0x09 => @truncate(ppu.bg[0].bg0Cnt() >> getHalf(byte_addr)),
+            0x0A, 0x0B => @truncate(ppu.bg[1].bg1Cnt() >> getHalf(byte_addr)),
+            0x0C, 0x0D => @truncate(ppu.bg[2].cnt.raw >> getHalf(byte_addr)),
+            0x0E, 0x0F => @truncate(ppu.bg[3].cnt.raw >> getHalf(byte_addr)),
             0x10...0x1F => null, // BGXHOFS/VOFS
             0x20...0x2F => null, // BG2 Rot/Scaling
             0x30...0x3F => null, // BG3 Rot/Scaling
             0x40...0x47 => null, // WINXH/V Registers
-            0x48, 0x49 => @as(T, @truncate(ppu.win.getIn() >> getHalf(byte_addr))),
-            0x4A, 0x4B => @as(T, @truncate(ppu.win.getOut() >> getHalf(byte_addr))),
+            0x48, 0x49 => @truncate(ppu.win.getIn() >> getHalf(byte_addr)),
+            0x4A, 0x4B => @truncate(ppu.win.getOut() >> getHalf(byte_addr)),
             0x4C, 0x4D => null, // MOSAIC
             0x4E, 0x4F => null,
-            0x50, 0x51 => @as(T, @truncate(ppu.bld.getCnt() >> getHalf(byte_addr))),
-            0x52, 0x53 => @as(T, @truncate(ppu.bld.getAlpha() >> getHalf(byte_addr))),
+            0x50, 0x51 => @truncate(ppu.bld.getCnt() >> getHalf(byte_addr)),
+            0x52, 0x53 => @truncate(ppu.bld.getAlpha() >> getHalf(byte_addr)),
             0x54, 0x55 => null, // BLDY
             else => util.io.read.err(T, log, "unexpected {} read from 0x{X:0>8}", .{ T, addr }),
         },
@@ -95,14 +95,14 @@ pub fn read(comptime T: type, ppu: *const Ppu, addr: u32) ?T {
 }
 
 pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
-    const byte_addr = @as(u8, @truncate(addr)); // prefixed with 0x0400_00
+    const byte_addr: u8 = @truncate(addr); // prefixed with 0x0400_00
 
     switch (T) {
         u32 => switch (byte_addr) {
-            0x00 => ppu.dispcnt.raw = @as(u16, @truncate(value)),
+            0x00 => ppu.dispcnt.raw = @truncate(value),
             0x04 => {
-                ppu.dispstat.set(@as(u16, @truncate(value)));
-                ppu.vcount.raw = @as(u16, @truncate(value >> 16));
+                ppu.dispstat.set(@truncate(value));
+                ppu.vcount.raw = @truncate(value >> 16);
             },
             0x08 => ppu.setAdjCnts(0, value),
             0x0C => ppu.setAdjCnts(2, value),
@@ -128,10 +128,10 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x4C => log.debug("Wrote 0x{X:0>8} to MOSAIC", .{value}),
 
             0x50 => {
-                ppu.bld.cnt.raw = @as(u16, @truncate(value));
-                ppu.bld.alpha.raw = @as(u16, @truncate(value >> 16));
+                ppu.bld.cnt.raw = @truncate(value);
+                ppu.bld.alpha.raw = @truncate(value >> 16);
             },
-            0x54 => ppu.bld.y.raw = @as(u16, @truncate(value)),
+            0x54 => ppu.bld.y.raw = @truncate(value),
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, addr }),
         },
         u16 => switch (byte_addr) {
@@ -154,19 +154,19 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x1C => ppu.bg[3].hofs.raw = value,
             0x1E => ppu.bg[3].vofs.raw = value,
 
-            0x20 => ppu.aff_bg[0].pa = @as(i16, @bitCast(value)),
-            0x22 => ppu.aff_bg[0].pb = @as(i16, @bitCast(value)),
-            0x24 => ppu.aff_bg[0].pc = @as(i16, @bitCast(value)),
-            0x26 => ppu.aff_bg[0].pd = @as(i16, @bitCast(value)),
-            0x28, 0x2A => ppu.aff_bg[0].x = @as(i32, @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[0].x)), byte_addr, value))),
-            0x2C, 0x2E => ppu.aff_bg[0].y = @as(i32, @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[0].y)), byte_addr, value))),
+            0x20 => ppu.aff_bg[0].pa = @bitCast(value),
+            0x22 => ppu.aff_bg[0].pb = @bitCast(value),
+            0x24 => ppu.aff_bg[0].pc = @bitCast(value),
+            0x26 => ppu.aff_bg[0].pd = @bitCast(value),
+            0x28, 0x2A => ppu.aff_bg[0].x = @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[0].x)), byte_addr, value)),
+            0x2C, 0x2E => ppu.aff_bg[0].y = @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[0].y)), byte_addr, value)),
 
-            0x30 => ppu.aff_bg[1].pa = @as(i16, @bitCast(value)),
-            0x32 => ppu.aff_bg[1].pb = @as(i16, @bitCast(value)),
-            0x34 => ppu.aff_bg[1].pc = @as(i16, @bitCast(value)),
-            0x36 => ppu.aff_bg[1].pd = @as(i16, @bitCast(value)),
-            0x38, 0x3A => ppu.aff_bg[1].x = @as(i32, @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[1].x)), byte_addr, value))),
-            0x3C, 0x3E => ppu.aff_bg[1].y = @as(i32, @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[1].y)), byte_addr, value))),
+            0x30 => ppu.aff_bg[1].pa = @bitCast(value),
+            0x32 => ppu.aff_bg[1].pb = @bitCast(value),
+            0x34 => ppu.aff_bg[1].pc = @bitCast(value),
+            0x36 => ppu.aff_bg[1].pd = @bitCast(value),
+            0x38, 0x3A => ppu.aff_bg[1].x = @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[1].x)), byte_addr, value)),
+            0x3C, 0x3E => ppu.aff_bg[1].y = @bitCast(setHalf(u32, @as(u32, @bitCast(ppu.aff_bg[1].y)), byte_addr, value)),
 
             0x40 => ppu.win.h[0].raw = value,
             0x42 => ppu.win.h[1].raw = value,
@@ -205,20 +205,20 @@ pub fn write(comptime T: type, ppu: *Ppu, addr: u32, value: T) void {
             0x1E, 0x1F => ppu.bg[3].vofs.raw = setHalf(u16, ppu.bg[3].vofs.raw, byte_addr, value),
 
             // BG2 Rot/Scaling
-            0x20, 0x21 => ppu.aff_bg[0].pa = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pa)), byte_addr, value))),
-            0x22, 0x23 => ppu.aff_bg[0].pb = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pb)), byte_addr, value))),
-            0x24, 0x25 => ppu.aff_bg[0].pc = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pc)), byte_addr, value))),
-            0x26, 0x27 => ppu.aff_bg[0].pd = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pd)), byte_addr, value))),
-            0x28, 0x29, 0x2A, 0x2B => ppu.aff_bg[0].x = @as(i32, @bitCast(setQuart(@as(u32, @bitCast(ppu.aff_bg[0].x)), byte_addr, value))),
-            0x2C, 0x2D, 0x2E, 0x2F => ppu.aff_bg[0].y = @as(i32, @bitCast(setQuart(@as(u32, @bitCast(ppu.aff_bg[0].y)), byte_addr, value))),
+            0x20, 0x21 => ppu.aff_bg[0].pa = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pa)), byte_addr, value)),
+            0x22, 0x23 => ppu.aff_bg[0].pb = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pb)), byte_addr, value)),
+            0x24, 0x25 => ppu.aff_bg[0].pc = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pc)), byte_addr, value)),
+            0x26, 0x27 => ppu.aff_bg[0].pd = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[0].pd)), byte_addr, value)),
+            0x28, 0x29, 0x2A, 0x2B => ppu.aff_bg[0].x = @bitCast(setQuart(@bitCast(ppu.aff_bg[0].x), byte_addr, value)),
+            0x2C, 0x2D, 0x2E, 0x2F => ppu.aff_bg[0].y = @bitCast(setQuart(@bitCast(ppu.aff_bg[0].y), byte_addr, value)),
 
             // BG3 Rot/Scaling
-            0x30, 0x31 => ppu.aff_bg[1].pa = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pa)), byte_addr, value))),
-            0x32, 0x33 => ppu.aff_bg[1].pb = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pb)), byte_addr, value))),
-            0x34, 0x35 => ppu.aff_bg[1].pc = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pc)), byte_addr, value))),
-            0x36, 0x37 => ppu.aff_bg[1].pd = @as(i16, @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pd)), byte_addr, value))),
-            0x38, 0x39, 0x3A, 0x3B => ppu.aff_bg[1].x = @as(i32, @bitCast(setQuart(@as(u32, @bitCast(ppu.aff_bg[1].x)), byte_addr, value))),
-            0x3C, 0x3D, 0x3E, 0x3F => ppu.aff_bg[1].y = @as(i32, @bitCast(setQuart(@as(u32, @bitCast(ppu.aff_bg[1].y)), byte_addr, value))),
+            0x30, 0x31 => ppu.aff_bg[1].pa = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pa)), byte_addr, value)),
+            0x32, 0x33 => ppu.aff_bg[1].pb = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pb)), byte_addr, value)),
+            0x34, 0x35 => ppu.aff_bg[1].pc = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pc)), byte_addr, value)),
+            0x36, 0x37 => ppu.aff_bg[1].pd = @bitCast(setHalf(u16, @as(u16, @bitCast(ppu.aff_bg[1].pd)), byte_addr, value)),
+            0x38, 0x39, 0x3A, 0x3B => ppu.aff_bg[1].x = @bitCast(setQuart(@bitCast(ppu.aff_bg[1].x), byte_addr, value)),
+            0x3C, 0x3D, 0x3E, 0x3F => ppu.aff_bg[1].y = @bitCast(setQuart(@bitCast(ppu.aff_bg[1].y), byte_addr, value)),
 
             // Window
             0x40, 0x41 => ppu.win.h[0].raw = setHalf(u16, ppu.win.h[0].raw, byte_addr, value),
@@ -324,13 +324,13 @@ pub const Ppu = struct {
     }
 
     pub fn setBgOffsets(self: *Self, comptime n: u2, word: u32) void {
-        self.bg[n].hofs.raw = @as(u16, @truncate(word));
-        self.bg[n].vofs.raw = @as(u16, @truncate(word >> 16));
+        self.bg[n].hofs.raw = @truncate(word);
+        self.bg[n].vofs.raw = @truncate(word >> 16);
     }
 
     pub fn setAdjCnts(self: *Self, comptime n: u2, word: u32) void {
-        self.bg[n].cnt.raw = @as(u16, @truncate(word));
-        self.bg[n + 1].cnt.raw = @as(u16, @truncate(word >> 16));
+        self.bg[n].cnt.raw = @truncate(word);
+        self.bg[n + 1].cnt.raw = @truncate(word >> 16);
     }
 
     /// Search OAM for Sprites that might be rendered on this scanline
@@ -341,11 +341,11 @@ pub const Ppu = struct {
         search: while (i < self.oam.buf.len) : (i += 8) {
             // Attributes in OAM are 6 bytes long, with 2 bytes of padding
             // Grab Attributes from OAM
-            const attr0 = @as(Attr0, @bitCast(self.oam.read(u16, i)));
+            const attr0: Attr0 = @bitCast(self.oam.read(u16, i));
 
             // Only consider enabled Sprites
             if (attr0.is_affine.read() or !attr0.disabled.read()) {
-                const attr1 = @as(Attr1, @bitCast(self.oam.read(u16, i + 2)));
+                const attr1: Attr1 = @bitCast(self.oam.read(u16, i + 2));
                 const d = spriteDimensions(attr0.shape.read(), attr1.size.read());
 
                 // Account for double-size affine sprites
@@ -368,7 +368,7 @@ pub const Ppu = struct {
                 if (y_pos <= y and y < (y_pos + sprite_height)) {
                     for (self.scanline_sprites) |*maybe_sprite| {
                         if (maybe_sprite.* == null) {
-                            maybe_sprite.* = Sprite.init(attr0, attr1, @as(Attr2, @bitCast(self.oam.read(u16, i + 4))));
+                            maybe_sprite.* = Sprite.init(attr0, attr1, @bitCast(self.oam.read(u16, i + 4)));
                             continue :search;
                         }
                     }
@@ -414,7 +414,7 @@ pub const Ppu = struct {
         const pc = self.oam.read(u16, base + 11 * @sizeOf(u16));
         const pd = self.oam.read(u16, base + 15 * @sizeOf(u16));
 
-        const matrix = @as([4]i16, @bitCast([_]u16{ pa, pb, pc, pd }));
+        const matrix: [4]i16 = @bitCast([_]u16{ pa, pb, pc, pd });
 
         const sprite_width = sprite.width << if (double_size) 1 else 0;
         const sprite_height = sprite.height << if (double_size) 1 else 0;
@@ -425,7 +425,7 @@ pub const Ppu = struct {
         var i: u9 = 0;
         while (i < sprite_width) : (i += 1) {
             // TODO: Something is wrong here
-            const x = @as(u9, @truncate(@as(u16, @bitCast(sprite_x + i))));
+            const x: u9 = @truncate(@as(u16, @bitCast(sprite_x + i)));
             if (x >= width) continue;
 
             if (!shouldDrawSprite(self.bld.cnt, &self.scanline, x)) continue;
@@ -447,11 +447,11 @@ pub const Ppu = struct {
             // Maybe this is the necessary check?
             if (rot_x >= sprite.width or rot_y >= sprite.height or rot_x < 0 or rot_y < 0) continue;
 
-            const tile_x = @as(u16, @bitCast(rot_x));
-            const tile_y = @as(u16, @bitCast(rot_y));
+            const tile_x: u16 = @bitCast(rot_x);
+            const tile_y: u16 = @bitCast(rot_y);
 
-            const col = @as(u3, @truncate(tile_x));
-            const row = @as(u3, @truncate(tile_y));
+            const col: u3 = @truncate(tile_x);
+            const row: u3 = @truncate(tile_y);
 
             // TODO: Finish that 2D Sprites Test ROM
             const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
@@ -461,7 +461,7 @@ pub const Ppu = struct {
             const tile = self.vram.buf[tile_base + tile_offset];
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
-            const global_x = @as(u9, @truncate(@as(u16, @bitCast(local_x + sprite_x))));
+            const global_x: u9 = @truncate(@as(u16, @bitCast(local_x + sprite_x)));
 
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
@@ -507,8 +507,8 @@ pub const Ppu = struct {
             const tile_x = @as(u9, @intCast(local_x)) ^ if (sprite.hFlip()) (sprite.width - 1) else 0;
             const tile_y = @as(u8, @intCast(local_y)) ^ if (sprite.vFlip()) (sprite.height - 1) else 0;
 
-            const col = @as(u3, @truncate(tile_x));
-            const row = @as(u3, @truncate(tile_y));
+            const col: u3 = @truncate(tile_x);
+            const row: u3 = @truncate(tile_y);
 
             // TODO: Finish that 2D Sprites Test ROM
             const tile_base = char_base + (tile_id * 0x20) + (row * tile_row_offset) + if (is_8bpp) col else col >> 1;
@@ -518,7 +518,7 @@ pub const Ppu = struct {
             const tile = self.vram.buf[tile_base + tile_offset];
             const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(sprite.palBank(), col, tile) else tile;
 
-            const global_x = @as(u9, @truncate(@as(u16, @bitCast(local_x + sprite_x))));
+            const global_x: u9 = @truncate(@as(u16, @bitCast(local_x + sprite_x)));
 
             // Sprite Palette starts at 0x0500_0200
             if (pal_id != 0) {
@@ -550,8 +550,8 @@ pub const Ppu = struct {
             aff_x += self.aff_bg[n - 2].pa;
             aff_y += self.aff_bg[n - 2].pc;
 
-            const _x = @as(u9, @truncate(@as(u32, @bitCast(ix))));
-            const _y = @as(u8, @truncate(@as(u32, @bitCast(iy))));
+            const _x: u9 = @truncate(@as(u32, @bitCast(ix)));
+            const _y: u8 = @truncate(@as(u32, @bitCast(iy)));
 
             const win_bounds = self.windowBounds(_x, _y);
             if (!shouldDrawBackground(self, n, win_bounds, i)) continue;
@@ -561,8 +561,8 @@ pub const Ppu = struct {
                 iy = if (iy > px_height) @rem(iy, px_height) else if (iy < 0) px_height + @rem(iy, px_height) else iy;
             } else if (ix > px_width or iy > px_height or ix < 0 or iy < 0) continue;
 
-            const x = @as(u32, @bitCast(ix));
-            const y = @as(u32, @bitCast(iy));
+            const x: u32 = @bitCast(ix);
+            const y: u32 = @bitCast(iy);
 
             const tile_id: u32 = self.vram.read(u8, screen_base + ((y / 8) * @as(u32, @bitCast(tile_width)) + (x / 8)));
             const row = y & 7;
@@ -601,12 +601,12 @@ pub const Ppu = struct {
         while (i < width) : (i += 1) {
             const x = hofs + i;
 
-            const win_bounds = self.windowBounds(@as(u9, @truncate(x)), @as(u8, @truncate(y)));
+            const win_bounds = self.windowBounds(@truncate(x), @truncate(y));
             if (!shouldDrawBackground(self, n, win_bounds, i)) continue;
 
             // Grab the Screen Entry from VRAM
             const entry_addr = screen_base + tilemapOffset(size, x, y);
-            const entry = @as(ScreenEntry, @bitCast(self.vram.read(u16, entry_addr)));
+            const entry: ScreenEntry = @bitCast(self.vram.read(u16, entry_addr));
 
             // Calculate the Address of the Tile in the designated Charblock
             // We also take this opportunity to flip tiles if necessary
@@ -649,7 +649,7 @@ pub const Ppu = struct {
                 if (obj_enable) self.fetchSprites();
 
                 for (0..4) |layer| {
-                    self.drawSprites(@as(u2, @truncate(layer)));
+                    self.drawSprites(@truncate(layer));
                     if (layer == self.bg[0].cnt.priority.read() and bg_enable & 1 == 1) self.drawBackground(0);
                     if (layer == self.bg[1].cnt.priority.read() and bg_enable >> 1 & 1 == 1) self.drawBackground(1);
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawBackground(2);
@@ -676,7 +676,7 @@ pub const Ppu = struct {
                 if (obj_enable) self.fetchSprites();
 
                 for (0..4) |layer| {
-                    self.drawSprites(@as(u2, @truncate(layer)));
+                    self.drawSprites(@truncate(layer));
                     if (layer == self.bg[2].cnt.priority.read() and bg_enable >> 2 & 1 == 1) self.drawAffineBackground(2);
                     if (layer == self.bg[3].cnt.priority.read() and bg_enable >> 3 & 1 == 1) self.drawAffineBackground(3);
                 }
@@ -1148,18 +1148,18 @@ const Window = struct {
     }
 
     pub fn setH(self: *Self, value: u32) void {
-        self.h[0].raw = @as(u16, @truncate(value));
-        self.h[1].raw = @as(u16, @truncate(value >> 16));
+        self.h[0].raw = @truncate(value);
+        self.h[1].raw = @truncate(value >> 16);
     }
 
     pub fn setV(self: *Self, value: u32) void {
-        self.v[0].raw = @as(u16, @truncate(value));
-        self.v[1].raw = @as(u16, @truncate(value >> 16));
+        self.v[0].raw = @truncate(value);
+        self.v[1].raw = @truncate(value >> 16);
     }
 
     pub fn setIo(self: *Self, value: u32) void {
-        self.in.raw = @as(u16, @truncate(value));
-        self.out.raw = @as(u16, @truncate(value >> 16));
+        self.in.raw = @truncate(value);
+        self.out.raw = @truncate(value >> 16);
     }
 };
 
@@ -1222,23 +1222,23 @@ const AffineBackground = struct {
     }
 
     pub fn setX(self: *Self, is_vblank: bool, value: u32) void {
-        self.x = @as(i32, @bitCast(value));
-        if (!is_vblank) self.x_latch = @as(i32, @bitCast(value));
+        self.x = @bitCast(value);
+        if (!is_vblank) self.x_latch = @bitCast(value);
     }
 
     pub fn setY(self: *Self, is_vblank: bool, value: u32) void {
-        self.y = @as(i32, @bitCast(value));
-        if (!is_vblank) self.y_latch = @as(i32, @bitCast(value));
+        self.y = @bitCast(value);
+        if (!is_vblank) self.y_latch = @bitCast(value);
     }
 
     pub fn writePaPb(self: *Self, value: u32) void {
-        self.pa = @as(i16, @bitCast(@as(u16, @truncate(value))));
-        self.pb = @as(i16, @bitCast(@as(u16, @truncate(value >> 16))));
+        self.pa = @bitCast(@as(u16, @truncate(value)));
+        self.pb = @bitCast(@as(u16, @truncate(value >> 16)));
     }
 
     pub fn writePcPd(self: *Self, value: u32) void {
-        self.pc = @as(i16, @bitCast(@as(u16, @truncate(value))));
-        self.pd = @as(i16, @bitCast(@as(u16, @truncate(value >> 16))));
+        self.pc = @bitCast(@as(u16, @truncate(value)));
+        self.pd = @bitCast(@as(u16, @truncate(value >> 16)));
     }
 
     // Every Vblank BG?X/Y registers are latched

@@ -74,7 +74,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
     const scn_scale = config.config().host.win_scale;
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
-    zgui.backend.newFrame(@as(f32, @floatFromInt(win_dim.width)), @as(f32, @floatFromInt(win_dim.height)));
+    zgui.backend.newFrame(@floatFromInt(win_dim.width), @floatFromInt(win_dim.height));
 
     {
         _ = zgui.beginMainMenuBar();
@@ -168,14 +168,14 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
     }
 
     {
-        const w = @as(f32, @floatFromInt(gba_width * scn_scale));
-        const h = @as(f32, @floatFromInt(gba_height * scn_scale));
+        const w: f32 = @floatFromInt(gba_width * scn_scale);
+        const h: f32 = @floatFromInt(gba_height * scn_scale);
 
         const window_title = std.mem.sliceTo(&state.title, 0);
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 
-        zgui.image(@as(*anyopaque, @ptrFromInt(tex_id)), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
+        zgui.image(@ptrFromInt(tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
     }
 
     // TODO: Any other steps to respect the copyright of the libraries I use?
@@ -272,8 +272,8 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
             break :blk buf;
         };
 
-        const y_max = 2 * if (len != 0) @as(f64, @floatFromInt(sorted[len - 1])) else emu.frame_rate;
-        const x_max = @as(f64, @floatFromInt(values.len));
+        const y_max: f64 = 2 * if (len != 0) @as(f64, @floatFromInt(sorted[len - 1])) else emu.frame_rate;
+        const x_max: f64 = @floatFromInt(values.len);
 
         const y_args = .{ .flags = .{ .no_grid_lines = true } };
         const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
@@ -294,11 +294,11 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
         const stats: struct { u32, u32, u32 } = blk: {
             if (len == 0) break :blk .{ 0, 0, 0 };
 
-            const average = average: {
+            const average: u32 = average: {
                 var sum: u32 = 0;
                 for (sorted[0..len]) |value| sum += value;
 
-                break :average @as(u32, @intCast(sum / len));
+                break :average @intCast(sum / len);
             };
             const median = sorted[len / 2];
             const low = sorted[len / 100]; // 1% Low
@@ -365,7 +365,7 @@ const widgets = struct {
         };
 
         for (0..0x100) |i| {
-            const offset = @as(u32, @truncate(i));
+            const offset: u32 = @truncate(i);
             const bgr555 = cpu.bus.dbgRead(u16, address + offset * @sizeOf(u16));
             widgets.colourSquare(bgr555);
 
@@ -378,11 +378,11 @@ const widgets = struct {
         // FIXME: working with the packed struct enum is currently broken :pensive:
         const ImguiColorEditFlags_NoInputs: u32 = 1 << 5;
         const ImguiColorEditFlags_NoPicker: u32 = 1 << 2;
-        const flags = @as(zgui.ColorEditFlags, @bitCast(ImguiColorEditFlags_NoInputs | ImguiColorEditFlags_NoPicker));
+        const flags: zgui.ColorEditFlags = @bitCast(ImguiColorEditFlags_NoInputs | ImguiColorEditFlags_NoPicker);
 
-        const b = @as(f32, @floatFromInt(bgr555 >> 10 & 0x1f));
-        const g = @as(f32, @floatFromInt(bgr555 >> 5 & 0x1F));
-        const r = @as(f32, @floatFromInt(bgr555 & 0x1F));
+        const b: f32 = @floatFromInt(bgr555 >> 10 & 0x1f);
+        const g: f32 = @floatFromInt(bgr555 >> 5 & 0x1F);
+        const r: f32 = @floatFromInt(bgr555 & 0x1F);
 
         var col = [_]f32{ r / 31.0, g / 31.0, b / 31.0 };
 

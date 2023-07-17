@@ -81,8 +81,8 @@ pub fn onToneSweepEvent(self: *Self, late: u64) void {
 
 /// NR10, NR11, NR12
 pub fn setSound1Cnt(self: *Self, value: u32) void {
-    self.setSound1CntL(@as(u8, @truncate(value)));
-    self.setSound1CntH(@as(u16, @truncate(value >> 16)));
+    self.setSound1CntL(@truncate(value));
+    self.setSound1CntH(@truncate(value >> 16));
 }
 
 /// NR10
@@ -111,8 +111,8 @@ pub fn sound1CntH(self: *const Self) u16 {
 
 /// NR11, NR12
 pub fn setSound1CntH(self: *Self, value: u16) void {
-    self.setNr11(@as(u8, @truncate(value)));
-    self.setNr12(@as(u8, @truncate(value >> 8)));
+    self.setNr11(@truncate(value));
+    self.setNr12(@truncate(value >> 8));
 }
 
 /// NR11
@@ -134,8 +134,8 @@ pub fn sound1CntX(self: *const Self) u16 {
 
 /// NR13, NR14
 pub fn setSound1CntX(self: *Self, fs: *const FrameSequencer, value: u16) void {
-    self.setNr13(@as(u8, @truncate(value)));
-    self.setNr14(fs, @as(u8, @truncate(value >> 8)));
+    self.setNr13(@truncate(value));
+    self.setNr14(fs, @truncate(value >> 8));
 }
 
 /// NR13

@@ -76,14 +76,14 @@ pub fn sound4CntL(self: *const Self) u16 {
 
 /// NR41, NR42
 pub fn setSound4CntL(self: *Self, value: u16) void {
-    self.setNr41(@as(u8, @truncate(value)));
-    self.setNr42(@as(u8, @truncate(value >> 8)));
+    self.setNr41(@truncate(value));
+    self.setNr42(@truncate(value >> 8));
 }
 
 /// NR41
 pub fn setNr41(self: *Self, len: u8) void {
-    self.len = @as(u6, @truncate(len));
-    self.len_dev.timer = @as(u7, 64) - @as(u6, @truncate(len));
+    self.len = @truncate(len);
+    self.len_dev.timer = @as(u7, 64) - self.len;
 }
 
 /// NR42
@@ -99,8 +99,8 @@ pub fn sound4CntH(self: *const Self) u16 {
 
 /// NR43, NR44
 pub fn setSound4CntH(self: *Self, fs: *const FrameSequencer, value: u16) void {
-    self.poly.raw = @as(u8, @truncate(value));
-    self.setNr44(fs, @as(u8, @truncate(value >> 8)));
+    self.poly.raw = @truncate(value);
+    self.setNr44(fs, @truncate(value >> 8));
 }
 
 /// NR44

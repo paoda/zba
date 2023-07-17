@@ -203,7 +203,7 @@ pub const audio = struct {
 
 /// Sets a quarter (8) of the bits of the u32 `left` to the value of u8 `right`
 pub inline fn setQuart(left: u32, addr: u8, right: u8) u32 {
-    const offset = @as(u2, @truncate(addr));
+    const offset: u2 = @truncate(addr);
 
     return switch (offset) {
         0b00 => (left & 0xFFFF_FF00) | right,
@@ -221,7 +221,7 @@ pub inline fn getHalf(byte: u8) u4 {
 }
 
 pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T {
-    const offset = @as(u1, @truncate(addr >> if (T == u32) 1 else 0));
+    const offset: u1 = @truncate(addr >> if (T == u32) 1 else 0);
 
     return switch (T) {
         u32 => switch (offset) {

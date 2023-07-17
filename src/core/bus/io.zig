@@ -43,7 +43,7 @@ pub const Io = struct {
     }
 
     fn setIrqs(self: *Io, word: u32) void {
-        self.ie.raw = @as(u16, @truncate(word));
+        self.ie.raw = @truncate(word);
         self.irq.raw &= ~@as(u16, @truncate(word >> 16));
     }
 };
@@ -141,11 +141,11 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_015A, 0x0400_015B => 0x00,
 
             // Interrupts
-            0x0400_0200, 0x0400_0201 => @as(T, @truncate(bus.io.ie.raw >> getHalf(@as(u8, @truncate(address))))),
-            0x0400_0202, 0x0400_0203 => @as(T, @truncate(bus.io.irq.raw >> getHalf(@as(u8, @truncate(address))))),
-            0x0400_0204, 0x0400_0205 => @as(T, @truncate(bus.io.waitcnt.raw >> getHalf(@as(u8, @truncate(address))))),
+            0x0400_0200, 0x0400_0201 => @truncate(bus.io.ie.raw >> getHalf(@truncate(address))),
+            0x0400_0202, 0x0400_0203 => @truncate(bus.io.irq.raw >> getHalf(@truncate(address))),
+            0x0400_0204, 0x0400_0205 => @truncate(bus.io.waitcnt.raw >> getHalf(@truncate(address))),
             0x0400_0206, 0x0400_0207 => 0x00,
-            0x0400_0208, 0x0400_0209 => @as(T, @truncate(@as(u16, @intFromBool(bus.io.ime)) >> getHalf(@as(u8, @truncate(address))))),
+            0x0400_0208, 0x0400_0209 => @truncate(@as(u16, @intFromBool(bus.io.ime)) >> getHalf(@truncate(address))),
             0x0400_020A, 0x0400_020B => 0x00,
             0x0400_0300 => @intFromEnum(bus.io.postflg),
             0x0400_0301 => null,
@@ -196,10 +196,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Interrupts
             0x0400_0200 => bus.io.setIrqs(value),
-            0x0400_0204 => bus.io.waitcnt.set(@as(u16, @truncate(value))),
+            0x0400_0204 => bus.io.waitcnt.set(@truncate(value)),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0300 => {
-                bus.io.postflg = @as(PostFlag, @enumFromInt(value & 1));
+                bus.io.postflg = @enumFromInt(value & 1);
                 bus.io.haltcnt = if (value >> 15 & 1 == 0) .Halt else @panic("TODO: Implement STOP");
             },
             else => util.io.write.undef(log, "Tried to write 0x{X:0>8}{} to 0x{X:0>8}", .{ value, T, address }),
@@ -246,7 +246,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_020A => {},
             0x0400_0300 => {
-                bus.io.postflg = @as(PostFlag, @enumFromInt(value & 1));
+                bus.io.postflg = @enumFromInt(value & 1);
                 bus.io.haltcnt = if (value >> 15 & 1 == 0) .Halt else @panic("TODO: Implement STOP");
             },
             else => util.io.write.undef(log, "Tried to write 0x{X:0>4}{} to 0x{X:0>8}", .{ value, T, address }),
@@ -273,16 +273,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0140 => log.debug("Wrote 0x{X:0>2} to JOYCNT_L", .{value}),
 
             // Interrupts
-            0x0400_0200, 0x0400_0201 => bus.io.ie.raw = setHalf(u16, bus.io.ie.raw, @as(u8, @truncate(address)), value),
+            0x0400_0200, 0x0400_0201 => bus.io.ie.raw = setHalf(u16, bus.io.ie.raw, @truncate(address), value),
             0x0400_0202 => bus.io.irq.raw &= ~@as(u16, value),
             0x0400_0203 => bus.io.irq.raw &= ~@as(u16, value) << 8, // TODO: Is this good?
-            0x0400_0204, 0x0400_0205 => bus.io.waitcnt.set(setHalf(u16, @as(u16, @truncate(bus.io.waitcnt.raw)), @as(u8, @truncate(address)), value)),
+            0x0400_0204, 0x0400_0205 => bus.io.waitcnt.set(setHalf(u16, bus.io.waitcnt.raw, @truncate(address), value)),
             0x0400_0206, 0x0400_0207 => {},
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0209 => {},
             0x0400_020A, 0x0400_020B => {},
 
-            0x0400_0300 => bus.io.postflg = @as(PostFlag, @enumFromInt(value & 1)),
+            0x0400_0300 => bus.io.postflg = @enumFromInt(value & 1),
             0x0400_0301 => bus.io.haltcnt = if (value >> 7 & 1 == 0) .Halt else std.debug.panic("TODO: Implement STOP", .{}),
 
             0x0400_0410 => log.debug("Wrote 0x{X:0>2} to the common yet undocumented 0x{X:0>8}", .{ value, address }),

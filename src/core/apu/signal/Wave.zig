@@ -70,7 +70,7 @@ pub fn sample(self: *const Self, nr30: io.WaveSelect) u4 {
     const base = if (nr30.bank.read()) @as(u32, 0x10) else 0;
 
     const value = self.buf[base + self.offset / 2];
-    return if (self.offset & 1 == 0) @as(u4, @truncate(value >> 4)) else @as(u4, @truncate(value));
+    return if (self.offset & 1 == 0) @truncate(value >> 4) else @truncate(value);
 }
 
 /// TODO: Write comment
