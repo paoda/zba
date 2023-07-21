@@ -6,7 +6,7 @@ const zgui = @import("lib/zgui/build.zig");
 
 pub fn build(b: *std.Build) void {
     // Minimum Zig Version
-    const min_ver = std.SemanticVersion.parse("0.11.0-dev.4003+c6aa29b6f") catch return; // https://github.com/ziglang/zig/commit/c6aa29b6f
+    const min_ver = std.SemanticVersion.parse("0.11.0") catch return; // https://github.com/ziglang/zig/tree/0.11.0
     if (builtin.zig_version.order(min_ver).compare(.lt)) {
         std.log.err("{s}", .{b.fmt("Zig v{} does not meet the minimum version requirement. (Zig v{})", .{ builtin.zig_version, min_ver })});
         std.os.exit(1);
@@ -21,8 +21,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
-    exe.setMainPkgPath("."); // Necessary so that src/main.zig can embed example.toml
+    exe.main_pkg_path = .{ .path = "." }; // Necessary so that src/main.zig can embed example.toml
 
     exe.addModule("known_folders", b.dependency("known-folders", .{}).module("known-folders")); // https://github.com/ziglibs/known-folders
     exe.addModule("datetime", b.dependency("zig-datetime", .{}).module("zig-datetime")); // https://github.com/frmdstryr/zig-datetime

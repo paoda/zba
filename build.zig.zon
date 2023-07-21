@@ -3,36 +3,36 @@
     .version = "0.1.0",
     .dependencies = .{
         .nfd = .{
-            .url = "https://github.com/fabioarnold/nfd-zig/archive/ae6df5e13f1013cee66929d934d34225b7bbb372.tar.gz",
-            .hash = "122040d748f2fed10c4786077ef2b6edbe65ab15c741a6450befab5867e3f828eb24",
+            .url = "https://github.com/paoda/nfd-zig/archive/3333a86186a0cb9fbf57823ac416aa77d472db61.tar.gz",
+            .hash = "12201079ca80d9a7cfe9f2f3ffe4d5e92627a48dfdec5dd3c8cf9a1609f746a9e17f",
         },
         .@"known-folders" = .{
-            .url = "https://github.com/ziglibs/known-folders/archive/03b70c3179e404c0d03b5480ddda52d4e0c8b744.tar.gz",
-            .hash = "1220480ebdabd57a5aa79889239c7f353a76a83a0185cced414589cf7bae29fcd272",
+            .url = "https://github.com/ziglibs/known-folders/archive/fa75e1bc672952efa0cf06160bbd942b47f6d59b.tar.gz",
+            .hash = "122048992ca58a78318b6eba4f65c692564be5af3b30fbef50cd4abeda981b2e7fa5",
         },
         .@"zig-datetime" = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/ddecb4e508e99ad6ab1314378225413959d54756.tar.gz",
             .hash = "12202cbb909feb6b09164ac997307c6b1ab35cb05a846198cf41f7ec608d842c1761",
         },
         .@"zig-clap" = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/bdb5853b678d68f342ec65b04a6785af522ca6c9.tar.gz",
-            .hash = "12202af04ec78191f2018458a7be29f54e0d9118f7688e7a226857acf754d68b8473",
+            .url = "https://github.com/Hejsil/zig-clap/archive/f49b94700e0761b7514abdca0e4f0e7f3f938a93.tar.gz",
+            .hash = "1220f48518ce22882e102255ed3bcdb7aeeb4891f50b2cdd3bd74b5b2e24d3149ba2",
         },
         .@"zba-gdbstub" = .{
-            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/dc159b4aebfa4a6dbafcd0ad0006ee9fe53a8bad.tar.gz",
-            .hash = "122021a32734d559087b912c72be759709d7f57758d747b2ae0176e88a7a3bf39ad6",
+            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/d3655e8f61a4943edfce40629dd2a82f9c7bf21c.tar.gz",
+            .hash = "122076f8e22bb55b555c9812d72d908419eda1bf07b6bb7a1f6d9ecb2bb2a49c56d0",
         },
         .@"zba-util" = .{
             .url = "https://git.musuka.dev/paoda/zba-util/archive/322c798e384a0d24cc84ffcfa2e4a3ca807798a0.tar.gz",
             .hash = "12209ce0e729460b997706e47a53a32f1842672cd120189e612f4871731780a30ed0",
         },
         .tomlz = .{
-            .url = "https://github.com/mattyhall/tomlz/archive/1a6f112183fa04ec88b2cab2a2e71cb1f8a40dd1.tar.gz",
-            .hash = "122098fcc1a1699303f7207d7ca3528750a972d927be2942eef4cd454ee52036650d",
+            .url = "https://github.com/mattyhall/tomlz/archive/47067cd7c902485f7d6e928331fd171ed47f72da.tar.gz",
+            .hash = "12205771687a4d42700c515ef32e4fadb8b4dbf9e3f941b0a0e6f8bde5ef6dbc27d6",
         },
         .arm32 = .{
-            .url = "https://git.musuka.dev/paoda/arm32/archive/6c81608c5914888858abea56514707712d64272a.tar.gz",
-            .hash = "1220b305f4ecba1918479e60dbe31c99f7763a0ce3883e7dcf30d24e0dc11f44a9c9",
+            .url = "https://git.musuka.dev/paoda/arm32/archive/ba22b856ecb3bd6fc43530dddf6ee79b4b458b30.tar.gz",
+            .hash = "1220f1cc3e23804eff5c68b93a4e77d948a9cfc3492d799d39f769d8c79b7c41d83e",
         },
     },
 }

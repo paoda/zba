@@ -27,7 +27,7 @@ Finally it's worth noting that ZBA uses a TOML config file it'll store in your O
 
 ## Compiling
 
-Most recently built on Zig [v0.11.0-dev.4003+c6aa29b6f](https://github.com/ziglang/zig/tree/c6aa29b6f)
+Most recently built on Zig [v0.11.0](https://github.com/ziglang/zig/tree/0.11.0)
 
 ### Dependencies
 
