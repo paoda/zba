@@ -6,7 +6,7 @@ const clap = @import("clap");
 const config = @import("config.zig");
 const emu = @import("core/emu.zig");
 
-const Channel = @import("zba-util").Channel(emu.Message, 0x100);
+const Synchro = @import("core/emu.zig").Synchro;
 const Gui = @import("platform.zig").Gui;
 const Bus = @import("core/Bus.zig");
 const Scheduler = @import("core/scheduler.zig").Scheduler;
@@ -103,10 +103,16 @@ pub fn main() void {
     var gui = Gui.init(allocator, &bus.apu, title_ptr) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
-    var quit = std.atomic.Atomic(bool).init(false);
+    var sync: Synchro = blk: {
+        const AtomicBool = std.atomic.Atomic(bool);
 
-    var ch = Channel.init(allocator) catch |e| exitln("failed to initialize ui -> emu thread message channel: {}", .{e});
-    defer ch.deinit(allocator);
+        var ui_busy = AtomicBool.init(false);
+        var paused = AtomicBool.init(true);
+        var should_quit = AtomicBool.init(false);
+        var did_pause = AtomicBool.init(false);
+
+        break :blk .{ .ui_busy = &ui_busy, .paused = &paused, .should_quit = &should_quit, .did_pause = &did_pause };
+    };
 
     if (result.args.gdb != 0) {
         const Server = @import("gdbstub").Server;
@@ -123,29 +129,25 @@ pub fn main() void {
 
         log.info("Starting GDB Server Thread", .{});
 
-        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
+        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, sync.should_quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
         defer thread.join();
 
-        gui.run(.Debug, .{
+        gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .ch = ch.tx,
+            .sync = sync,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
 
-        // emu should start paused if there's no ROM to run
-        if (paths.rom == null)
-            ch.tx.send(.Pause);
-
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, ch.rx }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, sync }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
-        gui.run(.Standard, .{
+        gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .ch = ch.tx,
             .tracker = &tracker,
+            .sync = sync,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }

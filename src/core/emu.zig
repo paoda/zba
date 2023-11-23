@@ -6,7 +6,6 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Bus = @import("Bus.zig");
 const Tracker = @import("../util.zig").FpsTracker;
-const Channel = @import("zba-util").Channel(Message, 0x100);
 
 pub const Message = enum { Pause, Resume, Quit };
 
@@ -14,6 +13,18 @@ const stepDmaTransfer = @import("cpu_util.zig").stepDmaTransfer;
 const isHalted = @import("cpu_util.zig").isHalted;
 
 const Timer = std.time.Timer;
+
+pub const Synchro = struct {
+    const AtomicBool = std.atomic.Atomic(bool);
+
+    // UI -> Emulator
+    ui_busy: *AtomicBool,
+    paused: *AtomicBool, // FIXME: can ui_busy and paused be the same?
+    should_quit: *AtomicBool,
+
+    // Emulator -> UI
+    did_pause: *AtomicBool,
+};
 
 /// 4 Cycles in 1 dot
 const cycles_per_dot = 4;
@@ -41,18 +52,18 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, rx: Channel.Receiver) void {
+pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, sync: Synchro) void {
     const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
     if (config.config().guest.video_sync) {
-        inner(.LimitedFPS, audio_sync, cpu, scheduler, tracker, rx);
+        inner(.LimitedFPS, audio_sync, cpu, scheduler, tracker, sync);
     } else {
-        inner(.UnlimitedFPS, audio_sync, cpu, scheduler, tracker, rx);
+        inner(.UnlimitedFPS, audio_sync, cpu, scheduler, tracker, sync);
     }
 }
 
-fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, rx: Channel.Receiver) void {
+fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, sync: Synchro) void {
     if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
         std.debug.assert(tracker != null);
         log.info("FPS tracking enabled", .{});
@@ -60,19 +71,16 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
 
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
-    var paused: bool = false;
-
     switch (kind) {
         .Unlimited, .UnlimitedFPS => {
             log.info("Emulation w/out video sync", .{});
 
-            while (true) {
-                if (rx.recv()) |m| switch (m) {
-                    .Quit => break,
-                    .Resume, .Pause => paused = m == .Pause,
-                };
+            while (!sync.should_quit.load(.Monotonic)) {
+                if (sync.ui_busy.load(.Monotonic) or sync.paused.load(.Monotonic)) {
+                    sync.did_pause.store(true, .Monotonic);
 
-                if (paused) continue;
+                    continue;
+                }
 
                 runFrame(scheduler, cpu);
                 audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
@@ -85,13 +93,12 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             var timer = Timer.start() catch @panic("failed to initalize std.timer.Timer");
             var wake_time: u64 = frame_period;
 
-            while (true) {
-                if (rx.recv()) |m| switch (m) {
-                    .Quit => break,
-                    .Resume, .Pause => paused = m == .Pause,
-                };
+            while (!sync.should_quit.load(.Monotonic)) {
+                if (sync.ui_busy.load(.Monotonic) or sync.paused.load(.Monotonic)) {
+                    sync.did_pause.store(true, .Release);
 
-                if (paused) continue;
+                    continue;
+                }
 
                 runFrame(scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);

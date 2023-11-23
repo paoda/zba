@@ -12,7 +12,7 @@ const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Bus = @import("core/Bus.zig");
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const FpsTracker = @import("util.zig").FpsTracker;
-const Channel = @import("zba-util").Channel(emu.Message, 0x100);
+const Synchro = @import("core/emu.zig").Synchro;
 const KeyInput = @import("core/bus/io.zig").KeyInput;
 
 const gba_width = @import("core/ppu.zig").width;
@@ -95,18 +95,16 @@ pub const Gui = struct {
     }
 
     const RunOptions = struct {
-        ch: Channel.Sender,
+        sync: Synchro,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
     };
 
-    const RunMode = enum { Standard, Debug };
-
-    pub fn run(self: *Self, comptime mode: RunMode, opt: RunOptions) !void {
+    pub fn run(self: *Self, opt: RunOptions) !void {
         const cpu = opt.cpu;
         const tracker = opt.tracker;
-        const ch = opt.ch;
+        const sync = opt.sync;
 
         const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
@@ -196,50 +194,34 @@ pub const Gui = struct {
             switch (self.state.emulation) {
                 .Transition => |inner| switch (inner) {
                     .Active => {
-                        ch.send(.Resume);
+                        sync.paused.store(false, .Monotonic);
                         if (!config.config().host.mute) SDL.SDL_PauseAudioDevice(self.audio.device, 0);
 
                         self.state.emulation = .Active;
                     },
                     .Inactive => {
                         // Assert that double pausing is impossible
-
                         SDL.SDL_PauseAudioDevice(self.audio.device, 1);
-                        ch.send(.Pause);
+                        sync.paused.store(true, .Monotonic);
 
                         self.state.emulation = .Inactive;
                     },
                 },
-                .Active => {
-                    const is_std = mode == .Standard;
+                .Active => blk: {
+                    sync.ui_busy.store(true, .Monotonic);
+                    defer sync.ui_busy.store(false, .Monotonic);
 
-                    if (is_std) ch.send(.Pause);
-                    defer if (is_std) ch.send(.Resume);
+                    // spin until we know the emu is paused :)
 
-                    // switch (mode) {
-                    //     .Standard => blk: {
-                    //         const limit = 15; // TODO: What should this be?
+                    const timeout = 0x100000;
+                    wait_loop: for (0..timeout) |i| {
+                        const ret = sync.did_pause.compareAndSwap(true, false, .Acquire, .Monotonic);
+                        if (ret == null) break :wait_loop;
 
-                    //         // TODO: learn more about std.atomic.spinLoopHint();
-                    //         for (0..limit) |_| {
-                    //             const message = channel.gui.pop() orelse continue;
+                        if (i == timeout - 1) break :blk;
+                    }
 
-                    //             switch (message) {
-                    //                 .Paused => break :blk,
-                    //                 .Quit => unreachable,
-                    //             }
-                    //         }
-
-                    //         log.info("timed out waiting for emu thread to pause (limit: {})", .{limit});
-                    //         break :skip_draw;
-                    //     },
-                    //     .Debug => blk: {
-                    //         switch (channel.gui.pop() orelse break :blk) {
-                    //             .Paused => unreachable, // only in standard mode
-                    //             .Quit => break :emu_loop, // FIXME: gdb side of emu is seriously out-of-date...
-                    //         }
-                    //     },
-                    // }
+                    // while (sync.did_pause.compareAndSwap(true, false, .Acquire, .Acquire) != null) std.atomic.spinLoopHint();
 
                     // Add FPS count to the histogram
                     if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
@@ -278,7 +260,7 @@ pub const Gui = struct {
             SDL.SDL_GL_SwapWindow(self.window);
         }
 
-        ch.send(.Quit);
+        sync.should_quit.store(true, .Monotonic);
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
