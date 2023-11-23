@@ -70,8 +70,24 @@ pub fn main() void {
 
     config.load(allocator, cfg_file_path) catch |e| exitln("failed to load config file: {}", .{e});
 
-    const paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
-    defer if (paths.save) |path| allocator.free(path);
+    var paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
+    defer paths.deinit(allocator);
+
+    // if paths.bios is null, then we want to see if it's in the data directory
+    if (paths.bios == null) blk: {
+        const bios_path = std.mem.join(allocator, "/", &.{ data_path, "zba", "gba_bios.bin" }) catch |e| exitln("failed to allocate backup bios dir path: {}", .{e});
+        defer allocator.free(bios_path);
+
+        _ = std.fs.cwd().statFile(bios_path) catch |e| switch (e) {
+            error.FileNotFound => { // ZBA will crash on attempt to read BIOS but that's fine
+                log.err("file located at {s} was not found", .{bios_path});
+                break :blk;
+            },
+            else => exitln("error when checking \"{s}\": {}", .{ bios_path, e }),
+        };
+
+        paths.bios = allocator.dupe(u8, bios_path) catch |e| exitln("failed to duplicate path to bios: {}", .{e});
+    }
 
     const log_file = switch (config.config().debug.cpu_trace) {
         true => std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e}),
@@ -153,13 +169,16 @@ pub fn main() void {
 }
 
 fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !FilePaths {
-    const rom_path = romPath(result);
-    log.info("ROM path: {?s}", .{rom_path});
+    const rom_path = try romPath(allocator, result);
+    errdefer if (rom_path) |path| allocator.free(path);
 
-    const bios_path = result.args.bios;
-    if (bios_path) |path| log.info("BIOS path: {s}", .{path}) else log.warn("No BIOS provided", .{});
+    const bios_path: ?[]const u8 = if (result.args.bios) |path| try allocator.dupe(u8, path) else null;
+    errdefer if (bios_path) |path| allocator.free(path);
 
     const save_path = try std.fs.path.join(allocator, &[_][]const u8{ data_path, "zba", "save" });
+
+    log.info("ROM path: {?s}", .{rom_path});
+    log.info("BIOS path: {?s}", .{bios_path});
     log.info("Save path: {s}", .{save_path});
 
     return .{
@@ -203,10 +222,10 @@ fn ensureConfigDirExists(config_path: []const u8) !void {
     try dir.makePath("zba");
 }
 
-fn romPath(result: *const clap.Result(clap.Help, &params, clap.parsers.default)) ?[]const u8 {
+fn romPath(allocator: Allocator, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !?[]const u8 {
     return switch (result.positionals.len) {
         0 => null,
-        1 => result.positionals[0],
+        1 => try allocator.dupe(u8, result.positionals[0]),
         else => exitln("ZBA received too many positional arguments.", .{}),
     };
 }

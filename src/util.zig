@@ -52,7 +52,13 @@ pub fn escape(title: [12]u8) [12]u8 {
 pub const FilePaths = struct {
     rom: ?[]const u8,
     bios: ?[]const u8,
-    save: ?[]const u8,
+    save: []const u8,
+
+    pub fn deinit(self: @This(), allocator: Allocator) void {
+        if (self.rom) |path| allocator.free(path);
+        if (self.bios) |path| allocator.free(path);
+        allocator.free(self.save);
+    }
 };
 
 pub const io = struct {

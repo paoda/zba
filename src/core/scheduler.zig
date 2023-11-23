@@ -93,7 +93,7 @@ pub const Scheduler = struct {
                 // invalidates the slice we're iterating over
                 _ = self.queue.removeIndex(i);
 
-                log.debug("Removed {?}@{}", .{ event.kind, event.tick });
+                // log.debug("Removed {?}@{}", .{ event.kind, event.tick });
                 break;
             }
         }
