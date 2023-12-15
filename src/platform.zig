@@ -95,7 +95,7 @@ pub const Gui = struct {
     }
 
     const RunOptions = struct {
-        sync: Synchro,
+        sync: *Synchro,
         tracker: ?*FpsTracker = null,
         cpu: *Arm7tdmi,
         scheduler: *Scheduler,
@@ -127,7 +127,7 @@ pub const Gui = struct {
         emu_loop: while (true) {
             // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
             // should exit, in which case we should also handle this
-            if (self.state.should_quit) break :emu_loop;
+            if (self.state.should_quit or sync.should_quit.load(.Monotonic)) break :emu_loop;
 
             var event: SDL.SDL_Event = undefined;
             while (SDL.SDL_PollEvent(&event) != 0) {

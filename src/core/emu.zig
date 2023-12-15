@@ -18,12 +18,12 @@ pub const Synchro = struct {
     const AtomicBool = std.atomic.Atomic(bool);
 
     // UI -> Emulator
-    ui_busy: *AtomicBool,
-    paused: *AtomicBool, // FIXME: can ui_busy and paused be the same?
-    should_quit: *AtomicBool,
+    ui_busy: AtomicBool = AtomicBool.init(false),
+    paused: AtomicBool = AtomicBool.init(true), // FIXME: can ui_busy and paused be the same?
+    should_quit: AtomicBool = AtomicBool.init(false),
 
     // Emulator -> UI
-    did_pause: *AtomicBool,
+    did_pause: AtomicBool = AtomicBool.init(false),
 };
 
 /// 4 Cycles in 1 dot
@@ -52,7 +52,7 @@ const RunKind = enum {
     LimitedFPS,
 };
 
-pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, sync: Synchro) void {
+pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, sync: *Synchro) void {
     const audio_sync = config.config().guest.audio_sync and !config.config().host.mute;
     if (audio_sync) log.info("Audio sync enabled", .{});
 
@@ -63,7 +63,7 @@ pub fn run(cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: *Tracker, sync: Synch
     }
 }
 
-fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, sync: Synchro) void {
+fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *Scheduler, tracker: ?*Tracker, sync: *Synchro) void {
     if (kind == .UnlimitedFPS or kind == .LimitedFPS) {
         std.debug.assert(tracker != null);
         log.info("FPS tracking enabled", .{});

@@ -119,16 +119,7 @@ pub fn main() void {
     var gui = Gui.init(allocator, &bus.apu, title_ptr) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
-    var sync: Synchro = blk: {
-        const AtomicBool = std.atomic.Atomic(bool);
-
-        var ui_busy = AtomicBool.init(false);
-        var paused = AtomicBool.init(true);
-        var should_quit = AtomicBool.init(false);
-        var did_pause = AtomicBool.init(false);
-
-        break :blk .{ .ui_busy = &ui_busy, .paused = &paused, .should_quit = &should_quit, .did_pause = &did_pause };
-    };
+    var sync: Synchro = .{};
 
     if (result.args.gdb != 0) {
         const Server = @import("gdbstub").Server;
@@ -145,25 +136,25 @@ pub fn main() void {
 
         log.info("Starting GDB Server Thread", .{});
 
-        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, sync.should_quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
+        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &sync.should_quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
         defer thread.join();
 
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
-            .sync = sync,
+            .sync = &sync,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     } else {
         var tracker = FpsTracker.init();
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, sync }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &sync }) catch |e| exitln("emu thread panicked: {}", .{e});
         defer thread.join();
 
         gui.run(.{
             .cpu = &cpu,
             .scheduler = &scheduler,
             .tracker = &tracker,
-            .sync = sync,
+            .sync = &sync,
         }) catch |e| exitln("main thread panicked: {}", .{e});
     }
 }
