@@ -206,21 +206,9 @@ pub const Gui = struct {
                         self.state.emulation = .Inactive;
                     },
                 },
-                .Active => blk: {
-                    sync.ui_busy.store(true, .Monotonic);
-                    defer sync.ui_busy.store(false, .Monotonic);
-
-                    // spin until we know the emu is paused :)
-
-                    const timeout = 0x100000;
-                    wait_loop: for (0..timeout) |i| {
-                        const ret = sync.did_pause.compareAndSwap(true, false, .Acquire, .Monotonic);
-                        if (ret == null) break :wait_loop;
-
-                        if (i == timeout - 1) break :blk;
-                    }
-
-                    // while (sync.did_pause.compareAndSwap(true, false, .Acquire, .Acquire) != null) std.atomic.spinLoopHint();
+                .Active => {
+                    sync.emu_access.lock();
+                    defer sync.emu_access.unlock();
 
                     // Add FPS count to the histogram
                     if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};

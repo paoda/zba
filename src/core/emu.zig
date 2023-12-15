@@ -17,13 +17,10 @@ const Timer = std.time.Timer;
 pub const Synchro = struct {
     const AtomicBool = std.atomic.Atomic(bool);
 
-    // UI -> Emulator
-    ui_busy: AtomicBool = AtomicBool.init(false),
     paused: AtomicBool = AtomicBool.init(true), // FIXME: can ui_busy and paused be the same?
     should_quit: AtomicBool = AtomicBool.init(false),
 
-    // Emulator -> UI
-    did_pause: AtomicBool = AtomicBool.init(false),
+    emu_access: std.Thread.Mutex = .{},
 };
 
 /// 4 Cycles in 1 dot
@@ -71,18 +68,16 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
 
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
+    // FIXME: audioSync accesses emulator state without any guarantees
+
     switch (kind) {
         .Unlimited, .UnlimitedFPS => {
             log.info("Emulation w/out video sync", .{});
 
             while (!sync.should_quit.load(.Monotonic)) {
-                if (sync.ui_busy.load(.Monotonic) or sync.paused.load(.Monotonic)) {
-                    sync.did_pause.store(true, .Monotonic);
+                if (sync.paused.load(.Monotonic)) continue;
 
-                    continue;
-                }
-
-                runFrame(scheduler, cpu);
+                runFrame(sync, scheduler, cpu);
                 audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
 
                 if (kind == .UnlimitedFPS) tracker.?.tick();
@@ -94,13 +89,9 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             var wake_time: u64 = frame_period;
 
             while (!sync.should_quit.load(.Monotonic)) {
-                if (sync.ui_busy.load(.Monotonic) or sync.paused.load(.Monotonic)) {
-                    sync.did_pause.store(true, .Release);
+                if (sync.paused.load(.Monotonic)) continue;
 
-                    continue;
-                }
-
-                runFrame(scheduler, cpu);
+                runFrame(sync, scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);
 
                 // Spin to make up the difference of OS scheduler innacuracies
@@ -118,7 +109,10 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
     }
 }
 
-pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
+pub fn runFrame(sync: *Synchro, sched: *Scheduler, cpu: *Arm7tdmi) void {
+    sync.emu_access.lock();
+    defer sync.emu_access.unlock();
+
     const frame_end = sched.tick + cycles_per_frame;
 
     while (sched.tick < frame_end) {
