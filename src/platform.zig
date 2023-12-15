@@ -108,18 +108,17 @@ pub const Gui = struct {
 
         const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
-        const objects = opengl_impl.createObjects();
-        defer gl.deleteBuffers(3, @as(*const [3]GLuint, &.{ objects.vao, objects.vbo, objects.ebo }));
+        const vao_id = opengl_impl.vao();
+        defer gl.deleteVertexArrays(1, &[_]GLuint{vao_id});
 
-        const emu_tex = opengl_impl.createScreenTexture(bus_ptr.ppu.framebuf.get(.Renderer));
-        const out_tex = opengl_impl.createOutputTexture();
+        const emu_tex = opengl_impl.screenTex(bus_ptr.ppu.framebuf.get(.Renderer));
+        const out_tex = opengl_impl.outTex();
         defer gl.deleteTextures(2, &[_]GLuint{ emu_tex, out_tex });
 
-        const fbo_id = try opengl_impl.createFrameBuffer(out_tex);
+        const fbo_id = try opengl_impl.frameBuffer(out_tex);
         defer gl.deleteFramebuffers(1, &fbo_id);
 
-        // TODO: Support dynamically switching shaders?
-        const prog_id = try opengl_impl.compileShaders();
+        const prog_id = try opengl_impl.program(); // Dynamic Shaders?
         defer gl.deleteProgram(prog_id);
 
         var win_dim: Dimensions = default_dim;
@@ -231,9 +230,8 @@ pub const Gui = struct {
                         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo_id);
                         defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
-                        const buf = bus_ptr.ppu.framebuf.get(.Renderer);
                         gl.viewport(0, 0, gba_width, gba_height);
-                        opengl_impl.drawScreenTexture(emu_tex, prog_id, objects, buf);
+                        opengl_impl.drawScreen(emu_tex, prog_id, vao_id, bus_ptr.ppu.framebuf.get(.Renderer));
                     }
 
                     // FIXME: We only really care about locking the audio device (and therefore writing silence)
@@ -312,44 +310,24 @@ fn panic() noreturn {
 }
 
 const opengl_impl = struct {
-    // zig fmt: off
-    const vertices: [32]f32 = [_]f32{
-        // Positions        // Colours      // Texture Coords
-         1.0, -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
-         1.0,  1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
-        -1.0,  1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
-        -1.0, -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
-    };
-
-    const indices: [6]u32 = [_]u32{
-        0, 1, 3, // First Triangle
-        1, 2, 3, // Second Triangle
-    };
-    // zig fmt: on
-
-    const Objects = struct { vao: GLuint, vbo: GLuint, ebo: GLuint };
-
-    fn drawScreenTexture(tex_id: GLuint, prog_id: GLuint, ids: Objects, buf: []const u8) void {
+    fn drawScreen(tex_id: GLuint, prog_id: GLuint, vao_id: GLuint, buf: []const u8) void {
         gl.bindTexture(gl.TEXTURE_2D, tex_id);
         defer gl.bindTexture(gl.TEXTURE_2D, 0);
 
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gba_width, gba_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
 
-        // Bind VAO, EBO. VBO not bound
-        gl.bindVertexArray(ids.vao); // VAO
+        // Bind VAO
+        gl.bindVertexArray(vao_id);
         defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ids.ebo); // EBO
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
 
         // Use compiled frag + vertex shader
         gl.useProgram(prog_id);
         defer gl.useProgram(0);
 
-        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 3);
     }
 
-    fn compileShaders() !GLuint {
+    fn program() !GLuint {
         const vert_shader = @embedFile("shader/pixelbuf.vert");
         const frag_shader = @embedFile("shader/pixelbuf.frag");
 
@@ -369,50 +347,22 @@ const opengl_impl = struct {
 
         if (!shader.didCompile(fs)) return error.FragmentCompileError;
 
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
 
-        return program;
+        return prog;
     }
 
-    // Returns the VAO ID since it's used in run()
-    fn createObjects() Objects {
+    fn vao() GLuint {
         var vao_id: GLuint = undefined;
-        var vbo_id: GLuint = undefined;
-        var ebo_id: GLuint = undefined;
-
         gl.genVertexArrays(1, &vao_id);
-        gl.genBuffers(1, &vbo_id);
-        gl.genBuffers(1, &ebo_id);
 
-        gl.bindVertexArray(vao_id);
-        defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
-        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
-
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
-
-        // Position
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
-        gl.enableVertexAttribArray(0);
-        // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((3 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(1);
-        // Texture Coord
-        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((6 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(2);
-
-        return .{ .vao = vao_id, .vbo = vbo_id, .ebo = ebo_id };
+        return vao_id;
     }
 
-    fn createScreenTexture(buf: []const u8) GLuint {
+    fn screenTex(buf: []const u8) GLuint {
         var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
 
@@ -427,7 +377,7 @@ const opengl_impl = struct {
         return tex_id;
     }
 
-    fn createOutputTexture() GLuint {
+    fn outTex() GLuint {
         var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
 
@@ -442,7 +392,7 @@ const opengl_impl = struct {
         return tex_id;
     }
 
-    fn createFrameBuffer(tex_id: GLuint) !GLuint {
+    fn frameBuffer(tex_id: GLuint) !GLuint {
         var fbo_id: GLuint = undefined;
         gl.genFramebuffers(1, &fbo_id);
 
@@ -450,9 +400,7 @@ const opengl_impl = struct {
         defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
         gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
-
-        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
-        gl.drawBuffers(1, &draw_buffers);
+        gl.drawBuffers(1, &@as(GLuint, gl.COLOR_ATTACHMENT0));
 
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
             return error.FrameBufferObejctInitFailed;
@@ -461,8 +409,7 @@ const opengl_impl = struct {
     }
 
     const shader = struct {
-        const Kind = enum { vertex, fragment };
-        const log = std.log.scoped(.Shader);
+        const log = std.log.scoped(.shader);
 
         fn didCompile(id: gl.GLuint) bool {
             var success: gl.GLint = undefined;

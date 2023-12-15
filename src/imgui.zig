@@ -175,7 +175,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 
-        zgui.image(@ptrFromInt(tex_id), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
+        zgui.image(@ptrFromInt(tex_id), .{ .w = w, .h = h });
     }
 
     // TODO: Any other steps to respect the copyright of the libraries I use?

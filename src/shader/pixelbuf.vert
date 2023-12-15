@@ -1,13 +1,10 @@
 #version 330 core
-layout (location = 0) in vec3 pos;
-layout (location = 1) in vec3 in_color;
-layout (location = 2) in vec2 in_uv;
-
-out vec3 color;
 out vec2 uv;
 
+const vec2 pos[3] = vec2[3](vec2(-1.0f, -1.0f), vec2(-1.0f, 3.0f), vec2(3.0f, -1.0f));
+const vec2 uvs[3] = vec2[3](vec2( 0.0f,  0.0f), vec2( 0.0f, 2.0f), vec2(2.0f,  0.0f));
+
 void main() {
-	color = in_color;
-	uv = in_uv;
-	gl_Position = vec4(pos, 1.0);
+	uv = uvs[gl_VertexID];
+	gl_Position = vec4(pos[gl_VertexID], 0.0, 1.0);
 }
