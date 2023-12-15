@@ -4,3 +4,6 @@
 [submodule "lib/zgui"]
 	path = lib/zgui
 	url = https://git.musuka.dev/paoda/zgui
+[submodule "lib/zba-gdbstub"]
+	path = lib/zba-gdbstub
+	url = https://git.musuka.dev/paoda/zba-gdbstub

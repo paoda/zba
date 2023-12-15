@@ -18,10 +18,6 @@
             .url = "https://github.com/Hejsil/zig-clap/archive/f49b94700e0761b7514abdca0e4f0e7f3f938a93.tar.gz",
             .hash = "1220f48518ce22882e102255ed3bcdb7aeeb4891f50b2cdd3bd74b5b2e24d3149ba2",
         },
-        .@"zba-gdbstub" = .{
-            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/d3655e8f61a4943edfce40629dd2a82f9c7bf21c.tar.gz",
-            .hash = "122076f8e22bb55b555c9812d72d908419eda1bf07b6bb7a1f6d9ecb2bb2a49c56d0",
-        },
         .@"zba-util" = .{
             .url = "https://git.musuka.dev/paoda/zba-util/archive/322c798e384a0d24cc84ffcfa2e4a3ca807798a0.tar.gz",
             .hash = "12209ce0e729460b997706e47a53a32f1842672cd120189e612f4871731780a30ed0",

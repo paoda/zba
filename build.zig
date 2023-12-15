@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 
 const Sdk = @import("lib/SDL.zig/Sdk.zig");
 const zgui = @import("lib/zgui/build.zig");
+const gdbstub = @import("lib/zba-gdbstub/build.zig");
 
 pub fn build(b: *std.Build) void {
     // Minimum Zig Version
@@ -26,10 +27,11 @@ pub fn build(b: *std.Build) void {
     exe.addModule("known_folders", b.dependency("known-folders", .{}).module("known-folders")); // https://github.com/ziglibs/known-folders
     exe.addModule("datetime", b.dependency("zig-datetime", .{}).module("zig-datetime")); // https://github.com/frmdstryr/zig-datetime
     exe.addModule("clap", b.dependency("zig-clap", .{}).module("clap")); // https://github.com/Hejsil/zig-clap
-    exe.addModule("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub")); // https://git.musuka.dev/paoda/zba-gdbstub
     exe.addModule("zba-util", b.dependency("zba-util", .{}).module("zba-util")); // https://git.musuka.dev/paoda/zba-util
     exe.addModule("tomlz", b.dependency("tomlz", .{}).module("tomlz")); // https://github.com/mattyhall/tomlz
     exe.addModule("arm32", b.dependency("arm32", .{}).module("arm32")); // https://git.musuka.dev/paoda/arm32
+
+    exe.addModule("gdbstub", gdbstub.module(b)); // https://git.musuka.dev/paoda/gdbstub
 
     // https://github.com/fabioarnold/nfd-zig
     const nfd_dep = b.dependency("nfd", .{ .target = target, .optimize = optimize });
