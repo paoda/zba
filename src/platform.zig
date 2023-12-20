@@ -207,9 +207,6 @@ pub const Gui = struct {
                     },
                 },
                 .Active => {
-                    sync.emu_access.lock();
-                    defer sync.emu_access.unlock();
-
                     // Add FPS count to the histogram
                     if (tracker) |t| self.state.fps_hist.push(t.value()) catch {};
 
@@ -228,9 +225,9 @@ pub const Gui = struct {
                     SDL.SDL_LockAudioDevice(self.audio.device);
                     defer SDL.SDL_UnlockAudioDevice(self.audio.device);
 
-                    zgui_redraw = imgui.draw(&self.state, win_dim, out_tex, cpu);
+                    zgui_redraw = imgui.draw(sync, &self.state, win_dim, out_tex, cpu);
                 },
-                .Inactive => zgui_redraw = imgui.draw(&self.state, win_dim, out_tex, cpu),
+                .Inactive => zgui_redraw = imgui.draw(sync, &self.state, win_dim, out_tex, cpu),
             }
 
             if (zgui_redraw) {

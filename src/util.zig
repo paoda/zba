@@ -295,3 +295,31 @@ pub const FrameBuffer = struct {
         return self.layers[if (dev == .Emulator) self.current else ~self.current];
     }
 };
+
+const RingBuffer = @import("zba-util").RingBuffer;
+
+// TODO: Lock Free Queue?
+pub fn Queue(comptime T: type) type {
+    return struct {
+        inner: RingBuffer(T),
+        mtx: std.Thread.Mutex = .{},
+
+        pub fn init(buf: []T) @This() {
+            return .{ .inner = RingBuffer(T).init(buf) };
+        }
+
+        pub fn push(self: *@This(), value: T) !void {
+            self.mtx.lock();
+            defer self.mtx.unlock();
+
+            try self.inner.push(value);
+        }
+
+        pub fn pop(self: *@This()) ?T {
+            self.mtx.lock();
+            defer self.mtx.unlock();
+
+            return self.inner.pop();
+        }
+    };
+}

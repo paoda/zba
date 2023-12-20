@@ -13,6 +13,7 @@ const Gui = @import("platform.zig").Gui;
 const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Scheduler = @import("core/scheduler.zig").Scheduler;
 const Bus = @import("core/Bus.zig");
+const Synchro = @import("core/emu.zig").Synchro;
 
 const RingBuffer = @import("zba-util").RingBuffer;
 const Dimensions = @import("platform.zig").Dimensions;
@@ -70,11 +71,13 @@ pub const State = struct {
     }
 };
 
-pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) bool {
+pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *const Arm7tdmi) bool {
     const scn_scale = config.config().host.win_scale;
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     zgui.backend.newFrame(@floatFromInt(win_dim.width), @floatFromInt(win_dim.height));
+
+    state.title = handleTitle(&bus_ptr.pak.title);
 
     {
         _ = zgui.beginMainMenuBar();
@@ -99,12 +102,18 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
                 defer nfd.freePath(file_path);
 
                 log.info("user chose: \"{s}\"", .{file_path});
-                emu.replaceGamepak(cpu, file_path) catch |e| {
-                    log.err("failed to replace GamePak: {}", .{e});
+
+                const message = tmp: {
+                    var msg: Synchro.Message = .{ .rom_path = undefined };
+                    @memcpy(msg.rom_path[0..file_path.len], file_path);
+                    break :tmp msg;
+                };
+
+                sync.ch.push(message) catch |e| {
+                    log.err("failed to send file path to emu thread: {}", .{e});
                     break :blk;
                 };
 
-                state.title = handleTitle(&bus_ptr.pak.title);
                 state.emulation = .{ .Transition = .Active };
             }
 
@@ -121,8 +130,15 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
                 defer nfd.freePath(file_path);
 
                 log.info("user chose: \"{s}\"", .{file_path});
-                emu.replaceBios(cpu, file_path) catch |e| {
-                    log.err("failed to replace BIOS: {}", .{e});
+
+                const message = tmp: {
+                    var msg: Synchro.Message = .{ .bios_path = undefined };
+                    @memcpy(msg.bios_path[0..file_path.len], file_path);
+                    break :tmp msg;
+                };
+
+                sync.ch.push(message) catch |e| {
+                    log.err("failed to send file path to emu thread: {}", .{e});
                     break :blk;
                 };
             }
@@ -149,7 +165,7 @@ pub fn draw(state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *Arm7tdmi) 
             }
 
             if (zgui.menuItem("Restart", .{}))
-                emu.reset(cpu);
+                sync.ch.push(.restart) catch |e| log.err("failed to send restart req to emu thread: {}", .{e});
         }
 
         if (zgui.beginMenu("Stats", true)) {

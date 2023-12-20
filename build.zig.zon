@@ -19,8 +19,8 @@
             .hash = "1220f48518ce22882e102255ed3bcdb7aeeb4891f50b2cdd3bd74b5b2e24d3149ba2",
         },
         .@"zba-util" = .{
-            .url = "https://git.musuka.dev/paoda/zba-util/archive/322c798e384a0d24cc84ffcfa2e4a3ca807798a0.tar.gz",
-            .hash = "12209ce0e729460b997706e47a53a32f1842672cd120189e612f4871731780a30ed0",
+            .url = "https://git.musuka.dev/paoda/zba-util/archive/14ea006f4ffae77a333de4993c89690ce94d4abc.tar.gz",
+            .hash = "1220f0d7c5802ae0a297844f96b2226ccc3d4d895277278e4345c3660161debbe85d",
         },
         .tomlz = .{
             .url = "https://github.com/mattyhall/tomlz/archive/47067cd7c902485f7d6e928331fd171ed47f72da.tar.gz",

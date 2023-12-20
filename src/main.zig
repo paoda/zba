@@ -119,7 +119,8 @@ pub fn main() void {
     var gui = Gui.init(allocator, &bus.apu, title_ptr) catch |e| exitln("failed to init gui: {}", .{e});
     defer gui.deinit();
 
-    var sync: Synchro = .{};
+    var sync = Synchro.init(allocator) catch |e| exitln("failed to allocate sync types: {}", .{e});
+    defer sync.deinit(allocator);
 
     if (result.args.gdb != 0) {
         const Server = @import("gdbstub").Server;

@@ -6,8 +6,7 @@ const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("arm32").Arm7tdmi;
 const Bus = @import("Bus.zig");
 const Tracker = @import("../util.zig").FpsTracker;
-
-pub const Message = enum { Pause, Resume, Quit };
+const Channel = @import("../util.zig").Queue;
 
 const stepDmaTransfer = @import("cpu_util.zig").stepDmaTransfer;
 const isHalted = @import("cpu_util.zig").isHalted;
@@ -17,10 +16,27 @@ const Timer = std.time.Timer;
 pub const Synchro = struct {
     const AtomicBool = std.atomic.Atomic(bool);
 
+    // FIXME: This Enum ends up being really LARGE!!!
+    pub const Message = union(enum) {
+        rom_path: [std.fs.MAX_PATH_BYTES]u8,
+        bios_path: [std.fs.MAX_PATH_BYTES]u8,
+        restart: void,
+    };
+
     paused: AtomicBool = AtomicBool.init(true), // FIXME: can ui_busy and paused be the same?
     should_quit: AtomicBool = AtomicBool.init(false),
 
-    emu_access: std.Thread.Mutex = .{},
+    ch: Channel(Message),
+
+    pub fn init(allocator: std.mem.Allocator) !@This() {
+        const msg_buf = try allocator.alloc(Message, 1);
+        return .{ .ch = Channel(Message).init(msg_buf) };
+    }
+
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.ch.inner.buf);
+        self.* = undefined;
+    }
 };
 
 /// 4 Cycles in 1 dot
@@ -75,9 +91,10 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             log.info("Emulation w/out video sync", .{});
 
             while (!sync.should_quit.load(.Monotonic)) {
+                handleChannel(cpu, &sync.ch);
                 if (sync.paused.load(.Monotonic)) continue;
 
-                runFrame(sync, scheduler, cpu);
+                runFrame(scheduler, cpu);
                 audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
 
                 if (kind == .UnlimitedFPS) tracker.?.tick();
@@ -89,9 +106,10 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
             var wake_time: u64 = frame_period;
 
             while (!sync.should_quit.load(.Monotonic)) {
+                handleChannel(cpu, &sync.ch);
                 if (sync.paused.load(.Monotonic)) continue;
 
-                runFrame(sync, scheduler, cpu);
+                runFrame(scheduler, cpu);
                 const new_wake_time = videoSync(&timer, wake_time);
 
                 // Spin to make up the difference of OS scheduler innacuracies
@@ -109,10 +127,23 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
     }
 }
 
-pub fn runFrame(sync: *Synchro, sched: *Scheduler, cpu: *Arm7tdmi) void {
-    sync.emu_access.lock();
-    defer sync.emu_access.unlock();
+inline fn handleChannel(cpu: *Arm7tdmi, channel: *Channel(Synchro.Message)) void {
+    const message = channel.pop() orelse return;
 
+    switch (message) {
+        .rom_path => |path_buf| {
+            const path = std.mem.sliceTo(&path_buf, 0);
+            replaceGamepak(cpu, path) catch |e| log.err("failed to replace GamePak: {}", .{e});
+        },
+        .bios_path => |path_buf| {
+            const path = std.mem.sliceTo(&path_buf, 0);
+            replaceBios(cpu, path) catch |e| log.err("failed to replace BIOS: {}", .{e});
+        },
+        .restart => reset(cpu),
+    }
+}
+
+pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     const frame_end = sched.tick + cycles_per_frame;
 
     while (sched.tick < frame_end) {
@@ -249,21 +280,21 @@ pub const EmuThing = struct {
     }
 };
 
-pub fn reset(cpu: *Arm7tdmi) void {
+fn reset(cpu: *Arm7tdmi) void {
     // @breakpoint();
     cpu.sched.reset(); // Yes this is order sensitive, see the PPU reset for why
     cpu.bus.reset();
     cpu.reset();
 }
 
-pub fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
+fn replaceGamepak(cpu: *Arm7tdmi, file_path: []const u8) !void {
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     try bus_ptr.replaceGamepak(file_path);
     reset(cpu);
 }
 
-pub fn replaceBios(cpu: *Arm7tdmi, file_path: []const u8) !void {
+fn replaceBios(cpu: *Arm7tdmi, file_path: []const u8) !void {
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
     const allocator = bus_ptr.bios.allocator;
