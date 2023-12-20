@@ -71,11 +71,11 @@ pub const State = struct {
     }
 };
 
-pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, cpu: *const Arm7tdmi) bool {
+pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi, tex_id: GLuint) bool {
     const scn_scale = config.config().host.win_scale;
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
-    zgui.backend.newFrame(@floatFromInt(win_dim.width), @floatFromInt(win_dim.height));
+    zgui.backend.newFrame(@floatFromInt(dim.width), @floatFromInt(dim.height));
 
     state.title = handleTitle(&bus_ptr.pak.title);
 
@@ -90,14 +90,16 @@ pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, 
                 state.should_quit = true;
 
             if (zgui.menuItem("Insert ROM", .{})) blk: {
-                const maybe_path = nfd.openFileDialog("gba", null) catch |e| {
-                    log.err("failed to open file dialog: {}", .{e});
-                    break :blk;
-                };
+                const file_path = tmp: {
+                    const path_opt = nfd.openFileDialog("gba", null) catch |e| {
+                        log.err("file dialog failed to open: {}", .{e});
+                        break :blk;
+                    };
 
-                const file_path = maybe_path orelse {
-                    log.warn("did not receive a file path", .{});
-                    break :blk;
+                    break :tmp path_opt orelse {
+                        log.warn("did not receive a file path", .{});
+                        break :blk;
+                    };
                 };
                 defer nfd.freePath(file_path);
 
@@ -118,14 +120,16 @@ pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, 
             }
 
             if (zgui.menuItem("Load BIOS", .{})) blk: {
-                const maybe_path = nfd.openFileDialog("bin", null) catch |e| {
-                    log.err("failed to open file dialog: {}", .{e});
-                    break :blk;
-                };
+                const file_path = tmp: {
+                    const path_opt = nfd.openFileDialog("bin", null) catch |e| {
+                        log.err("file dialog failed to open: {}", .{e});
+                        break :blk;
+                    };
 
-                const file_path = maybe_path orelse {
-                    log.warn("did not receive a file path", .{});
-                    break :blk;
+                    break :tmp path_opt orelse {
+                        log.warn("did not receive a file path", .{});
+                        break :blk;
+                    };
                 };
                 defer nfd.freePath(file_path);
 
@@ -340,9 +344,9 @@ pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, 
         const Event = std.meta.Child(@TypeOf(sched_ptr.queue.items));
 
         var items: [20]Event = undefined;
-        const len = sched_ptr.queue.len;
+        const len = @min(sched_ptr.queue.len, items.len);
 
-        @memcpy(&items, sched_ptr.queue.items);
+        @memcpy(items[0..len], sched_ptr.queue.items[0..len]);
         std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {
@@ -361,9 +365,9 @@ pub fn draw(sync: *Synchro, state: *State, win_dim: Dimensions, tex_id: GLuint, 
         widgets.paletteGrid(.Object, cpu);
     }
 
-    {
-        zgui.showDemoWindow(null);
-    }
+    // {
+    //     zgui.showDemoWindow(null);
+    // }
 
     return true; // request redraw
 }

@@ -225,9 +225,9 @@ pub const Gui = struct {
                     SDL.SDL_LockAudioDevice(self.audio.device);
                     defer SDL.SDL_UnlockAudioDevice(self.audio.device);
 
-                    zgui_redraw = imgui.draw(sync, &self.state, win_dim, out_tex, cpu);
+                    zgui_redraw = imgui.draw(&self.state, sync, win_dim, cpu, out_tex);
                 },
-                .Inactive => zgui_redraw = imgui.draw(sync, &self.state, win_dim, out_tex, cpu),
+                .Inactive => zgui_redraw = imgui.draw(&self.state, sync, win_dim, cpu, out_tex),
             }
 
             if (zgui_redraw) {
