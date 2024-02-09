@@ -382,7 +382,7 @@ pub const KeyInput = extern union {
 
 const AtomicKeyInput = struct {
     const Self = @This();
-    const Ordering = std.atomic.Ordering;
+    const AtomicOrder = std.builtin.AtomicOrder;
 
     inner: KeyInput,
 
@@ -390,18 +390,18 @@ const AtomicKeyInput = struct {
         return .{ .inner = value };
     }
 
-    pub inline fn load(self: *const Self, comptime ordering: Ordering) u16 {
+    pub inline fn load(self: *const Self, comptime ordering: AtomicOrder) u16 {
         return switch (ordering) {
             .AcqRel, .Release => @compileError("not supported for atomic loads"),
             else => @atomicLoad(u16, &self.inner.raw, ordering),
         };
     }
 
-    pub inline fn fetchOr(self: *Self, value: u16, comptime ordering: Ordering) void {
+    pub inline fn fetchOr(self: *Self, value: u16, comptime ordering: AtomicOrder) void {
         _ = @atomicRmw(u16, &self.inner.raw, .Or, value, ordering);
     }
 
-    pub inline fn fetchAnd(self: *Self, value: u16, comptime ordering: Ordering) void {
+    pub inline fn fetchAnd(self: *Self, value: u16, comptime ordering: AtomicOrder) void {
         _ = @atomicRmw(u16, &self.inner.raw, .And, value, ordering);
     }
 };

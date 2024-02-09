@@ -12,7 +12,7 @@ pub fn read(self: *const Self, comptime T: type, address: usize) T {
     const addr = address & 0x3FF;
 
     return switch (T) {
-        u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
+        u32, u16, u8 => std.mem.readInt(T, self.buf[addr..][0..@sizeOf(T)], .little),
         else => @compileError("OAM: Unsupported read width"),
     };
 }
@@ -21,7 +21,7 @@ pub fn write(self: *Self, comptime T: type, address: usize, value: T) void {
     const addr = address & 0x3FF;
 
     switch (T) {
-        u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
+        u32, u16 => std.mem.writeInt(T, self.buf[addr..][0..@sizeOf(T)], value, .little),
         u8 => return, // 8-bit writes are explicitly ignored
         else => @compileError("OAM: Unsupported write width"),
     }

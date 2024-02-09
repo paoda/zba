@@ -11,13 +11,13 @@ pub const FpsTracker = struct {
     const Self = @This();
 
     fps: u32,
-    count: std.atomic.Atomic(u32),
+    count: std.atomic.Value(u32),
     timer: std.time.Timer,
 
     pub fn init() Self {
         return .{
             .fps = 0,
-            .count = std.atomic.Atomic(u32).init(0),
+            .count = std.atomic.Value(u32).init(0),
             .timer = std.time.Timer.start() catch unreachable,
         };
     }

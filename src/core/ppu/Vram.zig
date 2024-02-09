@@ -13,7 +13,7 @@ pub fn read(self: *const Self, comptime T: type, address: usize) T {
     const addr = Self.mirror(address);
 
     return switch (T) {
-        u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
+        u32, u16, u8 => std.mem.readInt(T, self.buf[addr..][0..@sizeOf(T)], .little),
         else => @compileError("VRAM: Unsupported read width"),
     };
 }
@@ -23,7 +23,7 @@ pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address:
     const idx = Self.mirror(address);
 
     switch (T) {
-        u32, u16 => std.mem.writeIntSliceLittle(T, self.buf[idx..][0..@sizeOf(T)], value),
+        u32, u16 => std.mem.writeInt(T, self.buf[idx..][0..@sizeOf(T)], value, .little),
         u8 => {
             // Ignore write if it falls within the boundaries of OBJ VRAM
             switch (mode) {
@@ -32,7 +32,7 @@ pub fn write(self: *Self, comptime T: type, dispcnt: io.DisplayControl, address:
             }
 
             const align_idx = idx & ~@as(u32, 1); // Aligned to a halfword boundary
-            std.mem.writeIntSliceLittle(u16, self.buf[align_idx..][0..@sizeOf(u16)], @as(u16, value) * 0x101);
+            std.mem.writeInt(u16, self.buf[align_idx..][0..@sizeOf(u16)], @as(u16, value) * 0x101, .little);
         },
         else => @compileError("VRAM: Unsupported write width"),
     }

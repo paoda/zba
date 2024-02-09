@@ -18,7 +18,7 @@ pub fn read(self: *const Self, comptime T: type, nr30: io.WaveSelect, addr: u32)
     const base = if (!nr30.bank.read()) @as(u32, 0x10) else 0; // Read from the Opposite Bank in Use
 
     const i = base + addr - 0x0400_0090;
-    return std.mem.readIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)]);
+    return std.mem.readInt(T, self.buf[i..][0..@sizeOf(T)], .little);
 }
 
 pub fn write(self: *Self, comptime T: type, nr30: io.WaveSelect, addr: u32, value: T) void {
@@ -26,7 +26,7 @@ pub fn write(self: *Self, comptime T: type, nr30: io.WaveSelect, addr: u32, valu
     const base = if (!nr30.bank.read()) @as(u32, 0x10) else 0; // Write to the Opposite Bank in Use
 
     const i = base + addr - 0x0400_0090;
-    std.mem.writeIntSliceLittle(T, self.buf[i..][0..@sizeOf(T)], value);
+    std.mem.writeInt(T, self.buf[i..][0..@sizeOf(T)], value, .little);
 }
 
 pub fn init(sched: *Scheduler) Self {

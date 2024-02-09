@@ -121,7 +121,7 @@ pub const Eeprom = struct {
                     .Large => {
                         if (self.writer.len() == 14) {
                             const addr: u10 = @intCast(self.writer.finish());
-                            const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
+                            const value = std.mem.readInt(u64, buf[@as(u13, addr) * 8 ..][0..8], .little);
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;
@@ -131,7 +131,7 @@ pub const Eeprom = struct {
                         if (self.writer.len() == 6) {
                             // FIXME: Duplicated code from above
                             const addr: u6 = @intCast(self.writer.finish());
-                            const value = std.mem.readIntSliceLittle(u64, buf[@as(u13, addr) * 8 ..][0..8]);
+                            const value = std.mem.readInt(u64, buf[@as(u13, addr) * 8 ..][0..8], .little);
 
                             self.reader.configure(value);
                             self.state = .RequestEnd;
@@ -159,7 +159,7 @@ pub const Eeprom = struct {
             },
             .WriteTransfer => {
                 if (self.writer.len() == 64) {
-                    std.mem.writeIntSliceLittle(u64, buf[self.addr * 8 ..][0..8], self.writer.finish());
+                    std.mem.writeInt(u64, buf[self.addr * 8 ..][0..8], self.writer.finish(), .little);
                     self.state = .RequestEnd;
                 }
             },

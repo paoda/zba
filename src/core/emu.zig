@@ -14,7 +14,7 @@ const isHalted = @import("cpu_util.zig").isHalted;
 const Timer = std.time.Timer;
 
 pub const Synchro = struct {
-    const AtomicBool = std.atomic.Atomic(bool);
+    const AtomicBool = std.atomic.Value(bool);
 
     // FIXME: This Enum ends up being really LARGE!!!
     pub const Message = union(enum) {
@@ -228,6 +228,49 @@ pub const EmuThing = struct {
     const Self = @This();
     const Interface = @import("gdbstub").Emulator;
     const Allocator = std.mem.Allocator;
+
+    pub const target =
+        \\<target version="1.0">
+        \\    <architecture>armv4t</architecture>
+        \\    <feature name="org.gnu.gdb.arm.core">
+        \\        <reg name="r0" bitsize="32" type="uint32"/>
+        \\        <reg name="r1" bitsize="32" type="uint32"/>
+        \\        <reg name="r2" bitsize="32" type="uint32"/>
+        \\        <reg name="r3" bitsize="32" type="uint32"/>
+        \\        <reg name="r4" bitsize="32" type="uint32"/>
+        \\        <reg name="r5" bitsize="32" type="uint32"/>
+        \\        <reg name="r6" bitsize="32" type="uint32"/>
+        \\        <reg name="r7" bitsize="32" type="uint32"/>
+        \\        <reg name="r8" bitsize="32" type="uint32"/>
+        \\        <reg name="r9" bitsize="32" type="uint32"/>
+        \\        <reg name="r10" bitsize="32" type="uint32"/>
+        \\        <reg name="r11" bitsize="32" type="uint32"/>
+        \\        <reg name="r12" bitsize="32" type="uint32"/>
+        \\        <reg name="sp" bitsize="32" type="data_ptr"/>
+        \\        <reg name="lr" bitsize="32"/>
+        \\        <reg name="pc" bitsize="32" type="code_ptr"/>
+        \\
+        \\        <reg name="cpsr" bitsize="32" regnum="25"/>
+        \\    </feature>
+        \\</target>
+    ;
+
+    // Game Pak SRAM isn't included
+    // TODO: Can i be more specific here?
+    pub const map =
+        \\ <memory-map version="1.0">
+        \\     <memory type="rom" start="0x00000000" length="0x00004000"/>
+        \\     <memory type="ram" start="0x02000000" length="0x00040000"/>
+        \\     <memory type="ram" start="0x03000000" length="0x00008000"/>
+        \\     <memory type="ram" start="0x04000000" length="0x00000400"/>
+        \\     <memory type="ram" start="0x05000000" length="0x00000400"/>
+        \\     <memory type="ram" start="0x06000000" length="0x00018000"/>
+        \\     <memory type="ram" start="0x07000000" length="0x00000400"/>
+        \\     <memory type="rom" start="0x08000000" length="0x02000000"/>
+        \\     <memory type="rom" start="0x0A000000" length="0x02000000"/>
+        \\     <memory type="rom" start="0x0C000000" length="0x02000000"/>
+        \\ </memory-map>
+    ;
 
     cpu: *Arm7tdmi,
     scheduler: *Scheduler,

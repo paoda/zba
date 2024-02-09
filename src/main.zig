@@ -61,7 +61,8 @@ pub fn main() void {
     defer allocator.free(config_path);
 
     // Parse CLI
-    const result = clap.parse(clap.Help, &params, clap.parsers.default, .{}) catch |e| exitln("failed to parse cli: {}", .{e});
+
+    const result = clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = allocator }) catch |e| exitln("failed to parse cli: {}", .{e});
     defer result.deinit();
 
     // TODO: Move config file to XDG Config directory?
@@ -101,8 +102,8 @@ pub fn main() void {
 
     var bus: Bus = undefined;
 
-    var ischeduler = IScheduler.init(&scheduler);
-    var ibus = IBus.init(&bus);
+    const ischeduler = IScheduler.init(&scheduler);
+    const ibus = IBus.init(&bus);
 
     var cpu = Arm7tdmi.init(ischeduler, ibus);
 
@@ -132,7 +133,10 @@ pub fn main() void {
 
         log.info("Ready to connect", .{});
 
-        var server = Server.init(emulator) catch |e| exitln("failed to init gdb server: {}", .{e});
+        var server = Server.init(
+            emulator,
+            .{ .memory_map = EmuThing.map, .target = EmuThing.target },
+        ) catch |e| exitln("failed to init gdb server: {}", .{e});
         defer server.deinit(allocator);
 
         log.info("Starting GDB Server Thread", .{});
@@ -193,7 +197,7 @@ fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
         const config_file = std.fs.createFileAbsolute(path, .{}) catch |err| exitln("failed to create \"{s}\": {}", .{ path, err });
         defer config_file.close();
 
-        try config_file.writeAll(@embedFile("../example.toml"));
+        try config_file.writeAll(@embedFile("example.toml"));
     };
 
     return path;

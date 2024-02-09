@@ -11,7 +11,7 @@ pub fn read(self: *const Self, comptime T: type, address: usize) T {
     const addr = address & 0x3FFFF;
 
     return switch (T) {
-        u32, u16, u8 => std.mem.readIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)]),
+        u32, u16, u8 => std.mem.readInt(T, self.buf[addr..][0..@sizeOf(T)], .little),
         else => @compileError("EWRAM: Unsupported read width"),
     };
 }
@@ -20,7 +20,7 @@ pub fn write(self: *const Self, comptime T: type, address: usize, value: T) void
     const addr = address & 0x3FFFF;
 
     return switch (T) {
-        u32, u16, u8 => std.mem.writeIntSliceLittle(T, self.buf[addr..][0..@sizeOf(T)], value),
+        u32, u16, u8 => std.mem.writeInt(T, self.buf[addr..][0..@sizeOf(T)], value, .little),
         else => @compileError("EWRAM: Unsupported write width"),
     };
 }

@@ -51,7 +51,7 @@ fn _read(self: *const Self, comptime T: type, addr: u32) T {
     const buf = self.buf orelse std.debug.panic("[BIOS] ZBA tried to read {} from 0x{X:0>8} but not BIOS was present", .{ T, addr });
 
     return switch (T) {
-        u32, u16, u8 => std.mem.readIntSliceLittle(T, buf[addr..][0..@sizeOf(T)]),
+        u32, u16, u8 => std.mem.readInt(T, buf[addr..][0..@sizeOf(T)], .little),
         else => @compileError("BIOS: Unsupported read width"),
     };
 }
