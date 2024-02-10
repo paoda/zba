@@ -30,8 +30,8 @@
             .hash = "12207da7e1f5d6180666db9575f84373055b230cb4259a4b6310562293338dc10b9d",
         },
         .@"zba-gdbstub" = .{
-            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/8c3a166a5daa453c3627dda42bc169c20a470c68.tar.gz",
-            .hash = "12201dd0f0ae0c9efc8928aedd6970738f146675b2b9cbe8190177e37d1d849a6b6d",
+            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/8d2c76e410357166f092008ff5c7f7f097a043a7.tar.gz",
+            .hash = "1220a171c7e14769386e3f4aab6aed53b5e176d654bdf1428a15b972effed750bf30",
         },
         .tomlz = .{
             .url = "https://github.com/paoda/tomlz/archive/f0aebccc31d48a131e57108cb05c8acfe4991eb8.tar.gz",

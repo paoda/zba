@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "**.zig"
+      - "dl_sdl2.ps1"
     branches:
       - main
   schedule:
@@ -15,12 +16,16 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        # os: [ubuntu-latest, windows-latest]
     runs-on: ${{matrix.os}}
     steps:
       - uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.11.0
+          version: 0.12.0-dev.2063+804cee3b9
+      - run: |
+            git config --global core.autocrlf false
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: prepare-linux
         if: runner.os == 'Linux'
         run: |
@@ -29,16 +34,11 @@ jobs:
       - name: prepare-windows
         if: runner.os == 'Windows'
         run: |
-            vcpkg integrate install
-            vcpkg install sdl2:x64-windows
-            git config --global core.autocrlf false
+            .\dl_sdl2.ps1
       - name: prepare-macos
         if: runner.os == 'macOS'
         run: |
             brew install sdl2
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
       - name: build 
         run: zig build -Doptimize=ReleaseSafe -Dcpu=baseline
       - name: prepare-executable
@@ -57,6 +57,5 @@ jobs:
           submodules: recursive
       - uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.11.0-dev.3395+1e7dcaa3a
-      - run: zig fmt src/**/*.zig
-  
+          version: 0.12.0-dev.2063+804cee3b9
+      - run: zig fmt --check {src,lib}/**/*.zig build.zig build.zig.zon

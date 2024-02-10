@@ -1,6 +1,6 @@
 [submodule "lib/SDL.zig"]
 	path = lib/SDL.zig
-	url = https://github.com/MasterQ32/SDL.zig
+	url = https://github.com/paoda/SDL.zig
 [submodule "lib/zgui"]
 	path = lib/zgui
 	url = https://git.musuka.dev/paoda/zgui
