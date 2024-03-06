@@ -41,14 +41,12 @@ jobs:
             brew install sdl2
       - name: build 
         run: zig build -Doptimize=ReleaseSafe -Dcpu=baseline
-      - name: prepare-executable
-        run: |
-            mv zig-out/lib/* zig-out/bin
       - name: upload
         uses: actions/upload-artifact@v3
         with:
           name: zba-${{matrix.os}}
-          path: zig-out/bin
+          path: zig-out
+
   lint:
     runs-on: ubuntu-latest
     steps: 

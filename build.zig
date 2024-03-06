@@ -43,7 +43,6 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("sdl2", sdk.getNativeModule());
 
     // https://git.musuka.dev/paoda/zgui
-    // .shared option should stay in sync with SDL.zig call above where true == .dynamic, and false == .static
     const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3 } });
     zgui_pkg.link(exe);
     sdk.link(zgui_pkg.zgui_c_cpp, .dynamic);
