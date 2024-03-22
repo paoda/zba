@@ -41,5 +41,9 @@
             .url = "https://git.musuka.dev/paoda/arm32/archive/6f0e27136072610e6dba97ff8aaf5e2ec86e2c09.tar.gz",
             .hash = "122047d0affe12b9e9e9c655a7ba6d51b311f02d688e9f1c9a91394a03103f1c0cd5",
         },
+        .zgui = .{
+            .url = "https://git.musuka.dev/paoda/zgui/archive/28e926748b8f302dd4e2902835e392c9b87ea3c6.tar.gz",
+            .hash = "1220dbf1d809d07d1910b9853f162458ed1ebc66be81b21ccfc40a2552bc1019f9c2",
+        },
     },
 }
