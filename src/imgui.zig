@@ -344,7 +344,7 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         const Event = std.meta.Child(@TypeOf(sched_ptr.queue.items));
 
         var items: [20]Event = undefined;
-        const len = @min(sched_ptr.queue.len, items.len);
+        const len = @min(sched_ptr.queue.items.len, items.len);
 
         @memcpy(items[0..len], sched_ptr.queue.items[0..len]);
         std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));

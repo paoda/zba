@@ -230,5 +230,5 @@ fn exitln(comptime format: []const u8, args: anytype) noreturn {
     const stderr = std.io.getStdErr().writer();
     stderr.print(format, args) catch {}; // Just exit already...
     stderr.writeByte('\n') catch {};
-    std.os.exit(1);
+    std.process.exit(1);
 }

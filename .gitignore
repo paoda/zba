@@ -1,6 +1,7 @@
 /.vscode
 /bin
 **/zig-cache
+**/.zig-cache
 **/zig-out
 /docs
 **/*.log

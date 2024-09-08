@@ -23,12 +23,12 @@ pub const FpsTracker = struct {
     }
 
     pub fn tick(self: *Self) void {
-        _ = self.count.fetchAdd(1, .Monotonic);
+        _ = self.count.fetchAdd(1, .monotonic);
     }
 
     pub fn value(self: *Self) u32 {
         if (self.timer.read() >= std.time.ns_per_s) {
-            self.fps = self.count.swap(0, .Monotonic);
+            self.fps = self.count.swap(0, .monotonic);
             self.timer.reset();
         }
 

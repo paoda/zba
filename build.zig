@@ -1,16 +1,16 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Sdk = @import("lib/SDL.zig/build.zig");
+const sdl = @import("lib/SDL.zig/build.zig");
 
 const SemVer = std.SemanticVersion;
 
-const expected_zig_version = "0.12.0-dev.2063+804cee3b9";
+const target_version = "0.13.0";
 
 pub fn build(b: *std.Build) void {
-    const attempted_zig_version = builtin.zig_version;
-    if (comptime attempted_zig_version.order(SemVer.parse(expected_zig_version) catch unreachable) != .eq) {
-        @compileError("ZBA must be built with Zig v" ++ expected_zig_version ++ ".");
+    const actual_version = builtin.zig_version;
+    if (comptime actual_version.order(SemVer.parse(target_version) catch unreachable) != .eq) {
+        @compileError("ZBA must be built with Zig v" ++ target_version ++ ".");
     }
 
     const target = b.standardTargetOptions(.{});
@@ -18,12 +18,12 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "zba",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const sdk = Sdk.init(b, null); // https://github.com/MasterQ32/SDL.zig
+    const sdk = sdl.init(b, null, null);
     const zgui = b.dependency("zgui", .{ .shared = false, .with_implot = true, .backend = .sdl2_opengl3 });
     const imgui = zgui.artifact("imgui");
 
@@ -33,17 +33,17 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("zba-util", b.dependency("zba-util", .{}).module("zba-util")); // https://git.musuka.dev/paoda/zba-util
     exe.root_module.addImport("tomlz", b.dependency("tomlz", .{}).module("tomlz")); // https://github.com/mattyhall/tomlz
     exe.root_module.addImport("arm32", b.dependency("arm32", .{}).module("arm32")); // https://git.musuka.dev/paoda/arm32
-    exe.root_module.addImport("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub")); // https://git.musuka.dev/paoda/gdbstub
+    exe.root_module.addImport("gdbstub", b.dependency("zba-gdbstub", .{}).module("zba-gdbstub")); // https://git.musuka.dev/paoda/gdbstub
     exe.root_module.addImport("nfd", b.dependency("nfd", .{}).module("nfd")); // https://github.com/fabioarnold/nfd-zig
     exe.root_module.addImport("zgui", zgui.module("root")); // https://git.musuka.dev/paoda/zgui
-    exe.root_module.addImport("sdl2", sdk.getNativeModule());
+    exe.root_module.addImport("sdl2", sdk.getNativeModule()); // https://github.com/MasterQ32/SDL.zig
 
-    exe.root_module.addAnonymousImport("bitfield", .{ .root_source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/
-    exe.root_module.addAnonymousImport("gl", .{ .root_source_file = .{ .path = "lib/gl.zig" } }); // https://github.com/MasterQ32/zig-opengl
-    exe.root_module.addAnonymousImport("example.toml", .{ .root_source_file = .{ .path = "example.toml" } });
+    exe.root_module.addAnonymousImport("bitfield", .{ .root_source_file = b.path("lib/bitfield.zig") }); // https://github.com/FlorenceOS/
+    exe.root_module.addAnonymousImport("gl", .{ .root_source_file = b.path("lib/gl.zig") }); // https://github.com/MasterQ32/zig-opengl
+    exe.root_module.addAnonymousImport("example.toml", .{ .root_source_file = b.path("example.toml") });
 
-    sdk.link(exe, .dynamic);
-    sdk.link(imgui, .dynamic);
+    sdk.link(exe, .dynamic, .SDL2);
+    sdk.link(imgui, .dynamic, .SDL2);
     exe.linkLibrary(imgui);
 
     b.installArtifact(exe);
@@ -56,7 +56,7 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });

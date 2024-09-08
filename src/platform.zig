@@ -126,7 +126,7 @@ pub const Gui = struct {
         emu_loop: while (true) {
             // Outside of `SDL.SDL_QUIT` below, the DearImgui UI might signal that the program
             // should exit, in which case we should also handle this
-            if (self.state.should_quit or sync.should_quit.load(.Monotonic)) break :emu_loop;
+            if (self.state.should_quit or sync.should_quit.load(.monotonic)) break :emu_loop;
 
             var event: SDL.SDL_Event = undefined;
             while (SDL.SDL_PollEvent(&event) != 0) {
@@ -153,7 +153,7 @@ pub const Gui = struct {
                             else => {},
                         }
 
-                        bus_ptr.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                        bus_ptr.io.keyinput.fetchAnd(~keyinput.raw, .monotonic);
                     },
                     SDL.SDL_KEYUP => {
                         // TODO: Make use of compare_and_xor?
@@ -174,7 +174,7 @@ pub const Gui = struct {
                             else => {},
                         }
 
-                        bus_ptr.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
+                        bus_ptr.io.keyinput.fetchOr(keyinput.raw, .monotonic);
                     },
                     SDL.SDL_WINDOWEVENT => {
                         if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
@@ -193,7 +193,7 @@ pub const Gui = struct {
             switch (self.state.emulation) {
                 .Transition => |inner| switch (inner) {
                     .Active => {
-                        sync.paused.store(false, .Monotonic);
+                        sync.paused.store(false, .monotonic);
                         if (!config.config().host.mute) SDL.SDL_PauseAudioDevice(self.audio.device, 0);
 
                         self.state.emulation = .Active;
@@ -201,7 +201,7 @@ pub const Gui = struct {
                     .Inactive => {
                         // Assert that double pausing is impossible
                         SDL.SDL_PauseAudioDevice(self.audio.device, 1);
-                        sync.paused.store(true, .Monotonic);
+                        sync.paused.store(true, .monotonic);
 
                         self.state.emulation = .Inactive;
                     },
@@ -243,7 +243,7 @@ pub const Gui = struct {
             SDL.SDL_GL_SwapWindow(self.window);
         }
 
-        sync.should_quit.store(true, .Monotonic);
+        sync.should_quit.store(true, .monotonic);
     }
 
     fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {

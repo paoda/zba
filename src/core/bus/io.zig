@@ -96,7 +96,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) ?T {
             0x0400_0128 => util.io.read.todo(log, "Read {} from SIOCNT", .{T}),
 
             // Keypad Input
-            0x0400_0130 => bus.io.keyinput.load(.Monotonic),
+            0x0400_0130 => bus.io.keyinput.load(.monotonic),
 
             // Serial Communication 2
             0x0400_0134 => util.io.read.todo(log, "Read {} from RCNT", .{T}),
@@ -392,7 +392,7 @@ const AtomicKeyInput = struct {
 
     pub inline fn load(self: *const Self, comptime ordering: AtomicOrder) u16 {
         return switch (ordering) {
-            .AcqRel, .Release => @compileError("not supported for atomic loads"),
+            .acq_rel, .release => @compileError("not supported for atomic loads"),
             else => @atomicLoad(u16, &self.inner.raw, ordering),
         };
     }
