@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.12.0-dev.2063+804cee3b9
+          version: 0.13.0
       - run: |
             git config --global core.autocrlf false
       - uses: actions/checkout@v3
@@ -55,5 +55,5 @@ jobs:
           submodules: recursive
       - uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.12.0-dev.2063+804cee3b9
+          version: 0.13.0
       - run: zig fmt --check {src,lib}/**/*.zig build.zig build.zig.zon
