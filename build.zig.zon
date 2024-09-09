@@ -42,8 +42,8 @@
             .hash = "12203c3dacf3a7aa7aee5fc5763dd7b40399bd1c34d1483330b6bd5a76bffef22d82",
         },
         .zgui = .{
-            .url = "git+https://git.musuka.dev/paoda/zgui#7f8d05101e96c64314d7926c80ee157dcb89da4e",
-            .hash = "1220bd81a1c7734892b1d4233ed047710487787873c85dd5fc76d1764a331ed2ff43",
+            .url = "git+https://git.musuka.dev/paoda/zgui#a50d52bae52992cccf5d38e9bdcdb4237df7cf87",
+            .hash = "1220098636c0c0b7b0b694c760d43068ac06ef50ab30437323f770f3ffebc32a5beb",
         },
     },
 }
