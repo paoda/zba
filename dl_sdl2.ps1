@@ -19,12 +19,16 @@ if (!(Test-Path -PathType Leaf $ArchiveFile)) {
 
 Expand-Archive $ArchiveFile
 
-if (Test-Path -PathType Leaf .\SDL2) {
+if (Test-Path -PathType Container .\SDL2) {
 	Remove-Item -Recurse .\SDL2
 }
 
 New-Item -Force -ItemType Directory -Path .\SDL2 
 Get-ChildItem -Path ".\SDL2-devel-mingw\SDL2-$SDL2Version\x86_64-w64-mingw32" | Move-Item -Destination .\SDL2
+
+# #include <SDL.h>
+Move-Item -Force -Path .\SDL2\include\SDL2\* -Destination .\SDL2\include
+Remove-Item -Force .\SDL2\include\SDL2
 
 New-Item -Force .\sdl.json -Value $Json
 
