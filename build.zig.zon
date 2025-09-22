@@ -8,6 +8,7 @@
         "lib/gl.zig",
         "src",
     },
+    .minimum_zig_version = "0.13.0",
     .dependencies = .{
         .nfd = .{
             .url = "git+https://github.com/paoda/nfd-zig#ad81729d33da30d5f4fd23718debec48245121ca",
