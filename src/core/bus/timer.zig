@@ -200,10 +200,10 @@ fn Timer(comptime id: u2) type {
 
             if (self.cnt.irq.read()) {
                 switch (id) {
-                    0 => io.irq.tim0.set(),
-                    1 => io.irq.tim1.set(),
-                    2 => io.irq.tim2.set(),
-                    3 => io.irq.tim3.set(),
+                    0 => io.irq.tim0.write(true),
+                    1 => io.irq.tim1.write(true),
+                    2 => io.irq.tim2.write(true),
+                    3 => io.irq.tim3.write(true),
                 }
 
                 handleInterrupt(cpu);

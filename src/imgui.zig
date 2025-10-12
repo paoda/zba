@@ -15,11 +15,11 @@ const Scheduler = @import("core/scheduler.zig").Scheduler;
 const Bus = @import("core/Bus.zig");
 const Synchro = @import("core/emu.zig").Synchro;
 
-const RingBuffer = @import("zba-util").RingBuffer;
+const RingBuffer = @import("zba_util").RingBuffer;
 const Dimensions = @import("platform.zig").Dimensions;
 
 const Allocator = std.mem.Allocator;
-const GLuint = gl.GLuint;
+const GLuint = gl.uint;
 
 const gba_width = @import("core/ppu.zig").width;
 const gba_height = @import("core/ppu.zig").height;
@@ -75,7 +75,7 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
     const scn_scale = config.config().host.win_scale;
     const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
 
-    zgui.backend.newFrame(@floatFromInt(dim.width), @floatFromInt(dim.height));
+    zgui.backend.newFrame(dim.width, dim.height);
 
     state.title = handleTitle(&bus_ptr.pak.title);
 
@@ -195,7 +195,8 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 
-        zgui.image(@ptrFromInt(tex_id), .{ .w = w, .h = h });
+        // FIXME(paoda): go look at some documentation here
+        zgui.image(.{ .tex_data = null, .tex_id = @enumFromInt(tex_id) }, .{ .w = w, .h = h });
     }
 
     // TODO: Any other steps to respect the copyright of the libraries I use?
@@ -204,7 +205,7 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         defer zgui.end();
 
         zgui.bulletText("known-folders by ziglibs", .{});
-        zgui.bulletText("nfd-zig by Fabio Arnold", .{});
+        zgui.bulletText("nfd-zig ported by Fabio Arnold", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
@@ -212,7 +213,7 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
             zgui.bulletText("nativefiledialog by Michael Labbe", .{});
         }
 
-        zgui.bulletText("SDL.zig by Felix Queißner", .{});
+        zgui.bulletText("SDL ported by Carl Åstholm", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
@@ -220,10 +221,10 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
             zgui.bulletText("SDL by Sam Lantinga", .{});
         }
 
-        zgui.bulletText("tomlz by Matthew Hall", .{});
+        // zgui.bulletText("tomlz by Matthew Hall", .{});
         zgui.bulletText("zba-gdbstub by Rekai Musuka", .{});
         zgui.bulletText("zba-util by Rekai Musuka", .{});
-        zgui.bulletText("zgui by Michal Ziulek", .{});
+        zgui.bulletText("zgui ported by Michal Ziulek et al.", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
@@ -234,8 +235,8 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         zgui.bulletText("zig-datetime by Jairus Martin", .{});
 
         zgui.newLine();
-        zgui.bulletText("bitfield.zig by Hannes Bredberg and FlorenceOS contributors", .{});
-        zgui.bulletText("zig-opengl by Felix Queißner", .{});
+        zgui.bulletText("bitfield.zig by Hannes Bredberg et al.", .{});
+        zgui.bulletText("zigglgen ported by Carl Åstholm", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
@@ -272,63 +273,63 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         _ = zgui.begin("Performance", .{ .popen = &state.win_stat.show_perf });
         defer zgui.end();
 
-        const tmp = blk: {
-            var buf: [histogram_len]u32 = undefined;
-            const len = state.fps_hist.copy(&buf);
+        // const tmp = blk: {
+        //     var buf: [histogram_len]u32 = undefined;
+        //     const len = state.fps_hist.copy(&buf);
 
-            break :blk .{ buf, len };
-        };
-        const values = tmp[0];
-        const len = tmp[1];
+        //     break :blk .{ buf, len };
+        // };
+        // const values = tmp[0];
+        // const len = tmp[1];
 
-        if (len == values.len) _ = state.fps_hist.pop();
+        // if (len == values.len) _ = state.fps_hist.pop();
 
-        const sorted = blk: {
-            var buf: @TypeOf(values) = undefined;
+        // const sorted = blk: {
+        //     var buf: @TypeOf(values) = undefined;
 
-            @memcpy(buf[0..len], values[0..len]);
-            std.mem.sort(u32, buf[0..len], {}, std.sort.asc(u32));
+        //     @memcpy(buf[0..len], values[0..len]);
+        //     std.mem.sort(u32, buf[0..len], {}, std.sort.asc(u32));
 
-            break :blk buf;
-        };
+        //     break :blk buf;
+        // };
 
-        const y_max: f64 = 2 * if (len != 0) @as(f64, @floatFromInt(sorted[len - 1])) else emu.frame_rate;
-        const x_max: f64 = @floatFromInt(values.len);
+        // const y_max: f64 = 2 * if (len != 0) @as(f64, @floatFromInt(sorted[len - 1])) else emu.frame_rate;
+        // const x_max: f64 = @floatFromInt(values.len);
 
-        const y_args = .{ .flags = .{ .no_grid_lines = true } };
-        const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
+        // const y_args = .{ .flags = .{ .no_grid_lines = true } };
+        // const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
 
-        if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
-            defer zgui.plot.endPlot();
+        // if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
+        //     defer zgui.plot.endPlot();
 
-            zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
-            zgui.plot.setupAxis(.x1, x_args);
-            zgui.plot.setupAxis(.y1, y_args);
-            zgui.plot.setupAxisLimits(.y1, .{ .min = 0.0, .max = y_max, .cond = .always });
-            zgui.plot.setupAxisLimits(.x1, .{ .min = 0.0, .max = x_max, .cond = .always });
-            zgui.plot.setupFinish();
+        //     zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
+        //     zgui.plot.setupAxis(.x1, x_args);
+        //     zgui.plot.setupAxis(.y1, y_args);
+        //     zgui.plot.setupAxisLimits(.y1, .{ .min = 0.0, .max = y_max, .cond = .always });
+        //     zgui.plot.setupAxisLimits(.x1, .{ .min = 0.0, .max = x_max, .cond = .always });
+        //     zgui.plot.setupFinish();
 
-            zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
-        }
+        //     zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
+        // }
 
-        const stats: struct { u32, u32, u32 } = blk: {
-            if (len == 0) break :blk .{ 0, 0, 0 };
+        // const stats: struct { u32, u32, u32 } = blk: {
+        //     if (len == 0) break :blk .{ 0, 0, 0 };
 
-            const average: u32 = average: {
-                var sum: u32 = 0;
-                for (sorted[0..len]) |value| sum += value;
+        //     const average: u32 = average: {
+        //         var sum: u32 = 0;
+        //         for (sorted[0..len]) |value| sum += value;
 
-                break :average @intCast(sum / len);
-            };
-            const median = sorted[len / 2];
-            const low = sorted[len / 100]; // 1% Low
+        //         break :average @intCast(sum / len);
+        //     };
+        //     const median = sorted[len / 2];
+        //     const low = sorted[len / 100]; // 1% Low
 
-            break :blk .{ average, median, low };
-        };
+        //     break :blk .{ average, median, low };
+        // };
 
-        zgui.text("Average: {:0>3} fps", .{stats[0]});
-        zgui.text(" Median: {:0>3} fps", .{stats[1]});
-        zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
+        // zgui.text("Average: {:0>3} fps", .{stats[0]});
+        // zgui.text(" Median: {:0>3} fps", .{stats[1]});
+        // zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
     }
 
     if (state.win_stat.show_schedule) {
@@ -336,8 +337,10 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         defer zgui.end();
 
         const scheduler = cpu.sched;
+        _ = scheduler;
 
-        zgui.text("tick: {X:0>16}", .{scheduler.now()});
+        // zgui.text("tick: {X:0>16}", .{scheduler.now()});
+        zgui.text("tick: (TODO: FIX THIS)", .{});
         zgui.separator();
 
         const sched_ptr: *Scheduler = @ptrCast(@alignCast(cpu.sched.ptr));
@@ -350,7 +353,9 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {
-            zgui.text("{X:0>16} | {?}", .{ event.tick, event.kind });
+            // zgui.text("{X:0>16} | {?}", .{ event.tick, event.kind });
+            _ = event;
+            zgui.text("TODO: Fix This", .{});
         }
     }
 

@@ -13,7 +13,7 @@ const setHalf = util.setHalf;
 const setQuart = util.setQuart;
 const handleInterrupt = @import("../cpu_util.zig").handleInterrupt;
 
-const rotr = @import("zba-util").rotr;
+const rotr = @import("zba_util").rotr;
 
 pub fn create() DmaTuple {
     return .{ DmaController(0).init(), DmaController(1).init(), DmaController(2).init(), DmaController(3).init() };
@@ -286,17 +286,17 @@ fn DmaController(comptime id: u2) type {
             if (self._word_count == 0) {
                 if (self.cnt.irq.read()) {
                     switch (id) {
-                        0 => bus_ptr.io.irq.dma0.set(),
-                        1 => bus_ptr.io.irq.dma1.set(),
-                        2 => bus_ptr.io.irq.dma2.set(),
-                        3 => bus_ptr.io.irq.dma3.set(),
+                        0 => bus_ptr.io.irq.dma0.write(true),
+                        1 => bus_ptr.io.irq.dma1.write(true),
+                        2 => bus_ptr.io.irq.dma2.write(true),
+                        3 => bus_ptr.io.irq.dma3.write(true),
                     }
 
                     handleInterrupt(cpu);
                 }
 
                 // If we're not repeating, Fire the IRQs and disable the DMA
-                if (!self.cnt.repeat.read()) self.cnt.enabled.unset();
+                if (!self.cnt.repeat.read()) self.cnt.enabled.write(false);
 
                 // We want to disable our internal enabled flag regardless of repeat
                 // because we only want to step A DMA that repeats during it's specific
@@ -338,7 +338,7 @@ fn DmaController(comptime id: u2) type {
 
             // FIXME: Safe to just assume whatever DAD is set to is the FIFO Address?
             // self.dad_latch = fifo_addr;
-            self.cnt.repeat.set();
+            self.cnt.repeat.write(true);
             self._word_count = 4;
             self.in_progress = true;
         }

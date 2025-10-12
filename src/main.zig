@@ -128,8 +128,8 @@ pub fn main() void {
         const EmuThing = @import("core/emu.zig").EmuThing;
 
         var wrapper = EmuThing.init(&cpu, &scheduler);
-        var emulator = wrapper.interface(allocator);
-        defer emulator.deinit();
+        var emulator = wrapper.interface();
+        defer emulator.deinit(allocator);
 
         log.info("Ready to connect", .{});
 
@@ -197,7 +197,9 @@ fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
         const config_file = std.fs.createFileAbsolute(path, .{}) catch |err| exitln("failed to create \"{s}\": {}", .{ path, err });
         defer config_file.close();
 
-        try config_file.writeAll(@embedFile("example.toml"));
+        // FIXME(2025-09-22): re-enable
+        // try config_file.writeAll(@embedFile("example.toml"));
+        try config_file.writeAll("");
     };
 
     return path;
@@ -221,13 +223,15 @@ fn ensureConfigDirExists(config_path: []const u8) !void {
 fn romPath(allocator: Allocator, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !?[]const u8 {
     return switch (result.positionals.len) {
         0 => null,
-        1 => try allocator.dupe(u8, result.positionals[0]),
+        1 => if (result.positionals[0]) |path| try allocator.dupe(u8, path) else null,
         else => exitln("ZBA received too many positional arguments.", .{}),
     };
 }
 
 fn exitln(comptime format: []const u8, args: anytype) noreturn {
-    const stderr = std.io.getStdErr().writer();
+    var buf: [1024]u8 = undefined;
+    var stderr = std.fs.File.stderr().writer(&buf).interface;
+
     stderr.print(format, args) catch {}; // Just exit already...
     stderr.writeByte('\n') catch {};
     std.process.exit(1);

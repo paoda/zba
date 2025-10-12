@@ -2,8 +2,8 @@ const std = @import("std");
 const io = @import("bus/io.zig");
 const util = @import("../util.zig");
 
-const Bit = @import("bitfield").Bit;
-const Bitfield = @import("bitfield").Bitfield;
+const Bit = @import("bitjuggle").Boolean;
+const Bitfield = @import("bitjuggle").Bitfield;
 const dma = @import("bus/dma.zig");
 
 const Oam = @import("ppu/Oam.zig");
@@ -1007,7 +1007,7 @@ pub const Ppu = struct {
 
         // Transitioning to a Hblank
         if (self.dispstat.hblank_irq.read()) {
-            bus_ptr.io.irq.hblank.set();
+            bus_ptr.io.irq.hblank.write(true);
             handleInterrupt(cpu);
         }
 
@@ -1015,7 +1015,7 @@ pub const Ppu = struct {
         if (!self.dispstat.vblank.read())
             dma.onBlanking(bus_ptr, .HBlank);
 
-        self.dispstat.hblank.set();
+        self.dispstat.hblank.write(true);
         self.sched.push(.HBlank, 68 * 4 -| late);
     }
 
@@ -1027,14 +1027,14 @@ pub const Ppu = struct {
         const scanline = (old_scanline + 1) % 228;
 
         self.vcount.scanline.write(scanline);
-        self.dispstat.hblank.unset();
+        self.dispstat.hblank.write(false);
 
         // Perform Vc == VcT check
         const coincidence = scanline == self.dispstat.vcount_trigger.read();
         self.dispstat.coincidence.write(coincidence);
 
         if (coincidence and self.dispstat.vcount_irq.read()) {
-            bus_ptr.io.irq.coincidence.set();
+            bus_ptr.io.irq.coincidence.write(true);
             handleInterrupt(cpu);
         }
 
@@ -1046,10 +1046,10 @@ pub const Ppu = struct {
             if (scanline == 160) {
                 self.framebuf.swap(); // Swap FrameBuffers
 
-                self.dispstat.vblank.set();
+                self.dispstat.vblank.write(true);
 
                 if (self.dispstat.vblank_irq.read()) {
-                    bus_ptr.io.irq.vblank.set();
+                    bus_ptr.io.irq.vblank.write(true);
                     handleInterrupt(cpu);
                 }
 
@@ -1060,7 +1060,7 @@ pub const Ppu = struct {
                 dma.onBlanking(bus_ptr, .VBlank);
             }
 
-            if (scanline == 227) self.dispstat.vblank.unset();
+            if (scanline == 227) self.dispstat.vblank.write(false);
             self.sched.push(.VBlank, 240 * 4 -| late);
         }
     }

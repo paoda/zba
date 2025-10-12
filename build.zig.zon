@@ -1,5 +1,5 @@
 .{
-    .name = "zba",
+    .name = .zba,
     .version = "0.1.0",
     .paths = .{
         "build.zig",
@@ -8,43 +8,48 @@
         "lib/gl.zig",
         "src",
     },
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.1",
+    .fingerprint = 0xcb596c7fbdb20efc,
     .dependencies = .{
-        .nfd = .{
-            .url = "git+https://github.com/paoda/nfd-zig#ad81729d33da30d5f4fd23718debec48245121ca",
-            .hash = "1220a679380847513262c8c5c474d4a415f9ecc4921c8c6aefbdbdce66cf2aa19ceb",
+        // .tomlz = .{
+        //     .url = "git+https://github.com/paoda/tomlz#9a16dd53927ef2012478b6494bafb4475e44f4c9",
+        //     .hash = "12204f922cab84980e36b5c058d354ec0ee169bda401c8e0e80a463580349b476569",
+        // },
+
+        .zba_util = .{ .path = "../zba-util" },
+        .arm32 = .{ .path = "../arm32" },
+        .zba_gdbstub = .{ .path = "../zba-gdbstub" },
+        .known_folders = .{
+            .url = "git+https://github.com/ziglibs/known-folders.git#ab5cf5feb936fa3b72c95d3ad0c0c67791937ba1",
+            .hash = "known_folders-0.0.0-Fy-PJtTTAADUOhGKM0sxzG4eMkNQxRvx9e5dfHVyaeA3",
         },
-        .@"known-folders" = .{
-            .url = "git+https://github.com/ziglibs/known-folders#1cceeb70e77dec941a4178160ff6c8d05a74de6f",
-            .hash = "12205f5e7505c96573f6fc5144592ec38942fb0a326d692f9cddc0c7dd38f9028f29",
+        .nfdzig = .{
+            .url = "git+https://github.com/paoda/nfd-zig#0ad2a0c092ffba0c98613d619b82100c991f5ad6",
+            .hash = "nfdzig-0.1.0-11fxvN6IBgD5rvvfjrw1wPqibMsbUJ-h2ZcGR6FOEvrm",
         },
-        .@"zig-datetime" = .{
-            .url = "git+https://github.com/frmdstryr/zig-datetime#70aebf28fb3e137cd84123a9349d157a74708721",
-            .hash = "122077215ce36e125a490e59ec1748ffd4f6ba00d4d14f7308978e5360711d72d77f",
+        .datetime = .{
+            .url = "git+https://github.com/frmdstryr/zig-datetime#3a39a21e6e34dcb0ade0ff828d0914d40ba535f3",
+            .hash = "datetime-0.8.0-cJNXzP_YAQBxQ5hkNNP6ScnG5XsqciJmeP5RVV4xwCBA",
         },
-        .@"zig-clap" = .{
-            .url = "git+https://github.com/Hejsil/zig-clap#c0193e9247335a6c1688b946325060289405de2a",
-            .hash = "12207ee987ce045596cb992cfb15b0d6d9456e50d4721c3061c69dabc2962053644d",
+        .clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.11.0.tar.gz",
+            .hash = "clap-0.11.0-oBajB-HnAQDPCKYzwF7rO3qDFwRcD39Q0DALlTSz5H7e",
         },
-        .@"zba-util" = .{
-            .url = "git+https://git.musuka.dev/paoda/zba-util#bf0e744047ce1ec90172dbcc0c72bfcc29a063e3",
-            .hash = "1220d044ecfbeacc3b3cebeff131d587e24167d61435a3cb96dffd4d4521bb06aed0",
+        .sdl = .{
+            .url = "git+https://github.com/castholm/SDL.git#b1913e7c31ad72ecfd3ab04aeac387027754cfaf",
+            .hash = "sdl-0.3.0+3.2.22-7uIn9Pg3fwGG2IyIOPxxOSVe-75nUng9clt7tXGFLzMr",
         },
-        .@"zba-gdbstub" = .{
-            .url = "git+https://git.musuka.dev/paoda/zba-gdbstub#9a50607d5f48293f950a4e823344f2bc24582a5a",
-            .hash = "1220ac267744ed2a735f03c4620d7c6210fbd36d7bfb2b376ddc3436faebadee0f61",
+        .zigglgen = .{
+            .url = "git+https://github.com/castholm/zigglgen.git#a1e969b3e35818785fab0373124f50463793b28a",
+            .hash = "zigglgen-0.4.0-bmyqLQGMLwA0EPVmSm-Nc6Olb84zBzvwMjguxwKYLf1S",
         },
-        .tomlz = .{
-            .url = "git+https://github.com/paoda/tomlz#9a16dd53927ef2012478b6494bafb4475e44f4c9",
-            .hash = "12204f922cab84980e36b5c058d354ec0ee169bda401c8e0e80a463580349b476569",
-        },
-        .arm32 = .{
-            .url = "git+https://git.musuka.dev/paoda/arm32#814d081ea0983bc48841a6baad7158c157b17ad6",
-            .hash = "12203c3dacf3a7aa7aee5fc5763dd7b40399bd1c34d1483330b6bd5a76bffef22d82",
+        .bitjuggle = .{
+            .url = "git+https://github.com/leecannon/zig-bitjuggle#80111f4f8c672aaea94a8a189ae2a7c8bbaf883f",
+            .hash = "bitjuggle-2.0.0-SJdU76dvAAARompHEhqKDiwZ4FE4FZ8eHvPvmz5JUOS0",
         },
         .zgui = .{
-            .url = "git+https://git.musuka.dev/paoda/zgui#7f8d05101e96c64314d7926c80ee157dcb89da4e",
-            .hash = "1220bd81a1c7734892b1d4233ed047710487787873c85dd5fc76d1764a331ed2ff43",
+            .url = "git+https://github.com/zig-gamedev/zgui#7fa8081c208885b85e3fdfc043cd9d9cb9559123",
+            .hash = "zgui-0.6.0-dev--L6sZL7tbQAPRLYrcQAVx0V49tPHAXNxclZ-v8IP4wLr",
         },
     },
 }

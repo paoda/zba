@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bios);
 
-const rotr = @import("zba-util").rotr;
+const rotr = @import("zba_util").rotr;
 const forceAlign = @import("../Bus.zig").forceAlign;
 
 /// Size of the BIOS in bytes
@@ -57,7 +57,7 @@ fn _read(self: *const Self, comptime T: type, addr: u32) T {
 }
 
 pub fn write(_: *Self, comptime T: type, addr: u32, value: T) void {
-    @setCold(true);
+    @branchHint(.cold);
     log.debug("Tried to write {} 0x{X:} to 0x{X:0>8} ", .{ T, value, addr });
 }
 

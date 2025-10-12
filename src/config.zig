@@ -1,5 +1,5 @@
 const std = @import("std");
-const tomlz = @import("tomlz");
+// const tomlz = @import("tomlz");
 
 const Allocator = std.mem.Allocator;
 
@@ -59,5 +59,6 @@ pub fn load(allocator: Allocator, file_path: []const u8) !void {
     const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
     defer allocator.free(contents);
 
-    state = try tomlz.parser.decode(Config, allocator, contents);
+    // FIXME(2025-09-22): re-enable
+    // state = try tomlz.parser.decode(Config, allocator, contents);
 }

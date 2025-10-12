@@ -1,6 +1,6 @@
 const std = @import("std");
-const SDL = @import("sdl2");
 const config = @import("../config.zig");
+const c = @import("../lib.zig").c;
 
 const Scheduler = @import("scheduler.zig").Scheduler;
 const Arm7tdmi = @import("arm32").Arm7tdmi;
@@ -18,8 +18,8 @@ pub const Synchro = struct {
 
     // FIXME: This Enum ends up being really LARGE!!!
     pub const Message = union(enum) {
-        rom_path: [std.fs.MAX_PATH_BYTES]u8,
-        bios_path: [std.fs.MAX_PATH_BYTES]u8,
+        rom_path: [std.fs.max_path_bytes]u8,
+        bios_path: [std.fs.max_path_bytes]u8,
         restart: void,
     };
 
@@ -160,26 +160,35 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn audioSync(audio_sync: bool, stream: *SDL.SDL_AudioStream, is_buffer_full: *bool) void {
-    comptime std.debug.assert(@import("../platform.zig").sample_format == SDL.AUDIO_U16);
+fn audioSync(audio_sync: bool, stream: *c.SDL_AudioStream, is_buffer_full: *bool) void {
+    // comptime std.debug.assert(@import("../platform.zig").sample_format == SDL.AUDIO_U16);
     const sample_size = 2 * @sizeOf(u16);
     const max_buf_size: c_int = 0x400;
 
-    // Determine whether the APU is busy right at this moment
-    var still_full: bool = SDL.SDL_AudioStreamAvailable(stream) > sample_size * if (is_buffer_full.*) max_buf_size >> 1 else max_buf_size;
-    defer is_buffer_full.* = still_full; // Update APU Busy status right before exiting scope
+    _ = audio_sync;
+    _ = stream;
+    _ = is_buffer_full;
 
-    // If Busy is false, there's no need to sync here
-    if (!still_full) return;
+    _ = sample_size;
+    _ = max_buf_size;
 
-    // TODO: Refactor!!!!
-    // while (SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1)
-    //     std.atomic.spinLoopHint();
+    // TODO(paoda): re-enable
 
-    while (true) {
-        still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
-        if (!audio_sync or !still_full) break;
-    }
+    // // Determine whether the APU is busy right at this moment
+    // var still_full: bool = SDL.SDL_AudioStreamAvailable(stream) > sample_size * if (is_buffer_full.*) max_buf_size >> 1 else max_buf_size;
+    // defer is_buffer_full.* = still_full; // Update APU Busy status right before exiting scope
+
+    // // If Busy is false, there's no need to sync here
+    // if (!still_full) return;
+
+    // // TODO: Refactor!!!!
+    // // while (SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1)
+    // //     std.atomic.spinLoopHint();
+
+    // while (true) {
+    //     still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
+    //     if (!audio_sync or !still_full) break;
+    // }
 }
 
 fn videoSync(timer: *Timer, wake_time: u64) u64 {
@@ -208,7 +217,7 @@ fn sleep(timer: *Timer, wake_time: u64) ?u64 {
     const times = sleep_for / step;
 
     for (0..times) |_| {
-        std.time.sleep(step);
+        std.Thread.sleep(step);
 
         // Upon wakeup, check to see if this particular sleep was longer than expected
         // if so we should exit early, but probably not skip a whole frame period
@@ -279,8 +288,8 @@ pub const EmuThing = struct {
         return .{ .cpu = cpu, .scheduler = scheduler };
     }
 
-    pub fn interface(self: *Self, allocator: Allocator) Interface {
-        return Interface.init(allocator, self);
+    pub fn interface(self: *Self) Interface {
+        return Interface.init(self);
     }
 
     pub fn read(self: *const Self, addr: u32) u8 {

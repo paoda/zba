@@ -1,3 +1,0 @@
-[submodule "lib/SDL.zig"]
-	path = lib/SDL.zig
-	url = https://github.com/paoda/SDL.zig

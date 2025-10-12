@@ -13,13 +13,13 @@ const TimerTuple = @import("bus/timer.zig").TimerTuple;
 const Scheduler = @import("scheduler.zig").Scheduler;
 const FilePaths = @import("../util.zig").FilePaths;
 
-const io = @import("bus/io.zig");
+const _io = @import("bus/io.zig");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.Bus);
 
 const createDmaTuple = @import("bus/dma.zig").create;
 const createTimerTuple = @import("bus/timer.zig").create;
-const rotr = @import("zba-util").rotr;
+const rotr = @import("zba_util").rotr;
 
 const timings: [2][0x10]u8 = [_][0x10]u8{
     // BIOS, Unused, EWRAM, IWRAM, I/0, PALRAM, VRAM, OAM, ROM0, ROM0, ROM1, ROM1, ROM2, ROM2, SRAM, Unused
@@ -81,7 +81,7 @@ pub fn init(self: *Self, allocator: Allocator, sched: *Scheduler, cpu: *Arm7tdmi
         .allocator = allocator,
     };
 
-    self.fillReadTable(read_table);
+    self.fillReadTable(@ptrCast(read_table));
 
     // Internal Display Memory behaves differently on 8-bit reads
     self.fillWriteTable(u32, write_tables[0]);
@@ -135,12 +135,10 @@ pub fn replaceGamepak(self: *Self, file_path: []const u8) !void {
 
     self.pak = try GamePak.init(self.allocator, self.cpu, file_path, save_path);
 
-    const read_ptr: *[table_len]?*const anyopaque = @constCast(self.read_table);
-    const write_ptrs: [2]*[table_len]?*anyopaque = .{ @constCast(self.write_tables[0]), @constCast(self.write_tables[1]) };
-
-    self.fillReadTable(read_ptr);
-    self.fillWriteTable(u32, write_ptrs[0]);
-    self.fillWriteTable(u8, write_ptrs[1]);
+    // SAFETY: TODO: why do we know this is safe?
+    self.fillReadTable(@ptrCast(@constCast(self.read_table)));
+    self.fillWriteTable(u32, @constCast(self.write_tables[0]));
+    self.fillWriteTable(u8, @constCast(self.write_tables[1]));
 }
 
 fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
@@ -169,7 +167,7 @@ fn fillReadTable(self: *Self, table: *[table_len]?*const anyopaque) void {
     }
 }
 
-fn fillWriteTable(self: *Self, comptime T: type, table: *[table_len]?*const anyopaque) void {
+fn fillWriteTable(self: *Self, comptime T: type, table: *[table_len]?*anyopaque) void {
     comptime std.debug.assert(T == u32 or T == u16 or T == u8);
     const vramMirror = @import("ppu/Vram.zig").mirror;
 
@@ -240,11 +238,11 @@ fn fillReadTableExternal(self: *Self, addr: u32) ?*anyopaque {
 }
 
 fn readIo(self: *const Self, comptime T: type, address: u32) T {
-    return io.read(self, T, address) orelse self.openBus(T, address);
+    return _io.read(self, T, address) orelse self.openBus(T, address);
 }
 
 fn openBus(self: *const Self, comptime T: type, address: u32) T {
-    @setCold(true);
+    @branchHint(.cold);
     const r15 = self.cpu.r[15];
 
     const word = blk: {
@@ -305,7 +303,7 @@ fn openBus(self: *const Self, comptime T: type, address: u32) T {
 }
 
 pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
-    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).int.bits;
     const page = unaligned_address >> bits;
     const offset = unaligned_address & (page_size - 1);
 
@@ -328,7 +326,7 @@ pub fn read(self: *Self, comptime T: type, unaligned_address: u32) T {
 }
 
 pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
-    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).int.bits;
     const page = unaligned_address >> bits;
     const offset = unaligned_address & (page_size - 1);
 
@@ -348,7 +346,7 @@ pub fn dbgRead(self: *const Self, comptime T: type, unaligned_address: u32) T {
 }
 
 fn slowRead(self: *Self, comptime T: type, unaligned_address: u32) T {
-    @setCold(true);
+    @branchHint(.cold);
 
     const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
@@ -419,7 +417,7 @@ fn readBackup(self: *const Self, comptime T: type, unaligned_address: u32) T {
 }
 
 pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
-    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).int.bits;
     const page = unaligned_address >> bits;
     const offset = unaligned_address & (page_size - 1);
 
@@ -446,7 +444,7 @@ pub fn write(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 
 /// Mostly Identical to `Bus.write`, slowmeme is handled by `Bus.dbgSlowWrite`
 pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
-    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).Int.bits;
+    const bits = @typeInfo(std.math.IntFittingRange(0, page_size - 1)).int.bits;
     const page = unaligned_address >> bits;
     const offset = unaligned_address & (page_size - 1);
 
@@ -469,7 +467,7 @@ pub fn dbgWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T)
 }
 
 fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
-    @setCold(true);
+    @branchHint(.cold);
 
     const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);
@@ -479,7 +477,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
         0x00 => self.bios.write(T, address, value),
         0x02 => unreachable, // completely handled by fastmem
         0x03 => unreachable, // completely handled by fastmem
-        0x04 => io.write(self, T, address, value),
+        0x04 => _io.write(self, T, address, value),
 
         // Internal Display Memory
         0x05 => self.ppu.palette.write(T, address, value),
@@ -494,7 +492,7 @@ fn slowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) vo
 }
 
 fn dbgSlowWrite(self: *Self, comptime T: type, unaligned_address: u32, value: T) void {
-    @setCold(true);
+    @branchHint(.cold);
 
     const page: u8 = @truncate(unaligned_address >> 24);
     const address = forceAlign(T, unaligned_address);

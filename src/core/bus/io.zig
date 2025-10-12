@@ -5,8 +5,8 @@ const apu = @import("../apu.zig");
 const ppu = @import("../ppu.zig");
 const util = @import("../../util.zig");
 
-const Bit = @import("bitfield").Bit;
-const Bitfield = @import("bitfield").Bitfield;
+const Bit = @import("bitjuggle").Boolean;
+const Bitfield = @import("bitjuggle").Bitfield;
 const Bus = @import("../Bus.zig");
 
 const getHalf = util.getHalf;

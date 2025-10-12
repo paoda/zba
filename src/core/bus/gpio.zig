@@ -1,5 +1,5 @@
 const std = @import("std");
-const Bit = @import("bitfield").Bit;
+const Bit = @import("bitjuggle").Boolean;
 const DateTime = @import("datetime").datetime.Datetime;
 
 const Arm7tdmi = @import("arm32").Arm7tdmi;
@@ -408,7 +408,7 @@ pub const Clock = struct {
         // TODO: Confirm that this is the right behaviour
         log.debug("Force GamePak IRQ", .{});
 
-        bus_ptr.io.irq.game_pak.set();
+        bus_ptr.io.irq.game_pak.write(true);
         handleInterrupt(self.cpu);
     }
 

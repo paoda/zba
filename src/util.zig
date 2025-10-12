@@ -69,7 +69,7 @@ pub const io = struct {
         }
 
         pub fn undef(comptime T: type, comptime log: anytype, comptime format: []const u8, args: anytype) ?T {
-            @setCold(true);
+            @branchHint(.cold);
 
             const unhandled_io = config.config().debug.unhandled_io;
 
@@ -80,7 +80,7 @@ pub const io = struct {
         }
 
         pub fn err(comptime T: type, comptime log: anytype, comptime format: []const u8, args: anytype) ?T {
-            @setCold(true);
+            @branchHint(.cold);
 
             log.err(format, args);
             return null;
@@ -245,10 +245,10 @@ pub inline fn setHalf(comptime T: type, left: T, addr: u8, right: HalfInt(T)) T 
 /// The Integer type which corresponds to T with exactly half the amount of bits
 fn HalfInt(comptime T: type) type {
     const type_info = @typeInfo(T);
-    comptime std.debug.assert(type_info == .Int); // Type must be an integer
-    comptime std.debug.assert(type_info.Int.bits % 2 == 0); // Type must have an even amount of bits
+    comptime std.debug.assert(type_info == .int); // Type must be an integer
+    comptime std.debug.assert(type_info.int.bits % 2 == 0); // Type must have an even amount of bits
 
-    return std.meta.Int(type_info.Int.signedness, type_info.Int.bits >> 1);
+    return std.meta.Int(type_info.int.signedness, type_info.int.bits >> 1);
 }
 
 /// Double Buffering Implementation
@@ -296,7 +296,7 @@ pub const FrameBuffer = struct {
     }
 };
 
-const RingBuffer = @import("zba-util").RingBuffer;
+const RingBuffer = @import("zba_util").RingBuffer;
 
 // TODO: Lock Free Queue?
 pub fn Queue(comptime T: type) type {
