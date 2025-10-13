@@ -197,9 +197,7 @@ fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
         const config_file = std.fs.createFileAbsolute(path, .{}) catch |err| exitln("failed to create \"{s}\": {}", .{ path, err });
         defer config_file.close();
 
-        // FIXME(2025-09-22): re-enable
-        // try config_file.writeAll(@embedFile("example.toml"));
-        try config_file.writeAll("");
+        try config_file.writeAll(@embedFile("example.toml"));
     };
 
     return path;

@@ -61,4 +61,5 @@ pub fn load(allocator: Allocator, file_path: []const u8) !void {
 
     // FIXME(2025-09-22): re-enable
     // state = try tomlz.parser.decode(Config, allocator, contents);
+    state = .{};
 }

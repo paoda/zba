@@ -81,6 +81,8 @@ pub fn build(b: *std.Build) void {
     exe_mod.addImport("zgui", zgui.module("root"));
     exe_mod.addImport("bitjuggle", b.dependency("bitjuggle", .{}).module("bitjuggle"));
 
+    exe_mod.addAnonymousImport("example.toml", .{ .root_source_file = b.path("example.toml") });
+
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
