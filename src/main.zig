@@ -41,7 +41,7 @@ pub fn main() !void {
     // Determine the Data Directory (stores saves)
     const data_path = blk: {
         const path = (try known_folders.getPath(allocator, .data)) orelse return error.unknown_data_folder;
-        try ensureDataDirsExist(path);
+        try makePath(path, "zba" ++ std.fs.path.sep_str ++ "save");
 
         break :blk path;
     };
@@ -50,7 +50,7 @@ pub fn main() !void {
     // Determine the Config Directory
     const config_path = blk: {
         const path = (try known_folders.getPath(allocator, .roaming_configuration)) orelse return error.unknown_config_folder;
-        try ensureConfigDirExists(path);
+        try makePath(path, "zba");
 
         break :blk path;
     };
@@ -61,10 +61,8 @@ pub fn main() !void {
     defer result.deinit();
 
     // TODO: Move config file to XDG Config directory?
-    const cfg_file_path = try configFilePath(allocator, config_path);
-    defer allocator.free(cfg_file_path);
-
-    try config.load(allocator, cfg_file_path);
+    try makeConfigFilePath(config_path);
+    try config.load(allocator, config_path);
 
     var paths = try handleArguments(allocator, data_path, &result);
     defer paths.deinit(allocator);
@@ -74,12 +72,11 @@ pub fn main() !void {
         const bios_path = try std.mem.join(allocator, "/", &.{ data_path, "zba", "gba_bios.bin" }); // FIXME: std.fs.path_sep or something
         defer allocator.free(bios_path);
 
-        _ = std.fs.cwd().statFile(bios_path) catch |e| switch (e) {
-            error.FileNotFound => { // ZBA will crash on attempt to read BIOS but that's fine
-                log.err("file located at {s} was not found", .{bios_path});
-                break :blk;
-            },
-            else => return e,
+        _ = std.fs.cwd().statFile(bios_path) catch |e| {
+            if (e != std.fs.Dir.StatFileError.FileNotFound) return e;
+
+            log.err("file located at {s} was not found", .{bios_path});
+            break :blk;
         };
 
         paths.bios = try allocator.dupe(u8, bios_path);
@@ -167,38 +164,23 @@ fn handleArguments(allocator: Allocator, data_path: []const u8, result: *const c
     };
 }
 
-fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
-    const path = try std.fs.path.join(allocator, &[_][]const u8{ config_path, "zba", "config.toml" });
-    errdefer allocator.free(path);
+fn makeConfigFilePath(config_path: []const u8) !void {
+    var dir = try std.fs.openDirAbsolute(config_path, .{});
+    defer dir.close();
+
+    const sub_path = "zba" ++ std.fs.path.sep_str ++ "config.toml";
 
     // We try to create the file exclusively, meaning that we err out if the file already exists.
     // All we care about is a file being there so we can just ignore that error in particular and
     // continue down the happy pathj
-    std.fs.accessAbsolute(path, .{}) catch |e| {
-        if (e != error.FileNotFound) return e;
+    dir.access(sub_path, .{}) catch |e| {
+        if (e != std.fs.Dir.AccessError.FileNotFound) return e;
 
-        const config_file = try std.fs.createFileAbsolute(path, .{});
+        const config_file = try dir.createFile(sub_path, .{});
         defer config_file.close();
 
         try config_file.writeAll(@embedFile("example.toml"));
     };
-
-    return path;
-}
-
-fn ensureDataDirsExist(data_path: []const u8) !void {
-    var dir = try std.fs.openDirAbsolute(data_path, .{});
-    defer dir.close();
-
-    // Will recursively create directories
-    try dir.makePath("zba" ++ std.fs.path.sep_str ++ "save");
-}
-
-fn ensureConfigDirExists(config_path: []const u8) !void {
-    var dir = try std.fs.openDirAbsolute(config_path, .{});
-    defer dir.close();
-
-    try dir.makePath("zba");
 }
 
 fn romPath(allocator: Allocator, result: *const clap.Result(clap.Help, &params, clap.parsers.default)) !?[]const u8 {
@@ -207,4 +189,11 @@ fn romPath(allocator: Allocator, result: *const clap.Result(clap.Help, &params, 
         1 => if (result.positionals[0]) |path| try allocator.dupe(u8, path) else null,
         else => error.too_many_positional_arguments,
     };
+}
+
+fn makePath(path: []const u8, sub_path: []const u8) !void {
+    var dir = try std.fs.openDirAbsolute(path, .{});
+    defer dir.close();
+
+    try dir.makePath(sub_path);
 }

@@ -50,13 +50,23 @@ pub fn config() *const Config {
 }
 
 /// Reads a config file and then loads it into the global state
-pub fn load(allocator: Allocator, file_path: []const u8) !void {
-    var config_file = try std.fs.cwd().openFile(file_path, .{});
-    defer config_file.close();
+pub fn load(allocator: Allocator, config_path: []const u8) !void {
+    var dir = try std.fs.openDirAbsolute(config_path, .{});
+    defer dir.close();
 
-    log.info("loaded from {s}", .{file_path});
+    const sub_path = "zba" ++ std.fs.path.sep_str ++ "config.toml";
 
-    const contents = try config_file.readToEndAlloc(allocator, try config_file.getEndPos());
+    var file = try dir.openFile(sub_path, .{});
+    defer file.close();
+
+    {
+        const path = try std.fs.path.join(allocator, &.{ config_path, sub_path });
+        defer allocator.free(path);
+
+        log.info("loaded from {s}", .{path});
+    }
+
+    const contents = try file.readToEndAlloc(allocator, try file.getEndPos());
     defer allocator.free(contents);
 
     // FIXME(2025-09-22): re-enable
