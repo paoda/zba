@@ -203,13 +203,13 @@ pub const Gui = struct {
                 .Transition => |inner| switch (inner) {
                     .Active => {
                         sync.paused.store(false, .monotonic);
-                        if (!config.config().host.mute) try errify(c.SDL_PauseAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
+                        // if (!config.config().host.mute) try errify(c.SDL_PauseAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
 
                         self.state.emulation = .Active;
                     },
                     .Inactive => {
                         // Assert that double pausing is impossible
-                        try errify(c.SDL_ResumeAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
+                        // try errify(c.SDL_ResumeAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
                         sync.paused.store(true, .monotonic);
 
                         self.state.emulation = .Inactive;

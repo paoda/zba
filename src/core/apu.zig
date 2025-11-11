@@ -468,7 +468,7 @@ pub const Apu = struct {
         @branchHint(.cold);
         _ = self;
 
-        @panic("TODO: Implement Multiple Sample Rates...");
+        // @panic("TODO: Implement Multiple Sample Rates...");
 
         // const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
         // log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
