@@ -31,7 +31,7 @@ const params = clap.parseParamsComptime(
     \\
 );
 
-pub fn main() void {
+pub fn main() !void {
     // Main Allocator for ZBA
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
@@ -40,10 +40,8 @@ pub fn main() void {
 
     // Determine the Data Directory (stores saves)
     const data_path = blk: {
-        const result = known_folders.getPath(allocator, .data);
-        const option = result catch |e| exitln("interrupted while determining the data folder: {}", .{e});
-        const path = option orelse exitln("no valid data folder found", .{});
-        ensureDataDirsExist(path) catch |e| exitln("failed to create folders under \"{s}\": {}", .{ path, e });
+        const path = (try known_folders.getPath(allocator, .data)) orelse return error.unknown_data_folder;
+        try ensureDataDirsExist(path);
 
         break :blk path;
     };
@@ -51,32 +49,29 @@ pub fn main() void {
 
     // Determine the Config Directory
     const config_path = blk: {
-        const result = known_folders.getPath(allocator, .roaming_configuration);
-        const option = result catch |e| exitln("interreupted while determining the config folder: {}", .{e});
-        const path = option orelse exitln("no valid config folder found", .{});
-        ensureConfigDirExists(path) catch |e| exitln("failed to create required folder \"{s}\": {}", .{ path, e });
+        const path = (try known_folders.getPath(allocator, .roaming_configuration)) orelse return error.unknown_config_folder;
+        try ensureConfigDirExists(path);
 
         break :blk path;
     };
     defer allocator.free(config_path);
 
     // Parse CLI
-
-    const result = clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = allocator }) catch |e| exitln("failed to parse cli: {}", .{e});
+    const result = try clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = allocator });
     defer result.deinit();
 
     // TODO: Move config file to XDG Config directory?
-    const cfg_file_path = configFilePath(allocator, config_path) catch |e| exitln("failed to ready config file for access: {}", .{e});
+    const cfg_file_path = try configFilePath(allocator, config_path);
     defer allocator.free(cfg_file_path);
 
-    config.load(allocator, cfg_file_path) catch |e| exitln("failed to load config file: {}", .{e});
+    try config.load(allocator, cfg_file_path);
 
-    var paths = handleArguments(allocator, data_path, &result) catch |e| exitln("failed to handle cli arguments: {}", .{e});
+    var paths = try handleArguments(allocator, data_path, &result);
     defer paths.deinit(allocator);
 
     // if paths.bios is null, then we want to see if it's in the data directory
     if (paths.bios == null) blk: {
-        const bios_path = std.mem.join(allocator, "/", &.{ data_path, "zba", "gba_bios.bin" }) catch |e| exitln("failed to allocate backup bios dir path: {}", .{e});
+        const bios_path = try std.mem.join(allocator, "/", &.{ data_path, "zba", "gba_bios.bin" }); // FIXME: std.fs.path_sep or something
         defer allocator.free(bios_path);
 
         _ = std.fs.cwd().statFile(bios_path) catch |e| switch (e) {
@@ -84,14 +79,14 @@ pub fn main() void {
                 log.err("file located at {s} was not found", .{bios_path});
                 break :blk;
             },
-            else => exitln("error when checking \"{s}\": {}", .{ bios_path, e }),
+            else => return e,
         };
 
-        paths.bios = allocator.dupe(u8, bios_path) catch |e| exitln("failed to duplicate path to bios: {}", .{e});
+        paths.bios = try allocator.dupe(u8, bios_path);
     }
 
     const log_file = switch (config.config().debug.cpu_trace) {
-        true => std.fs.cwd().createFile("zba.log", .{}) catch |e| exitln("failed to create trace log file: {}", .{e}),
+        true => try std.fs.cwd().createFile("zba.log", .{}),
         false => null,
     };
     defer if (log_file) |file| file.close();
@@ -107,7 +102,7 @@ pub fn main() void {
 
     var cpu = Arm7tdmi.init(ischeduler, ibus);
 
-    bus.init(allocator, &scheduler, &cpu, paths) catch |e| exitln("failed to init zba bus: {}", .{e});
+    try bus.init(allocator, &scheduler, &cpu, paths);
     defer bus.deinit();
 
     if (config.config().guest.skip_bios or result.args.skip != 0 or paths.bios == null) {
@@ -117,10 +112,10 @@ pub fn main() void {
     const title_ptr = if (paths.rom != null) &bus.pak.title else null;
 
     // TODO: Just copy the title instead of grabbing a pointer to it
-    var gui = Gui.init(allocator, &bus.apu, title_ptr) catch |e| exitln("failed to init gui: {}", .{e});
+    var gui = try Gui.init(allocator, &bus.apu, title_ptr);
     defer gui.deinit();
 
-    var sync = Synchro.init(allocator) catch |e| exitln("failed to allocate sync types: {}", .{e});
+    var sync = try Synchro.init(allocator);
     defer sync.deinit(allocator);
 
     if (result.args.gdb != 0) {
@@ -133,34 +128,22 @@ pub fn main() void {
 
         log.info("Ready to connect", .{});
 
-        var server = Server.init(
-            emulator,
-            .{ .memory_map = EmuThing.map, .target = EmuThing.target },
-        ) catch |e| exitln("failed to init gdb server: {}", .{e});
+        var server = try Server.init(emulator, .{ .memory_map = EmuThing.map, .target = EmuThing.target });
         defer server.deinit(allocator);
 
         log.info("Starting GDB Server Thread", .{});
 
-        const thread = std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &sync.should_quit }) catch |e| exitln("gdb server thread crashed: {}", .{e});
+        const thread = try std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &sync.should_quit });
         defer thread.join();
 
-        gui.run(.{
-            .cpu = &cpu,
-            .scheduler = &scheduler,
-            .sync = &sync,
-        }) catch |e| exitln("main thread panicked: {}", .{e});
+        try gui.run(.{ .cpu = &cpu, .scheduler = &scheduler, .sync = &sync });
     } else {
         var tracker = FpsTracker.init();
 
-        const thread = std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &sync }) catch |e| exitln("emu thread panicked: {}", .{e});
+        const thread = try std.Thread.spawn(.{}, emu.run, .{ &cpu, &scheduler, &tracker, &sync });
         defer thread.join();
 
-        gui.run(.{
-            .cpu = &cpu,
-            .scheduler = &scheduler,
-            .tracker = &tracker,
-            .sync = &sync,
-        }) catch |e| exitln("main thread panicked: {}", .{e});
+        try gui.run(.{ .cpu = &cpu, .scheduler = &scheduler, .tracker = &tracker, .sync = &sync });
     }
 }
 
@@ -194,7 +177,7 @@ fn configFilePath(allocator: Allocator, config_path: []const u8) ![]const u8 {
     std.fs.accessAbsolute(path, .{}) catch |e| {
         if (e != error.FileNotFound) return e;
 
-        const config_file = std.fs.createFileAbsolute(path, .{}) catch |err| exitln("failed to create \"{s}\": {}", .{ path, err });
+        const config_file = try std.fs.createFileAbsolute(path, .{});
         defer config_file.close();
 
         try config_file.writeAll(@embedFile("example.toml"));
@@ -222,15 +205,6 @@ fn romPath(allocator: Allocator, result: *const clap.Result(clap.Help, &params, 
     return switch (result.positionals.len) {
         0 => null,
         1 => if (result.positionals[0]) |path| try allocator.dupe(u8, path) else null,
-        else => exitln("ZBA received too many positional arguments.", .{}),
+        else => error.too_many_positional_arguments,
     };
-}
-
-fn exitln(comptime format: []const u8, args: anytype) noreturn {
-    var buf: [1024]u8 = undefined;
-    var stderr = std.fs.File.stderr().writer(&buf).interface;
-
-    stderr.print(format, args) catch {}; // Just exit already...
-    stderr.writeByte('\n') catch {};
-    std.process.exit(1);
 }
