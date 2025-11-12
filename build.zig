@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        .optimize = optimize,
     });
 
     // Here we define an executable. An executable needs to have a root module
