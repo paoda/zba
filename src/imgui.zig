@@ -273,63 +273,44 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         _ = zgui.begin("Performance", .{ .popen = &state.win_stat.show_perf });
         defer zgui.end();
 
-        // const tmp = blk: {
-        //     var buf: [histogram_len]u32 = undefined;
-        //     const len = state.fps_hist.copy(&buf);
+        var values: [histogram_len]u32 = undefined;
+        const len = state.fps_hist.copy(&values);
 
-        //     break :blk .{ buf, len };
-        // };
-        // const values = tmp[0];
-        // const len = tmp[1];
+        // FIXME(paoda): okay but why
+        if (len == values.len) _ = state.fps_hist.pop();
 
-        // if (len == values.len) _ = state.fps_hist.pop();
+        const y_max: f64 = 2 * if (len != 0) @as(f64, @floatFromInt(std.mem.max(u32, &values))) else emu.frame_rate;
+        const x_max: f64 = @floatFromInt(values.len);
 
-        // const sorted = blk: {
-        //     var buf: @TypeOf(values) = undefined;
+        if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
+            defer zgui.plot.endPlot();
 
-        //     @memcpy(buf[0..len], values[0..len]);
-        //     std.mem.sort(u32, buf[0..len], {}, std.sort.asc(u32));
+            zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
+            zgui.plot.setupAxis(.x1, .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } });
+            zgui.plot.setupAxis(.y1, .{ .label = "FPS", .flags = .{ .no_grid_lines = true } });
+            zgui.plot.setupAxisLimits(.y1, .{ .min = 0.0, .max = y_max, .cond = .always });
+            zgui.plot.setupAxisLimits(.x1, .{ .min = 0.0, .max = x_max, .cond = .always });
+            zgui.plot.setupFinish();
 
-        //     break :blk buf;
-        // };
+            zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
+        }
 
-        // const y_max: f64 = 2 * if (len != 0) @as(f64, @floatFromInt(sorted[len - 1])) else emu.frame_rate;
-        // const x_max: f64 = @floatFromInt(values.len);
+        // the following metrics require a sorted array
+        std.mem.sort(u32, values[0..len], {}, std.sort.asc(u32));
 
-        // const y_args = .{ .flags = .{ .no_grid_lines = true } };
-        // const x_args = .{ .flags = .{ .no_grid_lines = true, .no_tick_labels = true, .no_tick_marks = true } };
+        const avg: u32 = avg: {
+            var sum: u32 = 0;
+            for (values[0..len]) |value| sum += value;
 
-        // if (zgui.plot.beginPlot("Emulation FPS", .{ .w = 0.0, .flags = .{ .no_title = true, .no_frame = true } })) {
-        //     defer zgui.plot.endPlot();
+            break :avg @intCast(sum / len);
+        };
 
-        //     zgui.plot.setupLegend(.{ .north = true, .east = true }, .{});
-        //     zgui.plot.setupAxis(.x1, x_args);
-        //     zgui.plot.setupAxis(.y1, y_args);
-        //     zgui.plot.setupAxisLimits(.y1, .{ .min = 0.0, .max = y_max, .cond = .always });
-        //     zgui.plot.setupAxisLimits(.x1, .{ .min = 0.0, .max = x_max, .cond = .always });
-        //     zgui.plot.setupFinish();
+        const median = if (len == 0) 0 else values[len / 2];
+        const low = if (len == 0) 0 else values[len / 100]; // 1% Low
 
-        //     zgui.plot.plotLineValues("FPS", u32, .{ .v = values[0..len] });
-        // }
-
-        // const stats: struct { u32, u32, u32 } = blk: {
-        //     if (len == 0) break :blk .{ 0, 0, 0 };
-
-        //     const average: u32 = average: {
-        //         var sum: u32 = 0;
-        //         for (sorted[0..len]) |value| sum += value;
-
-        //         break :average @intCast(sum / len);
-        //     };
-        //     const median = sorted[len / 2];
-        //     const low = sorted[len / 100]; // 1% Low
-
-        //     break :blk .{ average, median, low };
-        // };
-
-        // zgui.text("Average: {:0>3} fps", .{stats[0]});
-        // zgui.text(" Median: {:0>3} fps", .{stats[1]});
-        // zgui.text(" 1% Low: {:0>3} fps", .{stats[2]});
+        zgui.text("Average: {:0>3} fps", .{avg});
+        zgui.text(" Median: {:0>3} fps", .{median});
+        zgui.text(" 1% Low: {:0>3} fps", .{low});
     }
 
     if (state.win_stat.show_schedule) {
