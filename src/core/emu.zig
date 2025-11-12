@@ -95,7 +95,7 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
                 if (sync.paused.load(.monotonic)) continue;
 
                 runFrame(scheduler, cpu);
-                audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
+                if (audio_sync) audioSync(bus_ptr.apu.stream);
 
                 if (kind == .UnlimitedFPS) tracker.?.tick();
             }
@@ -117,10 +117,13 @@ fn inner(comptime kind: RunKind, audio_sync: bool, cpu: *Arm7tdmi, scheduler: *S
                 // the amount of time needed for audio to catch up rather than
                 // our expected wake-up time
 
-                audioSync(audio_sync, bus_ptr.apu.stream, &bus_ptr.apu.is_buffer_full);
-                if (!audio_sync) spinLoop(&timer, wake_time);
-                wake_time = new_wake_time;
+                if (audio_sync) {
+                    audioSync(bus_ptr.apu.stream);
+                } else {
+                    spinLoop(&timer, wake_time);
+                }
 
+                wake_time = new_wake_time;
                 if (kind == .LimitedFPS) tracker.?.tick();
             }
         },
@@ -160,35 +163,25 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn audioSync(audio_sync: bool, stream: ?*c.SDL_AudioStream, is_buffer_full: *bool) void {
-    if (stream == null) return;
+fn audioSync(stream: ?*c.SDL_AudioStream) void {
+    if (stream == null) {
+        @branchHint(.cold);
+        return log.err("audio sync failed. no SDL_AudioStream to sync to", .{});
+    }
 
     const sample_size = 2 * @sizeOf(u16);
-    const max_buf_size: c_int = 0x400;
+    const max_sample_delay: c_int = 0x800;
+    var is_behind = true;
 
-    _ = audio_sync;
-    _ = is_buffer_full;
+    while (is_behind) {
+        const bytes = c.SDL_GetAudioStreamQueued(stream);
+        if (bytes == -1) std.debug.panic("failed to query amount of queued bytes in audio stream: SDL Error {s}", .{c.SDL_GetError()});
 
-    _ = sample_size;
-    _ = max_buf_size;
+        is_behind = bytes > max_sample_delay * sample_size;
+        std.atomic.spinLoopHint();
+    }
 
-    // TODO(paoda): re-enable
-
-    // // Determine whether the APU is busy right at this moment
-    // var still_full: bool = SDL.SDL_AudioStreamAvailable(stream) > sample_size * if (is_buffer_full.*) max_buf_size >> 1 else max_buf_size;
-    // defer is_buffer_full.* = still_full; // Update APU Busy status right before exiting scope
-
-    // // If Busy is false, there's no need to sync here
-    // if (!still_full) return;
-
-    // // TODO: Refactor!!!!
-    // // while (SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1)
-    // //     std.atomic.spinLoopHint();
-
-    // while (true) {
-    //     still_full = SDL.SDL_AudioStreamAvailable(stream) > sample_size * max_buf_size >> 1;
-    //     if (!audio_sync or !still_full) break;
-    // }
+    // FIXME(paoda, 2025-11-12): There was an is_buffer_full thing going on here that I'm sure was really important for some niche reason
 }
 
 fn videoSync(timer: *Timer, wake_time: u64) u64 {

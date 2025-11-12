@@ -255,8 +255,6 @@ pub const Apu = struct {
     fs: FrameSequencer,
     capacitor: f32,
 
-    is_buffer_full: bool,
-
     pub const Tick = enum { Length, Envelope, Sweep };
 
     pub fn init(sched: *Scheduler) Self {
@@ -278,7 +276,6 @@ pub const Apu = struct {
 
             .capacitor = 0,
             .fs = FrameSequencer.init(),
-            .is_buffer_full = false,
         };
 
         Self.initEvents(apu.sched, apu.interval());
@@ -398,11 +395,6 @@ pub const Apu = struct {
 
     pub fn sampleAudio(self: *Self, late: u64) void {
         self.sched.push(.SampleAudio, self.interval() -| late);
-
-        // Whether the APU is busy or not is determined  by the main loop in emu.zig
-        // This should only ever be true (because this side of the emu is single threaded)
-        // When audio sync is disaabled
-        if (self.is_buffer_full) return;
 
         var left: i16 = 0;
         var right: i16 = 0;
