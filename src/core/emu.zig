@@ -160,13 +160,13 @@ pub fn runFrame(sched: *Scheduler, cpu: *Arm7tdmi) void {
     }
 }
 
-fn audioSync(audio_sync: bool, stream: *c.SDL_AudioStream, is_buffer_full: *bool) void {
-    // comptime std.debug.assert(@import("../platform.zig").sample_format == SDL.AUDIO_U16);
+fn audioSync(audio_sync: bool, stream: ?*c.SDL_AudioStream, is_buffer_full: *bool) void {
+    if (stream == null) return;
+
     const sample_size = 2 * @sizeOf(u16);
     const max_buf_size: c_int = 0x400;
 
     _ = audio_sync;
-    _ = stream;
     _ = is_buffer_full;
 
     _ = sample_size;

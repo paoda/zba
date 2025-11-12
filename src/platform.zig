@@ -46,6 +46,8 @@ pub const Gui = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, apu: *Apu, title_opt: ?*const [12]u8) !Self {
+        errdefer |err| if (err == error.sdl_error) log.err("SDL Error: {s}", .{c.SDL_GetError()});
+
         c.SDL_SetMainReady();
 
         try errify(c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_AUDIO | c.SDL_INIT_EVENTS));
@@ -200,16 +202,16 @@ pub const Gui = struct {
             var zgui_redraw: bool = false;
 
             switch (self.state.emulation) {
-                .Transition => |inner| switch (inner) {
+                .Transition => |target| switch (target) {
                     .Active => {
                         sync.paused.store(false, .monotonic);
-                        // if (!config.config().host.mute) try errify(c.SDL_PauseAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
+                        if (!config.config().host.mute) try errify(c.SDL_ResumeAudioStreamDevice(self.audio.stream));
 
                         self.state.emulation = .Active;
                     },
                     .Inactive => {
                         // Assert that double pausing is impossible
-                        // try errify(c.SDL_ResumeAudioDevice(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK));
+                        if (!config.config().host.mute) try errify(c.SDL_PauseAudioStreamDevice(self.audio.stream));
                         sync.paused.store(true, .monotonic);
 
                         self.state.emulation = .Inactive;
@@ -233,7 +235,7 @@ pub const Gui = struct {
                     // spurious calls to SDL_LockAudioDevice?
 
                     try errify(c.SDL_LockAudioStream(self.audio.stream));
-                    defer errify(c.SDL_UnlockAudioStream(self.audio.stream)) catch @panic("TODO: FIXME");
+                    defer errify(c.SDL_UnlockAudioStream(self.audio.stream)) catch std.debug.panic("SDL Error: {s}", .{c.SDL_GetError()});
 
                     zgui_redraw = imgui.draw(&self.state, sync, win_dim, cpu, out_tex[0]);
                 },
@@ -257,17 +259,17 @@ pub const Gui = struct {
     }
 };
 
-const Audio = struct {
-    const Self = @This();
-    const log = std.log.scoped(.PlatformAudio);
+pub const Audio = struct {
+    const log = std.log.scoped(.platform_audio);
 
     stream: *c.SDL_AudioStream,
 
-    fn init(apu: *Apu) !Self {
-        var desired: c.SDL_AudioSpec = std.mem.zeroes(c.SDL_AudioSpec);
-        desired.freq = sample_rate;
-        desired.format = c.SDL_AUDIO_S16LE;
-        desired.channels = 2;
+    fn init(apu: *Apu) !@This() {
+        const desired: c.SDL_AudioSpec = .{
+            .freq = sample_rate,
+            .format = c.SDL_AUDIO_S16LE,
+            .channels = 2,
+        };
 
         log.info("Host Sample Rate: {}Hz, Host Format: SDL_AUDIO_S16LE", .{sample_rate});
 
@@ -278,7 +280,7 @@ const Audio = struct {
         return .{ .stream = stream };
     }
 
-    fn deinit(self: *Self) void {
+    fn deinit(self: *@This()) void {
         c.SDL_DestroyAudioStream(self.stream);
         self.* = undefined;
     }

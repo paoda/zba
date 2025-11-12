@@ -247,7 +247,9 @@ pub const Apu = struct {
 
     sampling_cycle: u2,
 
-    stream: *c.SDL_AudioStream,
+    // NB: This AudioStream is owned by platform.zig
+    stream: ?*c.SDL_AudioStream = null,
+
     sched: *Scheduler,
 
     fs: FrameSequencer,
@@ -273,7 +275,6 @@ pub const Apu = struct {
 
             .sampling_cycle = 0b00,
             .sched = sched,
-            .stream = undefined, // FIXME: bad practice
 
             .capacitor = 0,
             .fs = FrameSequencer.init(),
@@ -461,32 +462,23 @@ pub const Apu = struct {
         if (self.sampling_cycle != self.bias.sampling_cycle.read()) self.replaceSDLResampler();
 
         const ret = c.SDL_PutAudioStreamData(self.stream, &[2]i16{ @bitCast(ext_left ^ 0x8000), @bitCast(ext_right ^ 0x8000) }, 2 * @sizeOf(i16));
-        if (!ret) @panic("TODO: Failed to put i16s into SDL Audio Queue");
+        if (!ret) std.debug.panic("failed to append to sample queue. SDL Error: {s}", .{c.SDL_GetError()});
     }
 
     fn replaceSDLResampler(self: *Self) void {
-        @branchHint(.cold);
-        _ = self;
+        const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
+        log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
 
-        // @panic("TODO: Implement Multiple Sample Rates...");
+        self.sampling_cycle = self.bias.sampling_cycle.read();
 
-        // const sample_rate = Self.sampleRate(self.bias.sampling_cycle.read());
-        // log.info("Sample Rate changed from {}Hz to {}Hz", .{ Self.sampleRate(self.sampling_cycle), sample_rate });
+        const desired: c.SDL_AudioSpec = .{
+            .channels = 2,
+            .format = c.SDL_AUDIO_S16LE,
+            .freq = @intCast(Self.sampleRate(self.sampling_cycle)),
+        };
 
-        // // Sampling Cycle (Sample Rate) changed, Craete a new SDL Audio Resampler
-        // // FIXME: Replace SDL's Audio Resampler with either a custom or more reliable one
-        // const old_stream = self.stream;
-        // defer c.SDL_DestroyAudioStream(old_stream);
-
-        // self.sampling_cycle = self.bias.sampling_cycle.read();
-
-        // var desired: c.SDL_AudioSpec = std.mem.zeroes(c.SDL_AudioSpec);
-        // desired.format = c.SDL_AUDIO_S16;
-        // desired.channels = 2;
-        // desired.freq = @intCast(sample_rate);
-
-        // const new_stream = c.SDL_OpenAudioDeviceStream(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, null, null) orelse @panic("TODO: Failed to replace SDL Audio Stream");
-        // self.stream = new_stream;
+        const ret = c.SDL_SetAudioStreamFormat(self.stream, &desired, null);
+        if (!ret) std.debug.panic("failed to change sample rate. SDL Error: {s}", .{c.SDL_GetError()});
     }
 
     fn interval(self: *const Self) u64 {
