@@ -358,14 +358,19 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         defer zgui.end();
 
         const scheduler = cpu.sched;
-        _ = scheduler;
 
-        // zgui.text("tick: {X:0>16}", .{scheduler.now()});
-        zgui.text("tick: (TODO: FIX THIS)", .{});
+        const tick = scheduler.now();
+
+        // >> 24 becuase the ARM7TDMI runs at 2^24 Hz
+        const elapsed_str = std.mem.sliceTo(&printTime(tick >> 24), 0);
+
+        zgui.text("tick: 0x{X:0>16}", .{tick});
+        zgui.sameLine(.{});
+        zgui.text(" {s}s", .{elapsed_str});
         zgui.separator();
 
-        const sched_ptr: *Scheduler = @ptrCast(@alignCast(cpu.sched.ptr));
-        const Event = std.meta.Child(@TypeOf(sched_ptr.queue.items));
+        const sched_ptr: *Scheduler = @ptrCast(@alignCast(scheduler.ptr));
+        const Event = @typeInfo(@TypeOf(sched_ptr.queue.items)).pointer.child;
 
         var items: [20]Event = undefined;
         const len = @min(sched_ptr.queue.items.len, items.len);
@@ -374,9 +379,7 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         std.mem.sort(Event, items[0..len], {}, widgets.eventDesc(Event));
 
         for (items[0..len]) |event| {
-            // zgui.text("{X:0>16} | {?}", .{ event.tick, event.kind });
-            _ = event;
-            zgui.text("TODO: Fix This", .{});
+            zgui.text("0x{X:0>16} | {t}", .{ event.tick, event.kind });
         }
     }
 
@@ -534,4 +537,18 @@ fn handleTitle(title_opt: ?*const [12]u8) [12:0]u8 {
     if (title[0] == '\x00') return "[No Title]\x00\x00".*;
 
     return title.* ++ [_:0]u8{};
+}
+
+fn printTime(seconds: u64) [0x20]u8 {
+    var str = [_]u8{0x0} ** 0x20;
+    var writer = std.Io.Writer.fixed(&str);
+
+    const hr = seconds / 3600;
+    const min = (seconds % 3600) / 60;
+    const sec = seconds % 60;
+
+    // longest string is "5124095576030431:00:15" which is 22 bytes
+    writer.print("{:0>2}:{:0>2}:{:0>2}", .{ hr, min, sec }) catch unreachable;
+
+    return str;
 }
