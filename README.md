@@ -27,35 +27,9 @@ Finally it's worth noting that ZBA uses a TOML config file it'll store in your O
 
 ## Compiling
 
-Most recently built on Zig [v0.11.0](https://github.com/ziglang/zig/tree/0.11.0)
+Most recently built on Zig [v0.15.1](https://github.com/ziglang/zig/tree/0.15.1)
 
-### Dependencies
-
-Dependency | Source
---- | ---
-known-folders | <https://github.com/ziglibs/known-folders>
-nfd-zig | <https://github.com/fabioarnold/nfd-zig>
-SDL.zig | <https://github.com/MasterQ32/SDL.zig>
-tomlz | <https://github.com/mattyhall/tomlz>
-zba-gdbstub | <https://github.com/paoda/zba-gdbstub>
-zba-util | <https://git.musuka.dev/paoda/zba-util>
-zgui | <https://github.com/michal-z/zig-gamedev/tree/main/libs/zgui>
-zig-clap | <https://github.com/Hejsil/zig-clap>
-zig-datetime | <https://github.com/frmdstryr/zig-datetime>
-`bitfield.zig` | [https://github.com/FlorenceOS/Florence](https://github.com/FlorenceOS/Florence/blob/aaa5a9e568/lib/util/bitfields.zig)
-`gl.zig` | <https://github.com/MasterQ32/zig-opengl>
-
-Use `git submodule update --init` from the project root to pull the git relevant git submodules
-
-Be sure to provide SDL2 using:
-
-- Linux: Your distro's package manager
-- macOS: ¯\\\_(ツ)_/¯ (try [this formula](https://formulae.brew.sh/formula/sdl2)?)
-- Windows: [`vcpkg`](https://github.com/Microsoft/vcpkg) (install `sdl2:x64-windows`)
-
-`SDL.zig` will provide a helpful compile error if the zig compiler is unable to find SDL2.
-
-Once you've got all the dependencies, execute `zig build -Doptimize=ReleaseSafe`. The executable will be under `zig-out/bin` and the shared libraries (if enabled) under `zig-out/lib`. If working with shared libraries on windows, be sure to add all artifacts to the same directory. On Unix, you'll want to make use of `LD_PRELOAD`.
+Run `zig build -Doptimize=ReleaseSafe`. The executable will be under `zig-out/bin` and the shared libraries (if enabled) under `zig-out/lib`. If working with shared libraries on windows, be sure to add all artifacts to the same directory. On Unix, you'll want to make use of `LD_PRELOAD`.
 
 ## Controls
 
