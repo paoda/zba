@@ -11,11 +11,6 @@
     .minimum_zig_version = "0.15.1",
     .fingerprint = 0xcb596c7fbdb20efc,
     .dependencies = .{
-        // .tomlz = .{
-        //     .url = "git+https://github.com/paoda/tomlz#9a16dd53927ef2012478b6494bafb4475e44f4c9",
-        //     .hash = "12204f922cab84980e36b5c058d354ec0ee169bda401c8e0e80a463580349b476569",
-        // },
-
         .zba_util = .{ .path = "../zba-util" },
         .arm32 = .{ .path = "../arm32" },
         .zba_gdbstub = .{ .path = "../zba-gdbstub" },
@@ -50,6 +45,10 @@
         .zgui = .{
             .url = "git+https://github.com/zig-gamedev/zgui#7fa8081c208885b85e3fdfc043cd9d9cb9559123",
             .hash = "zgui-0.6.0-dev--L6sZL7tbQAPRLYrcQAVx0V49tPHAXNxclZ-v8IP4wLr",
+        },
+        .toml = .{
+            .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.15#475b03c630c802f8b6bd3e239d8fc2279b4fadb8",
+            .hash = "toml-0.3.0-bV14BfV7AQD8DkuQI7skP8ekQTaBYKTO0MY_35Cw_EXo",
         },
     },
 }

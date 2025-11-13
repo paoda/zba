@@ -1,5 +1,5 @@
 const std = @import("std");
-// const tomlz = @import("tomlz");
+const toml = @import("toml");
 
 const Allocator = std.mem.Allocator;
 
@@ -7,7 +7,6 @@ const log = std.log.scoped(.Config);
 var state: Config = .{};
 
 const Config = struct {
-    // FIXME: tomlz expects these to be case sensitive
     host: Host = .{},
     guest: Guest = .{},
     debug: Debug = .{},
@@ -69,7 +68,11 @@ pub fn load(allocator: Allocator, config_path: []const u8) !void {
     const contents = try file.readToEndAlloc(allocator, try file.getEndPos());
     defer allocator.free(contents);
 
-    // FIXME(2025-09-22): re-enable
-    // state = try tomlz.parser.decode(Config, allocator, contents);
-    state = .{};
+    var parser = toml.Parser(Config).init(allocator);
+    defer parser.deinit();
+
+    const parsed = try parser.parseString(contents);
+    defer parsed.deinit();
+
+    state = parsed.value; // FIXME: should copy the struct to state
 }

@@ -204,44 +204,84 @@ pub fn draw(state: *State, sync: *Synchro, dim: Dimensions, cpu: *const Arm7tdmi
         _ = zgui.begin("Dependencies", .{ .popen = &state.win_stat.show_deps });
         defer zgui.end();
 
-        zgui.bulletText("known-folders by ziglibs", .{});
-        zgui.bulletText("nfd-zig ported by Fabio Arnold", .{});
+        zgui.textLinkOpenURL("known-folders", "https://github.com/ziglibs/known-folders");
+        zgui.sameLine(.{});
+        zgui.text("by ziglibs", .{});
+
+        zgui.textLinkOpenURL("nfd-zig", "https://github.com/fabioarnold/nfd-zig");
+        zgui.sameLine(.{});
+        zgui.text("ported by Fabio Arnold", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
 
-            zgui.bulletText("nativefiledialog by Michael Labbe", .{});
+            zgui.textLinkOpenURL("nativefiledialog", "https://github.com/mlabbe/nativefiledialog");
+            zgui.sameLine(.{});
+            zgui.text("by Michael Labbe", .{});
         }
 
-        zgui.bulletText("SDL ported by Carl Åstholm", .{});
+        zgui.textLinkOpenURL("SDL", "https://github.com/castholm/SDL");
+        zgui.sameLine(.{});
+        zgui.text("ported by Carl Åstholm", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
 
-            zgui.bulletText("SDL by Sam Lantinga", .{});
+            zgui.textLinkOpenURL("SDL", "by Sam Lantinga");
+            zgui.sameLine(.{});
+            zgui.text("by Sam Lantinga", .{});
         }
 
-        // zgui.bulletText("tomlz by Matthew Hall", .{});
-        zgui.bulletText("zba-gdbstub by Rekai Musuka", .{});
-        zgui.bulletText("zba-util by Rekai Musuka", .{});
-        zgui.bulletText("zgui ported by Michal Ziulek et al.", .{});
+        zgui.textLinkOpenURL("zig-toml", "https://github.com/sam701/zig-toml");
+        zgui.sameLine(.{});
+        zgui.text("by Alexei Samokvalov", .{});
+
+        zgui.textLinkOpenURL("zba-gdbstub", "https://git.musuka.dev/paoda/zba-gdbstub");
+        zgui.sameLine(.{});
+        zgui.text("by Rekai Musuka", .{});
+
+        zgui.textLinkOpenURL("zba-util", "https://git.musuka.dev/paoda/zba-util");
+        zgui.sameLine(.{});
+        zgui.text("by Rekai Musuka", .{});
+
+        zgui.textLinkOpenURL("arm32", "https://git.musuka.dev/paoda/arm32");
+        zgui.sameLine(.{});
+        zgui.text("by Rekai Musuka", .{});
+
+        zgui.textLinkOpenURL("zgui", "https://github.com/zig-gamedev/zgui");
+        zgui.sameLine(.{});
+        zgui.text("ported by Michal Ziulek et al.", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
 
-            zgui.bulletText("DearImGui by Omar Cornut", .{});
+            zgui.textLinkOpenURL("Dear ImGui", "https://github.com/ocornut/imgui");
+            zgui.sameLine(.{});
+            zgui.text("by Omar Cornut", .{});
         }
-        zgui.bulletText("zig-clap by Jimmi Holst Christensen", .{});
-        zgui.bulletText("zig-datetime by Jairus Martin", .{});
 
-        zgui.newLine();
-        zgui.bulletText("bitfield.zig by Hannes Bredberg et al.", .{});
-        zgui.bulletText("zigglgen ported by Carl Åstholm", .{});
+        zgui.textLinkOpenURL("zig-clap", "https://github.com/Hejsil/zig-clap");
+        zgui.sameLine(.{});
+        zgui.text("by Jimmi Holst Christensen", .{});
+
+        zgui.textLinkOpenURL("zig-datetime", "https://github.com/frmdstryr/zig-datetime");
+        zgui.sameLine(.{});
+        zgui.text("by Jairus Martin", .{});
+
+        zgui.textLinkOpenURL("zig-bitjuggle", "https://github.com/leecannon/zig-bitjuggle");
+        zgui.sameLine(.{});
+        zgui.text("by Lee Cannon + Hannes Bredberg et al.", .{});
+
+        zgui.textLinkOpenURL("zigglgen", "https://github.com/castholm/zigglgen");
+        zgui.sameLine(.{});
+        zgui.text("ported by Carl Åstholm", .{});
         {
             zgui.indent(.{});
             defer zgui.unindent(.{});
 
-            zgui.bulletText("OpenGL-Registry by The Khronos Group", .{});
+            zgui.textLinkOpenURL("OpenGL-Registry", "https://github.com/KhronosGroup/OpenGL-Registry");
+            zgui.sameLine(.{});
+            zgui.text("by The Khronos Group", .{});
         }
     }
 

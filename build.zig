@@ -58,11 +58,7 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
-    const exe = b.addExecutable(.{
-        .name = "zba",
-        .root_module = exe_mod,
-        .use_llvm = true,
-    });
+    const exe = b.addExecutable(.{ .name = "zba", .root_module = exe_mod });
 
     const zgui = b.dependency("zgui", .{ .shared = false, .with_implot = true, .backend = .sdl3_opengl3 });
     const sdl = b.dependency("sdl", .{ .target = target, .optimize = optimize, .preferred_linkage = .static });
@@ -84,6 +80,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.addImport("nfd", b.dependency("nfdzig", .{}).module("nfd"));
     exe_mod.addImport("zgui", zgui.module("root"));
     exe_mod.addImport("bitjuggle", b.dependency("bitjuggle", .{}).module("bitjuggle"));
+    exe_mod.addImport("toml", b.dependency("toml", .{}).module("toml"));
 
     exe_mod.addAnonymousImport("example.toml", .{ .root_source_file = b.path("example.toml") });
 
