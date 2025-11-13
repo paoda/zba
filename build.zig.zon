@@ -11,9 +11,6 @@
     .minimum_zig_version = "0.15.1",
     .fingerprint = 0xcb596c7fbdb20efc,
     .dependencies = .{
-        .zba_util = .{ .path = "../zba-util" },
-        .arm32 = .{ .path = "../arm32" },
-        .zba_gdbstub = .{ .path = "../zba-gdbstub" },
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders.git#ab5cf5feb936fa3b72c95d3ad0c0c67791937ba1",
             .hash = "known_folders-0.0.0-Fy-PJtTTAADUOhGKM0sxzG4eMkNQxRvx9e5dfHVyaeA3",
@@ -49,6 +46,18 @@
         .toml = .{
             .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.15#475b03c630c802f8b6bd3e239d8fc2279b4fadb8",
             .hash = "toml-0.3.0-bV14BfV7AQD8DkuQI7skP8ekQTaBYKTO0MY_35Cw_EXo",
+        },
+        .zba_util = .{
+            .url = "git+https://git.musuka.dev/paoda/zba-util#d75962ac9bdf9b6f0d37e37d5097ea9bb9c16779",
+            .hash = "zba_util-0.0.0-SK3QiakqAABPCct0WbLsuHFfmxwzH99FmEVznCBKzdmR",
+        },
+        .arm32 = .{
+            .url = "git+https://git.musuka.dev/paoda/arm32#c9360e1e239300d8c80bcbc3a7494f015a82c4e1",
+            .hash = "arm32-0.0.0--_LW1VwTAgAbqwOzVfjnkClkwBrB8IZ1LSz8N4EoA3U3",
+        },
+        .zba_gdbstub = .{
+            .url = "git+https://git.musuka.dev/paoda/zba-gdbstub#7b77964e145ac874424a190ecd390596601a40d1",
+            .hash = "zba_gdbstub-0.0.0-KDf2GNiPAAAR5QuteF1MsN3XGElNvHLlRJ7O4PNFvTmK",
         },
     },
 }
