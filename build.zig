@@ -67,6 +67,8 @@ pub fn build(b: *std.Build) void {
     const sdl_lib = sdl.artifact("SDL3");
     const zgui_lib = zgui.artifact("imgui");
 
+    zgui_lib.linkLibrary(sdl_lib);
+
     exe_mod.linkLibrary(sdl_lib);
     exe_mod.linkLibrary(zgui_lib);
 
