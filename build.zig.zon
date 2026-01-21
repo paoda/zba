@@ -4,11 +4,9 @@
     .paths = .{
         "build.zig",
         "build.zig.zon",
-        "lib/bitfield.zig",
-        "lib/gl.zig",
         "src",
     },
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.15.2",
     .fingerprint = 0xcb596c7fbdb20efc,
     .dependencies = .{
         .known_folders = .{
